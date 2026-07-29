@@ -1,0 +1,221 @@
+/*
+ * ============================================================
+ * ARCHIVO: src/index.css
+ * ============================================================
+ * ¿QUÉ HACE ESTE ARCHIVO?
+ * Es el archivo de estilos GLOBAL de la aplicación.
+ * Aquí importamos las fuentes de Google y definimos
+ * estilos base que se aplican a TODA la página web.
+ *
+ * ¿CÓMO EDITARLO SI SOY PRINCIPIANTE?
+ * - Para cambiar las fuentes: modifica el enlace de Google Fonts
+ *   en el <head> de index.html
+ * - Para cambiar el color de fondo por defecto: edita la
+ *   propiedad "background-color" en el selector "body"
+ * ============================================================
+ */
+
+/* ============================================================
+   IMPORTAR FUENTES DE GOOGLE
+   ============================================================
+   Usamos "Playfair Display" para títulos elegantes (serif)
+   y "Inter" para el texto del cuerpo (sans-serif, muy legible)
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&display=swap');
+
+/* Las 3 líneas siguientes son OBLIGATORIAS para que Tailwind funcione */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   ESTILOS BASE (se aplican al HTML base sin clases)
+   ============================================================ */
+@layer base {
+
+  /* El selector "*" afecta a TODOS los elementos de la página */
+  * {
+    /* Hace que border y padding no aumenten el ancho/alto del elemento */
+    @apply box-border;
+  }
+
+  /* El elemento <html> controla el scroll general */
+  html {
+    scroll-behavior: smooth;
+    /* Hace que los links de navegación tengan scroll suave */
+  }
+
+  /* El elemento <body> es el contenedor principal de toda la página */
+  body {
+    /* Fondo negro profundo por defecto (modo oscuro es el principal) */
+    @apply bg-fondo-oscuro text-secundario font-sans antialiased;
+    /* antialiased: hace que las fuentes se vean más suaves en pantalla */
+  }
+
+  /* Estilos para todos los títulos (h1, h2, h3, h4, h5, h6) */
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+    /* Usamos la fuente elegante Playfair Display */
+  }
+
+  h4,
+  h5,
+  h6 {
+    @apply font-sans font-semibold;
+  }
+
+  /* Estilo de la barra de desplazamiento (scrollbar) personalizada */
+  ::-webkit-scrollbar {
+    width: 6px;
+    /* Ancho de la barra de scroll */
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0B0C10;
+    /* Color del fondo de la barra */
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #722F37;
+    /* Color del "dedo" de la barra (vinotinto) */
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9B4450;
+    /* Color al pasar el mouse sobre la barra */
+  }
+}
+
+/* ============================================================
+   COMPONENTES REUTILIZABLES (clases personalizadas)
+   ============================================================
+   Aquí definimos clases que podemos reusar en varios componentes.
+   Las clases @apply usan las clases de Tailwind internamente.
+   ============================================================ */
+@layer components {
+
+  /* --- Botones Principales --- */
+  .btn-primario {
+    @apply bg-vinotinto hover:bg-vinotinto-claro text-white font-semibold px-6 py-3 rounded-lg transition-all duration-300 shadow-glow-vinotinto hover:shadow-lg hover:scale-105 inline-flex items-center gap-2;
+  }
+
+  .btn-secundario {
+    @apply border-2 border-khaki text-khaki hover:bg-khaki hover:text-primario font-semibold px-6 py-3 rounded-lg transition-all duration-300 inline-flex items-center gap-2;
+  }
+
+  .btn-ghost {
+    @apply text-secundario hover:text-khaki transition-colors duration-200 font-medium inline-flex items-center gap-2;
+  }
+
+  /* --- Tarjetas con efecto vidrio (Glassmorphism) --- */
+  .card-glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-card hover:shadow-card-hover transition-all duration-300;
+  }
+
+  /* --- Sección con ancho máximo centrado --- */
+  .contenedor {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* --- Título de sección --- */
+  .titulo-seccion {
+    @apply text-4xl md:text-5xl font-display font-bold text-secundario leading-tight;
+  }
+
+  /* --- Línea decorativa bajo los títulos --- */
+  .linea-decorativa {
+    @apply h-1 w-16 bg-gradient-to-r from-vinotinto to-khaki rounded-full;
+  }
+
+  /* --- Badge / Insignia --- */
+  .badge {
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider;
+  }
+
+  .badge-vinotinto {
+    @apply badge bg-vinotinto/20 text-vinotinto-claro border border-vinotinto/30;
+  }
+
+  .badge-khaki {
+    @apply badge bg-khaki/10 text-khaki border border-khaki/30;
+  }
+
+  /* --- Input de formulario --- */
+  .input-campo {
+    @apply w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-secundario placeholder-white/40 focus:outline-none focus:border-vinotinto focus:ring-1 focus:ring-vinotinto/50 transition-colors duration-200;
+  }
+
+  /* --- Label de formulario --- */
+  .label-campo {
+    @apply block text-sm font-medium text-white/70 mb-2;
+  }
+
+  /* --- Pentagrama decorativo (líneas de música) --- */
+  .pentagrama-line {
+    @apply absolute w-full h-px bg-gradient-to-r from-transparent via-white/5 to-transparent;
+  }
+
+  /* --- Toggle Switch para admin --- */
+  .toggle-switch {
+    @apply relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 cursor-pointer;
+  }
+
+  /* --- Efecto hover 3D en tarjetas --- */
+  .card-3d {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transform-style: preserve-3d;
+  }
+
+  .card-3d:hover {
+    transform: perspective(1000px) rotateX(-2deg) rotateY(2deg) translateY(-4px);
+  }
+}
+
+/* ============================================================
+   UTILIDADES EXTRA
+   ============================================================ */
+@layer utilities {
+
+  /* Texto con gradiente (de vinotinto a khaki) */
+  .texto-gradiente {
+    @apply bg-gradient-to-r from-vinotinto-claro via-khaki to-vinotinto-claro bg-clip-text text-transparent;
+  }
+
+  /* Gradiente de fondo para secciones */
+  .fondo-gradiente {
+    background: linear-gradient(135deg, #0B0C10 0%, #121212 50%, #1A1B1F 100%);
+  }
+
+  /* Efecto de brillo sutil animado */
+  .efecto-brillo {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .efecto-brillo::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(transparent,
+        rgba(240, 230, 140, 0.03),
+        transparent);
+    transform: rotate(45deg);
+    animation: shimmer 3s linear infinite;
+  }
+
+  /* Ocultar scrollbar pero mantener funcionalidad */
+  .sin-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sin-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
