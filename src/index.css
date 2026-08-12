@@ -29,27 +29,134 @@
 @tailwind utilities;
 
 /* ============================================================
+   VARIABLES CSS (Modo Claro/Oscuro)
+   ============================================================ */
+:root, .dark {
+  --bg-primary: #000000;
+  --bg-card: #0A0A0A;
+  --bg-medio: #111111;
+  --text-primary: #FFFFFF;
+  --text-muted: rgba(255,255,255,0.5);
+  --text-muted-low: rgba(255,255,255,0.3);
+  --text-muted-high: rgba(255,255,255,0.7);
+  --border-subtle: rgba(255,255,255,0.08);
+  --border-medium: rgba(255,255,255,0.15);
+  --bg-subtle: rgba(255,255,255,0.03);
+  --bg-subtle-hover: rgba(255,255,255,0.06);
+  --shadow-glow-vinotinto: 0 0 20px rgba(114,47,55,0.5);
+  --shadow-glow-khaki: 0 0 20px rgba(240,230,140,0.3);
+  --shadow-card: 0 4px 16px rgba(0,0,0,0.6);
+  --shadow-card-hover: 0 8px 32px rgba(114,47,55,0.3);
+  --color-footer-bg: #000000;
+  --color-footer-border: rgba(255,255,255,0.1);
+
+  /* --- Hero: gradiente del texto --- */
+  --grad-texto-a: #9B4450;
+  --grad-texto-b: #F0E68C;
+  --grad-texto-c: #9B4450;
+
+  /* --- Hero: aurora animada --- */
+  --aurora-1: rgba(114,47,55,0.55);
+  --aurora-2: rgba(240,230,140,0.20);
+  --aurora-3: rgba(155,68,80,0.40);
+
+  /* --- Hero: vinilo giratorio --- */
+  --vinilo-fondo: #0B0B0E;
+  --vinilo-luz: rgba(155,68,80,0.40);
+  --vinilo-surco: rgba(255,255,255,0.09);
+  --vinilo-borde: rgba(114,47,55,0.45);
+  --vinilo-reflejo-brillo: rgba(255,255,255,0.15);
+  --vinilo-etiqueta: #722F37;
+  --vinilo-brillo-color: rgba(240,230,140,0.30);
+
+  /* --- Hero: notas musicales flotantes (doradas sobre negro) --- */
+  --nota-hero: rgba(240,230,140,0.50);
+  --nota-hero-glow: rgba(240,230,140,0.30);
+
+  /* --- Cursor: color y brillo neón en modo oscuro --- */
+  --cursor-nota: #F0E68C;
+  --cursor-glow: rgba(240,230,140,0.45);
+
+  /* --- Hero: marquee musical --- */
+  --marquee-fondo: rgba(8,8,10,0.55);
+  --marquee-texto: #EFE9DD;
+  --marquee-acento: #F0E68C;
+  --marquee-borde: rgba(240,230,140,0.25);
+}
+
+:root:not(.dark) {
+  --bg-primary: #C19A6B;
+  --bg-card: #D4B590;
+  --bg-medio: #B89060;
+  --text-primary: #1A1B1F;
+  --text-muted: rgba(0,0,0,0.55);
+  --text-muted-low: rgba(0,0,0,0.35);
+  --text-muted-high: rgba(0,0,0,0.75);
+  --border-subtle: rgba(0,0,0,0.12);
+  --border-medium: rgba(0,0,0,0.2);
+  --bg-subtle: rgba(0,0,0,0.06);
+  --bg-subtle-hover: rgba(0,0,0,0.1);
+  --shadow-glow-vinotinto: 0 0 20px rgba(114,47,55,0.25);
+  --shadow-glow-khaki: 0 0 20px rgba(240,230,140,0.2);
+  --shadow-card: 0 4px 16px rgba(0,0,0,0.12);
+  --shadow-card-hover: 0 10px 36px rgba(95,31,39,0.32);
+  --color-footer-bg: #8B6F4A;
+  --color-footer-border: rgba(255,255,255,0.1);
+
+  /* --- Hero: gradiente del texto (versión legible sobre beige) --- */
+  --grad-texto-a: #5B1F27;
+  --grad-texto-b: #8A7A3E;
+  --grad-texto-c: #5B1F27;
+
+  /* --- Hero: notas musicales flotantes (más oscuras sobre beige) --- */
+  --nota-hero: rgba(114,47,55,0.85);
+  --nota-hero-glow: rgba(114,47,55,0.35);
+
+  /* --- Cursor: color y brillo neón en modo claro --- */
+  --cursor-nota: #722F37;
+  --cursor-glow: rgba(114,47,55,0.45);
+
+  /* --- Hero: aurora animada (más saturada sobre beige) --- */
+  --aurora-1: rgba(114,47,55,0.32);
+  --aurora-2: rgba(200,192,112,0.50);
+  --aurora-3: rgba(155,68,80,0.30);
+
+  /* --- Hero: vinilo giratorio (nuez profundo sobre beige) --- */
+  --vinilo-fondo: #422E2C;
+  --vinilo-luz: rgba(240,230,140,0.22);
+  --vinilo-surco: rgba(0,0,0,0.18);
+  --vinilo-borde: rgba(0,0,0,0.4);
+  --vinilo-reflejo-brillo: rgba(255,255,255,0.20);
+  --vinilo-etiqueta: #722F37;
+  --vinilo-brillo-color: rgba(255,255,255,0.45);
+
+  /* --- Hero: marquee musical --- */
+  --marquee-fondo: rgba(255,255,255,0.30);
+  --marquee-texto: #1A1B1F;
+  --marquee-acento: #722F37;
+  --marquee-borde: rgba(0,0,0,0.15);
+}
+
+/* ============================================================
    ESTILOS BASE (se aplican al HTML base sin clases)
    ============================================================ */
 @layer base {
 
-  /* El selector "*" afecta a TODOS los elementos de la página */
   * {
-    /* Hace que border y padding no aumenten el ancho/alto del elemento */
     @apply box-border;
   }
 
-  /* El elemento <html> controla el scroll general */
   html {
     scroll-behavior: smooth;
-    /* Hace que los links de navegación tengan scroll suave */
   }
 
-  /* El elemento <body> es el contenedor principal de toda la página */
   body {
-    /* Fondo negro profundo por defecto (modo oscuro es el principal) */
-    @apply bg-fondo-oscuro text-secundario font-sans antialiased;
-    /* antialiased: hace que las fuentes se vean más suaves en pantalla */
+    @apply bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  *, *::before, *::after {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
   }
 
   /* Estilos para todos los títulos (h1, h2, h3, h4, h5, h6) */
@@ -66,27 +173,10 @@
     @apply font-sans font-semibold;
   }
 
-  /* Estilo de la barra de desplazamiento (scrollbar) personalizada */
-  ::-webkit-scrollbar {
-    width: 6px;
-    /* Ancho de la barra de scroll */
-  }
-
-  ::-webkit-scrollbar-track {
-    background: #0B0C10;
-    /* Color del fondo de la barra */
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #722F37;
-    /* Color del "dedo" de la barra (vinotinto) */
-    border-radius: 3px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #9B4450;
-    /* Color al pasar el mouse sobre la barra */
-  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: #722F37; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9B4450; }
 }
 
 /* ============================================================
@@ -112,7 +202,7 @@
 
   /* --- Tarjetas con efecto vidrio (Glassmorphism) --- */
   .card-glass {
-    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-card hover:shadow-card-hover transition-all duration-300;
+    @apply bg-sutil backdrop-blur-md border borde-subtle rounded-xl shadow-card hover:shadow-card-hover transition-all duration-300;
   }
 
   /* --- Sección con ancho máximo centrado --- */
@@ -145,17 +235,17 @@
 
   /* --- Input de formulario --- */
   .input-campo {
-    @apply w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-secundario placeholder-white/40 focus:outline-none focus:border-vinotinto focus:ring-1 focus:ring-vinotinto/50 transition-colors duration-200;
+    @apply w-full bg-sutil border borde-medium rounded-lg px-4 py-3 text-secundario placeholder-[var(--text-muted)] focus:outline-none focus:border-vinotinto focus:ring-1 focus:ring-vinotinto/50 transition-colors duration-200;
   }
 
   /* --- Label de formulario --- */
   .label-campo {
-    @apply block text-sm font-medium text-white/70 mb-2;
+    @apply block text-sm font-medium t-muted-high mb-2;
   }
 
   /* --- Pentagrama decorativo (líneas de música) --- */
   .pentagrama-line {
-    @apply absolute w-full h-px bg-gradient-to-r from-transparent via-white/5 to-transparent;
+    @apply absolute w-full h-px bg-gradient-to-r from-transparent via-[var(--border-subtle)] to-transparent;
   }
 
   /* --- Toggle Switch para admin --- */
@@ -179,14 +269,81 @@
    ============================================================ */
 @layer utilities {
 
-  /* Texto con gradiente (de vinotinto a khaki) */
+  /* Texto con gradiente (de vinotinto a khaki) DINÁMICO por tema */
   .texto-gradiente {
-    @apply bg-gradient-to-r from-vinotinto-claro via-khaki to-vinotinto-claro bg-clip-text text-transparent;
+    background-image: linear-gradient(90deg, var(--grad-texto-a) 0%, var(--grad-texto-b) 50%, var(--grad-texto-c) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
-  /* Gradiente de fondo para secciones */
+  /* --- Vinilo giratorio del Hero --- */
+  .vinilo-disco {
+    background:
+      radial-gradient(circle at 32% 28%, var(--vinilo-luz) 0%, transparent 46%),
+      var(--vinilo-fondo);
+    border: 1px solid var(--vinilo-borde);
+    box-shadow:
+      inset 0 0 42px rgba(0,0,0,0.65),
+      inset 0 0 8px rgba(0,0,0,0.5);
+  }
+
+  .vinilo-surcos {
+    background: repeating-radial-gradient(circle at 50% 50%,
+      var(--vinilo-surco) 0px, var(--vinilo-surco) 2px,
+      transparent 2px, transparent 5px);
+    -webkit-mask-image: radial-gradient(circle, black 50%, transparent 72%);
+    mask-image: radial-gradient(circle, black 50%, transparent 72%);
+  }
+
+  .vinilo-reflejo {
+    background: linear-gradient(115deg,
+      var(--vinilo-reflejo-brillo) 0%,
+      transparent 40%,
+      transparent 62%,
+      var(--vinilo-reflejo-brillo) 100%);
+  }
+
+  .vinilo-etiqueta {
+    background: var(--vinilo-etiqueta);
+    box-shadow: inset 0 0 18px rgba(0,0,0,0.45);
+  }
+
+  .vinilo-brillo {
+    background: var(--vinilo-brillo-color);
+  }
+
+  @keyframes giro-vinilo {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .vinilo-gira {
+    animation: giro-vinilo 12s linear infinite;
+    will-change: transform;
+  }
+
+  /* --- Marquee musical del Hero --- */
+  .marquee-capa {
+    background: var(--marquee-fondo);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .marquee-texto { color: var(--marquee-texto); }
+  .marquee-acento { color: var(--marquee-acento); }
+  .marquee-borde { border-color: var(--marquee-borde); }
+
+  /* Respetar usuarios con movimiento reducido */
+  @media (prefers-reduced-motion: reduce) {
+    .vinilo-gira,
+    .animate-marquee {
+      animation: none;
+    }
+  }
+
   .fondo-gradiente {
-    background: linear-gradient(135deg, #0B0C10 0%, #121212 50%, #1A1B1F 100%);
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-card) 50%, var(--bg-medio) 100%);
   }
 
   /* Efecto de brillo sutil animado */
@@ -218,4 +375,25 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Textos temáticos (responsive a modo claro/oscuro) */
+  .t-muted { color: var(--text-muted); }
+  .t-muted-low { color: var(--text-muted-low); }
+  .t-muted-high { color: var(--text-muted-high); }
+
+  /* Bordes temáticos */
+  .borde-subtle { border-color: var(--border-subtle); }
+  .borde-medium { border-color: var(--border-medium); }
+
+  /* Fondos sutiles temáticos */
+  .bg-sutil { background-color: var(--bg-subtle); }
+  .bg-sutil-hover:hover { background-color: var(--bg-subtle-hover); }
+
+  .footer-bg { background-color: var(--color-footer-bg); }
+  .footer-border { border-color: var(--color-footer-border); }
+  .footer-text { color: rgba(255,255,255,0.5); }
+  .footer-text-high { color: rgba(255,255,255,0.7); }
+  .footer-text-low { color: rgba(255,255,255,0.3); }
+  .footer-text-bright { color: rgba(255,255,255,0.9); }
+  .footer-bg-subtle { background-color: rgba(255,255,255,0.05); }
 }

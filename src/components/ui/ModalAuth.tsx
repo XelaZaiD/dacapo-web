@@ -76,7 +76,7 @@ const ModalAuth = ({ alCerrar }: Props) => {
                 {/* Botón cerrar */}
                 <button onClick={alCerrar}
                     className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
-                     rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white
+                     rounded-full bg-sutil-hover hover:bg-sutil-hover t-muted-high hover:text-secundario
                      transition-all">
                     <X className="w-4 h-4" />
                 </button>
@@ -89,20 +89,20 @@ const ModalAuth = ({ alCerrar }: Props) => {
                     <h2 className="text-2xl font-display font-bold text-secundario">
                         {modoActivo === 'login' ? 'Bienvenido de vuelta' : 'Únete a DaCapo'}
                     </h2>
-                    <p className="text-white/50 text-sm mt-1">
+                    <p className="t-muted text-sm mt-1">
                         {modoActivo === 'login' ? 'Accede a tu cuenta' : 'Crea tu cuenta gratuita'}
                     </p>
                 </div>
 
                 {/* Tabs Login/Registro */}
-                <div className="flex rounded-xl bg-white/5 p-1 mb-6">
+                <div className="flex rounded-xl bg-sutil p-1 mb-6">
                     {(['login', 'registro'] as const).map(modo => (
                         <button
                             key={modo}
                             onClick={() => { setModoActivo(modo); setError(''); }}
                             className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${modoActivo === modo
                                     ? 'bg-vinotinto text-white shadow-glow-vinotinto'
-                                    : 'text-white/50 hover:text-white'
+                                    : 't-muted hover:text-secundario'
                                 }`}
                         >
                             {modo === 'login' ? '🔐 Iniciar Sesión' : '✨ Registrarse'}
@@ -155,7 +155,7 @@ const ModalAuth = ({ alCerrar }: Props) => {
                             <button
                                 type="button"
                                 onClick={() => setMostrarPassword(!mostrarPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 t-muted hover:text-secundario transition-colors"
                             >
                                 {mostrarPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
@@ -168,7 +168,7 @@ const ModalAuth = ({ alCerrar }: Props) => {
                         className="btn-primario w-full justify-center py-3 mt-2 disabled:opacity-50"
                     >
                         {cargando ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <div className="w-4 h-4 border-2 borde-medium border-t-white rounded-full animate-spin" />
                         ) : modoActivo === 'login' ? (
                             <><LogIn className="w-4 h-4" /> Iniciar Sesión</>
                         ) : (
@@ -179,8 +179,8 @@ const ModalAuth = ({ alCerrar }: Props) => {
 
                 {/* Credenciales de demo (solo en login) */}
                 {modoActivo === 'login' && (
-                    <div className="mt-6 p-4 rounded-xl bg-white/3 border border-white/10">
-                        <p className="text-xs text-white/40 uppercase tracking-wider mb-3">
+                    <div className="mt-6 p-4 rounded-xl bg-white/3 border borde-subtle">
+                        <p className="text-xs t-muted uppercase tracking-wider mb-3">
                             Cuentas de Demostración (Fase 1):
                         </p>
                         <div className="space-y-2">
@@ -188,13 +188,13 @@ const ModalAuth = ({ alCerrar }: Props) => {
                                 <button
                                     key={u.rol}
                                     onClick={() => { setEmail(u.email); setPassword(u.password); }}
-                                    className="w-full text-left p-2 rounded-lg hover:bg-white/5 transition-colors"
+                                    className="w-full text-left p-2 rounded-lg hover:bg-sutil transition-colors"
                                 >
                                     <div className="flex items-center justify-between">
                                         <span className={`text-xs font-semibold ${u.color}`}>{u.rol}</span>
-                                        <span className="text-[10px] text-white/30">Clic para rellenar</span>
+                                        <span className="text-[10px] t-muted-low">Clic para rellenar</span>
                                     </div>
-                                    <p className="text-xs text-white/50">{u.email}</p>
+                                    <p className="text-xs t-muted">{u.email}</p>
                                 </button>
                             ))}
                         </div>

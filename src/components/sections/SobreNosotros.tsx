@@ -98,7 +98,7 @@ const SobreNosotros = () => {
                     </span>
                     <h2 className="titulo-seccion mb-4">Sobre Nosotros</h2>
                     <div className="linea-decorativa mx-auto mb-6" />
-                    <p className="text-white/60 text-lg max-w-3xl mx-auto leading-relaxed">
+                    <p className="t-muted-high text-lg max-w-3xl mx-auto leading-relaxed">
                         {infoGrupo.descripcion}
                     </p>
                 </motion.div>
@@ -121,7 +121,7 @@ const SobreNosotros = () => {
                         <h3 className="text-2xl font-display font-bold text-secundario mb-4">
                             Nuestra Misión
                         </h3>
-                        <p className="text-white/60 leading-relaxed">
+                        <p className="t-muted-high leading-relaxed">
                             {infoGrupo.mision}
                         </p>
                     </motion.div>
@@ -141,7 +141,7 @@ const SobreNosotros = () => {
                         <h3 className="text-2xl font-display font-bold text-secundario mb-4">
                             Nuestra Visión
                         </h3>
-                        <p className="text-white/60 leading-relaxed">
+                        <p className="t-muted-high leading-relaxed">
                             {infoGrupo.vision}
                         </p>
                     </motion.div>
@@ -158,7 +158,7 @@ const SobreNosotros = () => {
                         <div
                             key={indice}
                             className="card-glass p-6 rounded-xl text-center group hover:border-vinotinto/30
-                         border border-white/10 transition-all duration-300"
+                         border borde-subtle transition-all duration-300"
                         >
                             {/* Ícono */}
                             <div className="w-12 h-12 rounded-full bg-vinotinto/20 flex items-center justify-center
@@ -171,7 +171,7 @@ const SobreNosotros = () => {
                                 <ContadorAnimado valorFinal={stat.valor} sufijo={stat.sufijo} />
                             </div>
                             {/* Etiqueta */}
-                            <p className="text-xs text-white/50 uppercase tracking-wider">
+                            <p className="text-xs t-muted uppercase tracking-wider">
                                 {stat.etiqueta}
                             </p>
                         </div>
@@ -180,7 +180,7 @@ const SobreNosotros = () => {
 
                 {/* ---- AÑO DE FUNDACIÓN ---- */}
                 <motion.p
-                    className="text-center mt-8 text-white/30 text-sm"
+                    className="text-center mt-8 t-muted-low text-sm"
                     initial={{ opacity: 0 }}
                     animate={estaEnPantalla ? { opacity: 1 } : {}}
                     transition={{ delay: 1 }}

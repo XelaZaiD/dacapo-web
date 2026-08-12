@@ -6,11 +6,14 @@
  * ============================================================
  */
 
-import { Music, Heart, Link as LinkIcon } from 'lucide-react';
+import { Heart, Mail } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useApp } from '../../context/AppContext';
+import { EnlaceRedSocial, IconoInstagram, IconoFacebook, IconoYoutube, IconoTiktok } from '../ui/IconosRedes';
+import LogoDaCapo from '../ui/LogoDaCapo';
 
 const Footer = () => {
-    const { infoGrupo } = useApp();
+    const { infoGrupo, configuracionSecciones } = useApp();
     const anioActual = new Date().getFullYear();
 
     const irASeccion = (href: string) => {
@@ -18,52 +21,60 @@ const Footer = () => {
     };
 
     return (
-        <footer className="bg-primario border-t border-white/10 pt-16 pb-8">
+        <footer className="footer-bg border-t footer-border pt-16 pb-8">
             <div className="contenedor">
                 <div className="grid md:grid-cols-3 gap-12 mb-12">
 
                     {/* Logo e info */}
                     <div>
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 bg-vinotinto rounded-xl flex items-center justify-center">
-                                <Music className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                                <p className="font-display font-bold text-xl text-secundario">DaCapo</p>
-                                <p className="text-[10px] text-khaki uppercase tracking-[0.2em]">Grupo Vocal</p>
-                            </div>
+                        <div className="mb-4">
+                            {/* Logo oficial (incluye nombre y subtítulo del grupo) */}
+                            <LogoDaCapo
+                                className="h-24 w-24 sm:h-28 sm:w-28"
+                                colorClase="text-white"
+                            />
                         </div>
-                        <p className="text-white/40 text-sm leading-relaxed mb-6">
+                        <p className="footer-text text-sm leading-relaxed mb-6">
                             Fundado en {infoGrupo.anioFundacion}. Llevando la música coral
                             a los corazones de nuestra comunidad.
                         </p>
                         {/* Redes sociales */}
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 flex-wrap">
                             {[
-                                { icono: <LinkIcon className="w-4 h-4" />, url: infoGrupo.redesSociales.instagram },
-                                { icono: <LinkIcon className="w-4 h-4" />, url: infoGrupo.redesSociales.facebook },
-                                { icono: <LinkIcon className="w-4 h-4" />, url: infoGrupo.redesSociales.youtube },
-                            ].filter(r => r.url).map((red, i) => (
-                                <a key={i} href={red.url} target="_blank" rel="noopener noreferrer"
-                                    className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center
-                              text-white/50 hover:bg-vinotinto hover:text-white hover:border-vinotinto
-                              transition-all duration-300">
-                                    {red.icono}
-                                </a>
+                                { icono: <IconoInstagram className="w-4 h-4" />, url: infoGrupo.redesSociales.instagram, colorNeon: 'hover:text-pink-400', nombre: 'Instagram' },
+                                { icono: <IconoFacebook className="w-4 h-4" />, url: infoGrupo.redesSociales.facebook, colorNeon: 'hover:text-blue-400', nombre: 'Facebook' },
+                                { icono: <IconoYoutube className="w-4 h-4" />, url: infoGrupo.redesSociales.youtube, colorNeon: 'hover:text-red-400', nombre: 'YouTube' },
+                                { icono: <IconoTiktok className="w-4 h-4" />, url: infoGrupo.redesSociales.tiktok, colorNeon: 'hover:text-white', nombre: 'TikTok' },
+                            ].flatMap(r => r.url ? [{ ...r, url: r.url }] : []).map((red, i) => (
+                                <EnlaceRedSocial
+                                    key={i}
+                                    url={red.url}
+                                    icono={red.icono}
+                                    nombre={red.nombre}
+                                    colorNeon={red.colorNeon}
+                                />
                             ))}
+                            <a
+                                href={`mailto:${infoGrupo.emailContacto}`}
+                                className="group relative w-10 h-10 rounded-xl footer-bg-subtle border footer-border flex items-center justify-center footer-text hover:text-orange-400 hover:border-current hover:shadow-[0_0_15px_currentColor] transition-all duration-300 hover:scale-110"
+                                title="Correo electrónico"
+                            >
+                                <Mail className="w-4 h-4" />
+                                <span className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-20 bg-current blur-md transition-opacity duration-300" />
+                            </a>
                         </div>
                     </div>
 
                     {/* Links rápidos */}
                     <div>
-                        <h4 className="text-sm font-semibold text-white/70 uppercase tracking-wider mb-4">Navegación</h4>
+                        <h4 className="text-sm font-semibold footer-text-high uppercase tracking-wider mb-4">Navegación</h4>
                         <div className="space-y-2">
                             {[
                                 ['Inicio', '#inicio'], ['Nosotros', '#nosotros'], ['Integrantes', '#integrantes'],
                                 ['Presentaciones', '#presentaciones'], ['Eventos', '#eventos'], ['Contacto', '#contacto']
                             ].map(([texto, href]) => (
                                 <button key={href} onClick={() => irASeccion(href)}
-                                    className="block text-white/40 hover:text-khaki text-sm transition-colors text-left">
+                                    className="block footer-text hover:text-khaki text-sm transition-colors text-left">
                                     {texto}
                                 </button>
                             ))}
@@ -72,25 +83,35 @@ const Footer = () => {
 
                     {/* Contacto */}
                     <div>
-                        <h4 className="text-sm font-semibold text-white/70 uppercase tracking-wider mb-4">Contacto</h4>
-                        <div className="space-y-3 text-sm text-white/40">
+                        <h4 className="text-sm font-semibold footer-text-high uppercase tracking-wider mb-4">Contacto</h4>
+                        <div className="space-y-3 text-sm footer-text">
                             <p>{infoGrupo.emailContacto}</p>
-                            <div className="mt-4 p-4 rounded-xl bg-vinotinto/10 border border-vinotinto/20">
-                                <p className="text-vinotinto-claro font-medium text-xs mb-1">¿Quieres ser parte del coro?</p>
-                                <button onClick={() => irASeccion('#audiciones')}
-                                    className="text-xs text-white/60 hover:text-white transition-colors">
-                                    Envía tu audición aquí →
-                                </button>
-                            </div>
+                            {configuracionSecciones.mostrarAudiciones && (
+                                <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-vinotinto/10 to-khaki/10 border border-vinotinto/20 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 px-2 py-1 bg-vinotinto/20 rounded-bl-lg">
+                                        <span className="text-[8px] footer-text-high uppercase tracking-wider">¡Nuevo!</span>
+                                    </div>
+                                    <p className="text-vinotinto-claro font-medium text-xs mb-1">¿Quieres ser parte del coro?</p>
+                                    <p className="text-[10px] footer-text mb-2">Únete a DaCapo Grupo Vocal</p>
+                                    <motion.button 
+                                        onClick={() => irASeccion('#audiciones')}
+                                        className="text-xs bg-vinotinto hover:bg-vinotinto-claro text-white px-3 py-1.5 rounded-lg transition-all duration-300 shadow-glow-vinotinto hover:shadow-lg"
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                    >
+                                        Enviar Solicitud de Audición →
+                                    </motion.button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {/* Divider */}
-                <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-8" />
+                <div className="h-px bg-gradient-to-r from-transparent via-[var(--color-footer-border)] to-transparent mb-8" />
 
                 {/* Copyright */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/30">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs footer-text-low">
                     <p>© {anioActual} DaCapo Grupo Vocal. Todos los derechos reservados.</p>
                     <p className="flex items-center gap-1">
                         Hecho con <Heart className="w-3 h-3 text-vinotinto-claro" /> y mucha música

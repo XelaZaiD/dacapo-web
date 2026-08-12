@@ -205,7 +205,7 @@ export const obtenerIntegrantesDB = async () => {
 export const subirPdfSupabase = async (archivo: File, nombreArchivo: string) => {
     if (!supabase) return null;
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
         .from('partituras')          // Nombre del "bucket" (carpeta) en Storage
         .upload(nombreArchivo, archivo);
 

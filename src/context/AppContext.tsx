@@ -90,6 +90,11 @@ type AppContextType = {
     cerrarSesion: () => void;
     registrarUsuario: (email: string, password: string, nombre: string) => Promise<boolean>;
 
+    // --- Modal de autenticación (login/registro) ---
+    modalAuthAbierto: boolean;
+    abrirModalAuth: () => void;
+    cerrarModalAuth: () => void;
+
     // --- Funciones para Integrantes ---
     agregarIntegrante: (integrante: Omit<Integrante, 'id'>) => void;
     editarIntegrante: (id: string, datos: Partial<Integrante>) => void;
@@ -123,6 +128,9 @@ type AppContextType = {
     marcarSolicitudRevisada: (id: string, estado: SolicitudAudicion['estado']) => void;
     marcarMensajeLeido: (id: string) => void;
 
+    // --- Configuración del Asistente ---
+    actualizarAsistente: (config: Partial<{ tipoAsistente: 'ninguno' | 'chatbot' | 'whatsapp'; numeroWhatsapp: string }>) => void;
+
     // --- Tema (Claro/Oscuro) ---
     modoOscuro: boolean;
     toggleModoOscuro: () => void;
@@ -133,7 +141,7 @@ type AppContextType = {
 // ============================================================
 // Creamos el contexto. El "undefined as any" es solo para que
 // TypeScript no se queje; el valor real se asigna en AppProvider.
-const AppContext = createContext<AppContextType>(undefined as any);
+const AppContext = createContext<AppContextType>(undefined as unknown as AppContextType);
 
 // ============================================================
 // HOOK PERSONALIZADO: useApp()
@@ -141,6 +149,7 @@ const AppContext = createContext<AppContextType>(undefined as any);
 // Este hook es lo que usan los componentes para acceder al contexto.
 // En lugar de escribir useContext(AppContext) cada vez,
 // simplemente escribimos useApp() y es más legible.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => {
     const contexto = useContext(AppContext);
     // Si alguien usa useApp() fuera del Provider, lanzamos un error claro
@@ -167,6 +176,7 @@ const CLAVES_LS = {
     USUARIO: 'dacapo_usuario',
     MODO_OSCURO: 'dacapo_modo_oscuro',
     USUARIOS_REGISTRADOS: 'dacapo_usuarios_registrados',
+    ASISTENTE: 'dacapo_config_asistente',
 };
 
 // ============================================================
@@ -194,6 +204,11 @@ function guardarEnLocalStorage<T>(clave: string, valor: T): void {
         console.warn('No se pudo guardar en LocalStorage:', clave);
     }
 }
+
+// ============================================================
+// CONFIGURACIÓN DEL ASISTENTE
+// ============================================================
+export const WHATSAPP_PHONE_NUMBER = '584241721311';
 
 // ============================================================
 // USUARIOS DE PRUEBA (en Fase 1 sin Supabase)
@@ -227,9 +242,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // "useState" guarda un valor y provee una función para cambiarlo.
     // Sintaxis: const [valor, setValor] = useState(valorInicial)
 
-    const [infoGrupo, setInfoGrupo] = useState<InfoGrupo>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.INFO_GRUPO, infoGrupoDefault)
-    );
+    const [infoGrupo, setInfoGrupo] = useState<InfoGrupo>(() => {
+        const stored = leerDesdeLocalStorage<InfoGrupo | null>(CLAVES_LS.INFO_GRUPO, null);
+        if (!stored) return infoGrupoDefault;
+        return {
+            ...stored,
+            emailContacto: infoGrupoDefault.emailContacto,
+            redesSociales: infoGrupoDefault.redesSociales,
+        };
+    });
 
     const [integrantes, setIntegrantes] = useState<Integrante[]>(() =>
         leerDesdeLocalStorage(CLAVES_LS.INTEGRANTES, integrantesDefault)
@@ -266,6 +287,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [modoOscuro, setModoOscuro] = useState<boolean>(() =>
         leerDesdeLocalStorage(CLAVES_LS.MODO_OSCURO, true)
     );
+
+    // Modal de autenticación: un solo estado global para que cualquier
+    // botón de "Iniciar sesión" (Navbar, Biblioteca, etc.) abra el mismo modal
+    const [modalAuthAbierto, setModalAuthAbierto] = useState(false);
+    const abrirModalAuth = () => setModalAuthAbierto(true);
+    const cerrarModalAuth = () => setModalAuthAbierto(false);
 
     // ============================================================
     // EFECTOS: Se ejecutan cuando los datos cambian
@@ -493,6 +520,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setModoOscuro(prev => !prev);
     };
 
+    const actualizarAsistente = (nuevasConfig: Partial<{ tipoAsistente: 'ninguno' | 'chatbot' | 'whatsapp'; numeroWhatsapp: string }>) => {
+        setConfiguracionSecciones(prev => {
+            const actualizado = { ...prev };
+            if (nuevasConfig.tipoAsistente !== undefined) {
+                actualizado.tipoAsistente = nuevasConfig.tipoAsistente;
+                if (nuevasConfig.tipoAsistente === 'whatsapp' && !actualizado.numeroWhatsapp) {
+                    actualizado.numeroWhatsapp = WHATSAPP_PHONE_NUMBER;
+                }
+            }
+            if (nuevasConfig.numeroWhatsapp !== undefined) {
+                actualizado.numeroWhatsapp = nuevasConfig.numeroWhatsapp;
+            }
+            return actualizado;
+        });
+    };
+
     // ============================================================
     // VALORES DERIVADOS
     // ============================================================
@@ -539,8 +582,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         enviarMensajeContacto,
         marcarSolicitudRevisada,
         marcarMensajeLeido,
+        actualizarAsistente,
         modoOscuro,
         toggleModoOscuro,
+        modalAuthAbierto,
+        abrirModalAuth,
+        cerrarModalAuth,
     };
 
     // El "Provider" hace que el contexto esté disponible para todos

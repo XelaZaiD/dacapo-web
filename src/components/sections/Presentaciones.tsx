@@ -9,6 +9,7 @@
 import { useState, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { Play, ChevronLeft, ChevronRight, Video } from 'lucide-react';
+import CarruselMovil from '../ui/CarruselMovil';
 
 // ============================================================
 // DATOS: Videos de YouTube de ejemplo
@@ -94,7 +95,7 @@ const TarjetaVideo = ({ video }: { video: typeof VIDEOS_YOUTUBE[0] }) => {
                     {/* Botón de Play */}
                     <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-16 h-16 rounded-full bg-vinotinto/80 backdrop-blur-sm
-                            flex items-center justify-center border-2 border-white/20
+                            flex items-center justify-center border-2 borde-medium
                             group-hover:scale-110 group-hover:bg-vinotinto transition-all duration-300
                             shadow-glow-vinotinto">
                             <Play className="w-7 h-7 text-white fill-white ml-1" />
@@ -106,7 +107,7 @@ const TarjetaVideo = ({ video }: { video: typeof VIDEOS_YOUTUBE[0] }) => {
             {/* Información del video */}
             <div className="p-4">
                 <h4 className="font-semibold text-secundario text-sm mb-1">{video.titulo}</h4>
-                <p className="text-xs text-white/40">{video.descripcion}</p>
+                <p className="text-xs t-muted">{video.descripcion}</p>
             </div>
         </div>
     );
@@ -147,7 +148,7 @@ const SeccionPresentaciones = () => {
                     </span>
                     <h2 className="titulo-seccion mb-4">Presentaciones & Media</h2>
                     <div className="linea-decorativa mx-auto mb-6" />
-                    <p className="text-white/50 max-w-2xl mx-auto">
+                    <p className="t-muted max-w-2xl mx-auto">
                         Revive nuestras presentaciones y guarda los mejores momentos de DaCapo.
                     </p>
                 </motion.div>
@@ -159,15 +160,18 @@ const SeccionPresentaciones = () => {
                     animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
                     transition={{ duration: 0.7, delay: 0.2 }}
                 >
-                    <h3 className="text-xl font-semibold text-white/70 mb-6 flex items-center gap-2">
+                    <h3 className="text-xl font-semibold t-muted-high mb-6 flex items-center gap-2">
                         <Video className="w-5 h-5 text-red-500" />
                         Videos
                     </h3>
-                    <div className="grid md:grid-cols-3 gap-6">
-                        {VIDEOS_YOUTUBE.map(video => (
+                    <CarruselMovil
+                        slides={VIDEOS_YOUTUBE.map(video => (
                             <TarjetaVideo key={video.id} video={video} />
                         ))}
-                    </div>
+                        claseSlide="w-[82%] md:w-auto"
+                        gridDesktop="md:grid md:grid-cols-3 md:gap-6"
+                        ariaLabel="Carrusel de videos"
+                    />
                 </motion.div>
 
                 {/* ---- CARRUSEL DE FOTOS ---- */}
@@ -176,7 +180,7 @@ const SeccionPresentaciones = () => {
                     animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
                     transition={{ duration: 0.7, delay: 0.4 }}
                 >
-                    <h3 className="text-xl font-semibold text-white/70 mb-6">Galería de Fotos</h3>
+                    <h3 className="text-xl font-semibold t-muted-high mb-6">Galería de Fotos</h3>
 
                     {/* Carrusel principal */}
                     <div className="relative">
@@ -198,7 +202,7 @@ const SeccionPresentaciones = () => {
                             {/* Descripción de la foto */}
                             <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70">
                                 <p className="text-white font-medium">{FOTOS_GALERIA[indiceCarrusel].alt}</p>
-                                <p className="text-white/50 text-sm">{indiceCarrusel + 1} / {FOTOS_GALERIA.length}</p>
+                                <p className="t-muted text-sm">{indiceCarrusel + 1} / {FOTOS_GALERIA.length}</p>
                             </div>
                         </div>
 
@@ -206,7 +210,7 @@ const SeccionPresentaciones = () => {
                         <button
                             onClick={anteriorFoto}
                             className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
-                         bg-black/50 backdrop-blur-sm border border-white/20
+                         bg-black/50 backdrop-blur-sm border borde-medium
                          flex items-center justify-center text-white
                          hover:bg-vinotinto transition-all duration-300"
                         >
@@ -215,7 +219,7 @@ const SeccionPresentaciones = () => {
                         <button
                             onClick={siguienteFoto}
                             className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
-                         bg-black/50 backdrop-blur-sm border border-white/20
+                         bg-black/50 backdrop-blur-sm border borde-medium
                          flex items-center justify-center text-white
                          hover:bg-vinotinto transition-all duration-300"
                         >

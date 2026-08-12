@@ -44,13 +44,13 @@ const Chatbot = () => {
     const [botEscribiendo, setBotEscribiendo] = useState(false);
     const finMensajesRef = useRef<HTMLDivElement>(null);
 
-    // No mostrar si está desactivado desde el admin
-    if (!configuracionSecciones.mostrarChatbot) return null;
-
     // Cada vez que hay un nuevo mensaje, scrollear al final
     useEffect(() => {
         finMensajesRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [mensajes, botEscribiendo]);
+
+    // No mostrar si el tipo de asistente no es 'chatbot'
+    if (configuracionSecciones.tipoAsistente !== 'chatbot') return null;
 
     /**
      * Busca la respuesta más relevante para el mensaje del usuario.
@@ -115,14 +115,14 @@ const Chatbot = () => {
     };
 
     return (
-        <div className="fixed bottom-24 right-4 z-40">
+        <div className="fixed bottom-4 right-4 z-40">
 
             {/* Ventana del chat */}
             <AnimatePresence>
                 {abierto && (
                     <motion.div
                         className="mb-4 w-80 sm:w-96 bg-fondo-oscuro/95 backdrop-blur-xl
-                       border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                       border borde-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                         style={{ height: '480px' }}
                         initial={{ opacity: 0, scale: 0.8, y: 20, transformOrigin: 'bottom right' }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -130,7 +130,7 @@ const Chatbot = () => {
                         transition={{ duration: 0.3, type: 'spring', stiffness: 300, damping: 25 }}
                     >
                         {/* ---- CABECERA ---- */}
-                        <div className="flex items-center justify-between p-4 border-b border-white/10
+                        <div className="flex items-center justify-between p-4 border-b borde-subtle
                             bg-gradient-to-r from-vinotinto/20 to-transparent">
                             <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-full bg-vinotinto flex items-center justify-center">
@@ -140,14 +140,14 @@ const Chatbot = () => {
                                     <p className="font-semibold text-sm text-secundario">Asistente DaCapo</p>
                                     <div className="flex items-center gap-1.5">
                                         <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                                        <span className="text-[10px] text-white/50">En línea</span>
+                                        <span className="text-[10px] t-muted">En línea</span>
                                     </div>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setAbierto(false)}
                                 className="w-7 h-7 flex items-center justify-center rounded-full
-                           text-white/40 hover:text-white hover:bg-white/10 transition-all"
+                           t-muted hover:text-secundario hover:bg-sutil-hover transition-all"
                             >
                                 <X className="w-4 h-4" />
                             </button>
@@ -170,7 +170,7 @@ const Chatbot = () => {
                                     {/* Burbuja del mensaje */}
                                     <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed
                                    whitespace-pre-line ${mensaje.esBot
-                                            ? 'bg-white/10 text-white/80 rounded-tl-sm'
+                                            ? 'bg-sutil-hover t-muted-high rounded-tl-sm'
                                             : 'bg-vinotinto text-white rounded-tr-sm'
                                         }`}>
                                         {mensaje.texto}
@@ -178,8 +178,8 @@ const Chatbot = () => {
 
                                     {/* Avatar del usuario */}
                                     {!mensaje.esBot && (
-                                        <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 mt-1">
-                                            <UserIcon className="w-3.5 h-3.5 text-white/70" />
+                                        <div className="w-7 h-7 rounded-full bg-sutil-hover flex items-center justify-center flex-shrink-0 mt-1">
+                                            <UserIcon className="w-3.5 h-3.5 t-muted-high" />
                                         </div>
                                     )}
                                 </div>
@@ -191,7 +191,7 @@ const Chatbot = () => {
                                     <div className="w-7 h-7 rounded-full bg-vinotinto flex items-center justify-center">
                                         <Bot className="w-3.5 h-3.5 text-white" />
                                     </div>
-                                    <div className="bg-white/10 rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1.5 items-center">
+                                    <div className="bg-sutil-hover rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1.5 items-center">
                                         {[0, 1, 2].map(i => (
                                             <div
                                                 key={i}
@@ -225,7 +225,7 @@ const Chatbot = () => {
                         )}
 
                         {/* ---- INPUT DE MENSAJE ---- */}
-                        <div className="p-3 border-t border-white/10">
+                        <div className="p-3 border-t borde-subtle">
                             <div className="flex gap-2">
                                 <input
                                     type="text"
@@ -233,7 +233,7 @@ const Chatbot = () => {
                                     onChange={e => setInputUsuario(e.target.value)}
                                     onKeyPress={manejarKeyPress}
                                     placeholder="Escribe tu pregunta..."
-                                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5
+                                    className="flex-1 bg-sutil border borde-subtle rounded-xl px-4 py-2.5
                              text-sm text-secundario placeholder-white/30 focus:outline-none
                              focus:border-vinotinto/50 transition-colors"
                                 />

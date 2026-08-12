@@ -109,7 +109,7 @@ const SeccionAudiciones = () => {
                         </span>
                         <h2 className="titulo-seccion mb-4">Únete a DaCapo</h2>
                         <div className="linea-decorativa mx-auto mb-6" />
-                        <p className="text-white/50 leading-relaxed">
+                        <p className="t-muted leading-relaxed">
                             ¿Tienes pasión por el canto coral? Postúlate y sé parte de nuestra familia vocal.
                             Aceptamos todos los niveles de experiencia.
                         </p>
@@ -129,7 +129,7 @@ const SeccionAudiciones = () => {
                             <h3 className="text-2xl font-display font-bold text-secundario mb-3">
                                 ¡Solicitud Enviada!
                             </h3>
-                            <p className="text-white/60 mb-8">
+                            <p className="t-muted-high mb-8">
                                 Recibimos tu solicitud de audición. Nos pondremos en contacto contigo
                                 en los próximos 5 días hábiles.
                             </p>
@@ -268,7 +268,7 @@ const SeccionAudiciones = () => {
                                     value={datosFormulario.urlAudioPrueba}
                                     onChange={e => actualizarCampo('urlAudioPrueba', e.target.value)}
                                 />
-                                <p className="text-white/30 text-xs mt-1">
+                                <p className="t-muted-low text-xs mt-1">
                                     Puedes compartir un enlace de Google Drive, YouTube, Instagram o cualquier plataforma.
                                 </p>
                             </div>
@@ -281,7 +281,7 @@ const SeccionAudiciones = () => {
                             >
                                 {enviando ? (
                                     <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <div className="w-4 h-4 border-2 borde-medium border-t-white rounded-full animate-spin" />
                                         Enviando...
                                     </>
                                 ) : (
@@ -292,7 +292,7 @@ const SeccionAudiciones = () => {
                                 )}
                             </button>
 
-                            <p className="text-white/30 text-xs text-center">
+                            <p className="t-muted-low text-xs text-center">
                                 * Campos obligatorios. Tu información se mantendrá confidencial.
                             </p>
                         </motion.form>

@@ -12,6 +12,7 @@ import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { BookOpen, Lock, Search, Filter, Download, Eye, X, Music2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Partitura } from '../../data/mockData';
+import CarruselMovil from '../ui/CarruselMovil';
 
 // Colores para los niveles de dificultad
 const COLORES_DIFICULTAD: Record<string, string> = {
@@ -60,28 +61,28 @@ const ModalPartitura = ({ partitura, alCerrar }: { partitura: Partitura; alCerra
                     </div>
                     <div>
                         <h3 className="text-xl font-display font-bold text-secundario">{partitura.titulo}</h3>
-                        <p className="text-white/50 text-sm">{partitura.compositor}</p>
+                        <p className="t-muted text-sm">{partitura.compositor}</p>
                     </div>
                 </div>
 
                 {/* Metadatos */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="bg-white/5 rounded-lg p-3">
-                        <p className="text-xs text-white/40 mb-1">Estilo</p>
-                        <p className="text-sm text-white/80">{partitura.estilo}</p>
+                    <div className="bg-sutil rounded-lg p-3">
+                        <p className="text-xs t-muted mb-1">Estilo</p>
+                        <p className="text-sm t-muted-high">{partitura.estilo}</p>
                     </div>
-                    <div className="bg-white/5 rounded-lg p-3">
-                        <p className="text-xs text-white/40 mb-1">Época</p>
-                        <p className="text-sm text-white/80">{partitura.epoca}</p>
+                    <div className="bg-sutil rounded-lg p-3">
+                        <p className="text-xs t-muted mb-1">Época</p>
+                        <p className="text-sm t-muted-high">{partitura.epoca}</p>
                     </div>
                     {partitura.arreglista && (
-                        <div className="bg-white/5 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Arreglista</p>
-                            <p className="text-sm text-white/80">{partitura.arreglista}</p>
+                        <div className="bg-sutil rounded-lg p-3">
+                            <p className="text-xs t-muted mb-1">Arreglista</p>
+                            <p className="text-sm t-muted-high">{partitura.arreglista}</p>
                         </div>
                     )}
-                    <div className="bg-white/5 rounded-lg p-3">
-                        <p className="text-xs text-white/40 mb-1">Dificultad</p>
+                    <div className="bg-sutil rounded-lg p-3">
+                        <p className="text-xs t-muted mb-1">Dificultad</p>
                         <span className={`badge border text-xs ${COLORES_DIFICULTAD[partitura.dificultad]}`}>
                             {partitura.dificultad}
                         </span>
@@ -90,7 +91,7 @@ const ModalPartitura = ({ partitura, alCerrar }: { partitura: Partitura; alCerra
 
                 {/* Cuerdas */}
                 <div className="mb-4">
-                    <p className="text-xs text-white/40 mb-2">Voces:</p>
+                    <p className="text-xs t-muted mb-2">Voces:</p>
                     <div className="flex flex-wrap gap-2">
                         {partitura.cuerdas.map(cuerda => (
                             <span key={cuerda} className="badge badge-vinotinto text-xs">
@@ -102,7 +103,7 @@ const ModalPartitura = ({ partitura, alCerrar }: { partitura: Partitura; alCerra
 
                 {/* Descripción */}
                 <div className="linea-decorativa mb-4" />
-                <p className="text-white/60 text-sm leading-relaxed">{partitura.descripcion}</p>
+                <p className="t-muted-high text-sm leading-relaxed">{partitura.descripcion}</p>
             </div>
 
             {/* Botones de acción */}
@@ -119,7 +120,7 @@ const ModalPartitura = ({ partitura, alCerrar }: { partitura: Partitura; alCerra
                         </a>
                     </>
                 ) : (
-                    <p className="text-white/40 text-sm">PDF no disponible aún</p>
+                    <p className="t-muted text-sm">PDF no disponible aún</p>
                 )}
             </div>
         </motion.div>
@@ -134,7 +135,7 @@ const TarjetaPartitura = ({ partitura, alVerDetalle }: {
     alVerDetalle: () => void;
 }) => (
     <motion.div
-        className="card-glass rounded-xl p-5 group cursor-pointer border border-white/10
+        className="card-glass rounded-xl p-5 group cursor-pointer border borde-subtle
                hover:border-vinotinto/40 transition-all duration-300"
         onClick={alVerDetalle}
         whileHover={{ y: -2 }}
@@ -156,10 +157,10 @@ const TarjetaPartitura = ({ partitura, alVerDetalle }: {
                    transition-colors duration-300">
             {partitura.titulo}
         </h4>
-        <p className="text-xs text-white/40 mb-3">{partitura.compositor}</p>
+        <p className="text-xs t-muted mb-3">{partitura.compositor}</p>
 
         {/* Estilo y época */}
-        <div className="flex items-center gap-2 text-xs text-white/30 mb-4">
+        <div className="flex items-center gap-2 text-xs t-muted-low mb-4">
             <span>{partitura.estilo}</span>
             <span>·</span>
             <span>{partitura.epoca}</span>
@@ -168,14 +169,14 @@ const TarjetaPartitura = ({ partitura, alVerDetalle }: {
         {/* Cuerdas requeridas */}
         <div className="flex flex-wrap gap-1">
             {partitura.cuerdas.map(cuerda => (
-                <span key={cuerda} className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 text-white/40 border border-white/10">
+                <span key={cuerda} className="text-[9px] px-2 py-0.5 rounded-full bg-sutil t-muted border borde-subtle">
                     {cuerda.substring(0, 3)}
                 </span>
             ))}
         </div>
 
         {/* Hover: botón de ver */}
-        <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between opacity-0
+        <div className="mt-4 pt-4 border-t borde-subtle flex items-center justify-between opacity-0
                     group-hover:opacity-100 transition-opacity duration-300">
             <span className="text-xs text-vinotinto-claro">Ver detalles y PDF →</span>
         </div>
@@ -186,7 +187,7 @@ const TarjetaPartitura = ({ partitura, alVerDetalle }: {
 // COMPONENTE PRINCIPAL: SeccionBiblioteca
 // ============================================================
 const SeccionBiblioteca = () => {
-    const { partituras, configuracionSecciones, estaLogueado } = useApp();
+    const { partituras, configuracionSecciones, estaLogueado, abrirModalAuth } = useApp();
     const ref = useRef(null);
     const estaEnPantalla = useInView(ref, { once: true, margin: '-100px' });
 
@@ -228,7 +229,7 @@ const SeccionBiblioteca = () => {
                     </span>
                     <h2 className="titulo-seccion mb-4">Biblioteca de Partituras</h2>
                     <div className="linea-decorativa mx-auto mb-6" />
-                    <p className="text-white/50 max-w-2xl mx-auto">
+                    <p className="t-muted max-w-2xl mx-auto">
                         Acceso exclusivo a nuestro repertorio coral. Descarga y estudia las partituras del grupo.
                     </p>
                 </motion.div>
@@ -247,12 +248,12 @@ const SeccionBiblioteca = () => {
                         <h3 className="text-2xl font-display font-bold text-secundario mb-4">
                             Área Restringida
                         </h3>
-                        <p className="text-white/50 mb-8 leading-relaxed">
+                        <p className="t-muted mb-8 leading-relaxed">
                             La biblioteca de partituras es exclusiva para integrantes y colaboradores de DaCapo.
                             Inicia sesión o regístrate para acceder.
                         </p>
                         <button
-                            onClick={() => document.dispatchEvent(new CustomEvent('abrir-modal-auth'))}
+                            onClick={abrirModalAuth}
                             className="btn-primario mx-auto"
                         >
                             <Lock className="w-4 h-4" />
@@ -271,7 +272,7 @@ const SeccionBiblioteca = () => {
                         >
                             {/* Campo de búsqueda */}
                             <div className="flex-1 relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 t-muted" />
                                 <input
                                     type="text"
                                     placeholder="Buscar por título, compositor, estilo..."
@@ -283,7 +284,7 @@ const SeccionBiblioteca = () => {
 
                             {/* Filtro por voz */}
                             <div className="relative">
-                                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 t-muted" />
                                 <select
                                     value={filtroVoz}
                                     onChange={e => setFiltroVoz(e.target.value)}
@@ -311,25 +312,40 @@ const SeccionBiblioteca = () => {
                         </motion.div>
 
                         {/* Contador de resultados */}
-                        <p className="text-white/40 text-sm mb-6">
+                        <p className="t-muted text-sm mb-6">
                             {partiturasFiltradas.length} partitura{partiturasFiltradas.length !== 1 ? 's' : ''} encontrada{partiturasFiltradas.length !== 1 ? 's' : ''}
                         </p>
 
-                        {/* Grid de partituras */}
+                        {/* Carrusel de partituras (solo móvil; en md+ se usa el grid de abajo) */}
                         {partiturasFiltradas.length > 0 ? (
-                            <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                <AnimatePresence>
-                                    {partiturasFiltradas.map(partitura => (
+                            <>
+                                <CarruselMovil
+                                    slides={partiturasFiltradas.map(partitura => (
                                         <TarjetaPartitura
                                             key={partitura.id}
                                             partitura={partitura}
                                             alVerDetalle={() => setPartituraSeleccionada(partitura)}
                                         />
                                     ))}
-                                </AnimatePresence>
-                            </div>
+                                    claseSlide="w-[78%] md:w-auto"
+                                    gridDesktop="md:grid md:grid-cols-3 lg:grid-cols-4 md:gap-4"
+                                    ariaLabel="Carrusel de partituras"
+                                />
+                                {/* Grid de partituras (solo pantallas md+; en móvil se usa el carrusel) */}
+                                <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    <AnimatePresence>
+                                        {partiturasFiltradas.map(partitura => (
+                                            <TarjetaPartitura
+                                                key={partitura.id}
+                                                partitura={partitura}
+                                                alVerDetalle={() => setPartituraSeleccionada(partitura)}
+                                            />
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
+                            </>
                         ) : (
-                            <div className="text-center py-16 text-white/40">
+                            <div className="text-center py-16 t-muted">
                                 <Music2 className="w-12 h-12 mx-auto mb-4 opacity-30" />
                                 <p>No se encontraron partituras con esos filtros.</p>
                             </div>

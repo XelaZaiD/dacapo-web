@@ -18,6 +18,7 @@ import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { X, Music, Award } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Integrante } from '../../data/mockData';
+import CarruselMovil from '../ui/CarruselMovil';
 
 // Colores para distinguir cada cuerda vocal
 const COLORES_CUERDA: Record<string, { bg: string; text: string; border: string }> = {
@@ -57,8 +58,8 @@ const ModalIntegrante = ({ integrante, alCerrar }: { integrante: Integrante; alC
                 <button
                     onClick={alCerrar}
                     className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
-                     rounded-full bg-white/10 hover:bg-white/20 text-white/70
-                     hover:text-white transition-all duration-200"
+                     rounded-full bg-sutil-hover hover:bg-white/20 text-white/70
+                     hover:text-secundario transition-all duration-200"
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -99,8 +100,8 @@ const ModalIntegrante = ({ integrante, alCerrar }: { integrante: Integrante; alC
 
                 {/* Rango vocal */}
                 <div className="flex justify-center mb-6">
-                    <div className="px-4 py-2 rounded-full bg-white/5 border border-white/10">
-                        <span className="text-xs text-white/50 uppercase tracking-wider">Rango Vocal: </span>
+                    <div className="px-4 py-2 rounded-full bg-sutil border borde-subtle">
+                        <span className="text-xs t-muted uppercase tracking-wider">Rango Vocal: </span>
                         <span className="text-sm font-medium text-khaki">{integrante.rangoVocal}</span>
                     </div>
                 </div>
@@ -109,7 +110,7 @@ const ModalIntegrante = ({ integrante, alCerrar }: { integrante: Integrante; alC
                 <div className="linea-decorativa mx-auto mb-6" />
 
                 {/* Biografía */}
-                <p className="text-white/60 text-sm leading-relaxed text-center">
+                <p className="t-muted-high text-sm leading-relaxed text-center">
                     {integrante.biografia}
                 </p>
             </motion.div>
@@ -128,7 +129,7 @@ const TarjetaIntegrante = ({ integrante, alHacerClic }: {
 
     return (
         <motion.div
-            className="card-glass card-3d rounded-xl overflow-hidden cursor-pointer group border border-white/10
+            className="card-glass card-3d rounded-xl overflow-hidden cursor-pointer group border borde-subtle
                  hover:border-vinotinto/40 transition-all duration-300"
             onClick={alHacerClic}
             whileHover={{ y: -4 }}
@@ -146,7 +147,7 @@ const TarjetaIntegrante = ({ integrante, alHacerClic }: {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent
                         opacity-0 group-hover:opacity-100 transition-opacity duration-300
                         flex items-end p-4">
-                    <span className="text-xs text-white/80">Ver biografía →</span>
+                    <span className="text-xs t-muted-high">Ver biografía →</span>
                 </div>
 
                 {/* Badge de cuerda en la esquina */}
@@ -175,8 +176,8 @@ const TarjetaIntegrante = ({ integrante, alHacerClic }: {
                 {integrante.esDirectivo && integrante.cargo && (
                     <p className="text-xs text-khaki/80">{integrante.cargo}</p>
                 )}
-                <p className="text-xs text-white/40 mt-1">
-                    Rango: <span className="text-white/60">{integrante.rangoVocal}</span>
+                <p className="text-xs t-muted mt-1">
+                    Rango: <span className="t-muted-high">{integrante.rangoVocal}</span>
                 </p>
             </div>
         </motion.div>
@@ -227,7 +228,7 @@ const SeccionIntegrantes = () => {
                     </span>
                     <h2 className="titulo-seccion mb-4">Los Integrantes</h2>
                     <div className="linea-decorativa mx-auto mb-6" />
-                    <p className="text-white/50 max-w-2xl mx-auto">
+                    <p className="t-muted max-w-2xl mx-auto">
                         Descubre las voces que dan vida a DaCapo Grupo Vocal.
                         Haz clic en cualquier integrante para conocer su historia.
                     </p>
@@ -246,7 +247,7 @@ const SeccionIntegrantes = () => {
                             onClick={() => setFiltroActivo(filtro)}
                             className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${filtroActivo === filtro
                                     ? 'bg-vinotinto text-white shadow-glow-vinotinto'
-                                    : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white border border-white/10'
+                                    : 'bg-sutil t-muted-high hover:bg-sutil-hover hover:text-secundario border borde-subtle'
                                 }`}
                         >
                             {filtro === 'Todos' ? `Todos (${integrantes.length})` : `${filtro}s`}
@@ -254,9 +255,29 @@ const SeccionIntegrantes = () => {
                     ))}
                 </motion.div>
 
-                {/* Grid de tarjetas */}
+                {/* Carrusel de tarjetas (solo móvil; en md+ se usa el grid de abajo) */}
+                <CarruselMovil
+                    slides={integrantesFiltrados.map((integrante, indice) => (
+                        <motion.div
+                            key={integrante.id}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.3, delay: indice * 0.05 }}
+                        >
+                            <TarjetaIntegrante
+                                integrante={integrante}
+                                alHacerClic={() => setIntegranteSeleccionado(integrante)}
+                            />
+                        </motion.div>
+                    ))}
+                    claseSlide="w-[72%] md:w-auto"
+                    gridDesktop="md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-4"
+                    ariaLabel="Carrusel de integrantes"
+                />
+
+                {/* Grid de tarjetas (solo pantallas md+; en móvil se usa el carrusel) */}
                 <motion.div
-                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
+                    className="hidden md:grid grid-cols-4 lg:grid-cols-6 gap-4"
                     layout // Permite animar el reordenamiento cuando cambia el filtro
                 >
                     <AnimatePresence mode="popLayout">
@@ -280,7 +301,7 @@ const SeccionIntegrantes = () => {
 
                 {/* Mensaje si no hay integrantes con el filtro */}
                 {integrantesFiltrados.length === 0 && (
-                    <div className="text-center py-16 text-white/40">
+                    <div className="text-center py-16 t-muted">
                         No hay integrantes registrados en esta cuerda.
                     </div>
                 )}

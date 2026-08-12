@@ -23,6 +23,9 @@ import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown, Play, Calendar, Music2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import ViniloGiratorio from './ViniloGiratorio';
+import AuroraFondo from './AuroraFondo';
+import MarqueeMusical from './MarqueeMusical';
 
 // ============================================================
 // NOTAS MUSICALES PARA EL FONDO ANIMADO
@@ -30,16 +33,16 @@ import { useApp } from '../../context/AppContext';
 // Cada nota tiene: el símbolo musical, y propiedades de animación
 // (posición horizontal, tamaño, velocidad y retraso)
 const NOTAS_FLOTANTES = [
-    { simbolo: '♩', x: '10%', tamanio: 24, duracion: 8, retraso: 0 },
-    { simbolo: '♪', x: '25%', tamanio: 16, duracion: 12, retraso: 2 },
-    { simbolo: '♫', x: '40%', tamanio: 20, duracion: 10, retraso: 4 },
-    { simbolo: '♩', x: '55%', tamanio: 18, duracion: 9, retraso: 1 },
-    { simbolo: '♬', x: '70%', tamanio: 22, duracion: 11, retraso: 3 },
-    { simbolo: '♪', x: '85%', tamanio: 14, duracion: 7, retraso: 5 },
-    { simbolo: '𝄞', x: '15%', tamanio: 28, duracion: 15, retraso: 6 }, // Clave de Sol
-    { simbolo: '♫', x: '90%', tamanio: 16, duracion: 10, retraso: 2 },
-    { simbolo: '♩', x: '60%', tamanio: 12, duracion: 8, retraso: 7 },
-    { simbolo: '♬', x: '35%', tamanio: 20, duracion: 13, retraso: 3 },
+    { simbolo: '♩', x: '10%', tamanio: 42, duracion: 8, retraso: 0 },
+    { simbolo: '♪', x: '25%', tamanio: 28, duracion: 12, retraso: 2 },
+    { simbolo: '♫', x: '40%', tamanio: 35, duracion: 10, retraso: 4 },
+    { simbolo: '♩', x: '55%', tamanio: 32, duracion: 9, retraso: 1 },
+    { simbolo: '♬', x: '70%', tamanio: 39, duracion: 11, retraso: 3 },
+    { simbolo: '♪', x: '85%', tamanio: 25, duracion: 7, retraso: 5 },
+    { simbolo: '𝄞', x: '15%', tamanio: 49, duracion: 15, retraso: 6 }, // Clave de Sol
+    { simbolo: '♫', x: '90%', tamanio: 28, duracion: 10, retraso: 2 },
+    { simbolo: '♩', x: '60%', tamanio: 21, duracion: 8, retraso: 7 },
+    { simbolo: '♬', x: '35%', tamanio: 35, duracion: 13, retraso: 3 },
 ];
 
 // ============================================================
@@ -132,18 +135,8 @@ const HeroSection = () => {
             id="inicio"
             className="relative min-h-screen flex items-center justify-center overflow-hidden bg-fondo-oscuro"
         >
-            {/* ---- FONDO: Gradiente radial ---- */}
-            <div className="absolute inset-0">
-                {/* Gradiente de vinotinto en el centro, muy sutil */}
-                <div className="absolute inset-0 bg-gradient-radial from-vinotinto/20 via-transparent to-transparent"
-                    style={{ background: 'radial-gradient(ellipse at 30% 50%, rgba(114,47,55,0.25) 0%, transparent 70%)' }}
-                />
-                {/* Segundo gradiente desde abajo */}
-                <div
-                    style={{ background: 'radial-gradient(ellipse at 80% 80%, rgba(240,230,140,0.05) 0%, transparent 60%)' }}
-                    className="absolute inset-0"
-                />
-            </div>
+            {/* ---- FONDO: Aurora animada (dinámica por tema) ---- */}
+            <AuroraFondo />
 
             {/* ---- FONDO: Pentagrama animado ---- */}
             <PentagramaAnimado />
@@ -152,7 +145,8 @@ const HeroSection = () => {
             {NOTAS_FLOTANTES.map((nota, indice) => (
                 <motion.span
                     key={indice}
-                    className="absolute pointer-events-none select-none text-khaki/20 font-display"
+                    className="absolute pointer-events-none select-none font-display
+                               text-[var(--nota-hero)] drop-shadow-[0_0_8px_var(--nota-hero-glow)]"
                     style={{
                         left: nota.x,        // Posición horizontal
                         bottom: '-10%',      // Empieza por debajo de la pantalla
@@ -160,7 +154,7 @@ const HeroSection = () => {
                     }}
                     animate={{
                         y: [0, -(window.innerHeight * 1.2)], // Sube hacia arriba
-                        opacity: [0, 0.6, 0],                // Aparece y desaparece
+                        opacity: [0, 0.8, 0],                // Aparece y desaparece
                         rotate: [0, 360],                    // Rota mientras sube
                     }}
                     transition={{
@@ -177,12 +171,22 @@ const HeroSection = () => {
             {/* ---- CONTENIDO PRINCIPAL ---- */}
             <div className="contenedor relative z-10 text-center py-32">
 
+                {/* ---- VINILO GIRATORIO (pieza central) ---- */}
+                <motion.div
+                    initial={{ opacity: 0, y: 40, scale: 0.75 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.9, delay: 0.15, ease: 'easeOut' }}
+                    className="mb-10 sm:mb-12"
+                >
+                    <ViniloGiratorio />
+                </motion.div>
+
                 {/* Badge superior */}
                 <motion.div
                     className="inline-flex items-center gap-2 mb-8"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.2 }}
+                    transition={{ duration: 0.6, delay: 0.45 }}
                 >
                     <div className="badge-khaki flex items-center gap-2">
                         <Music2 className="w-3 h-3" />
@@ -190,22 +194,44 @@ const HeroSection = () => {
                     </div>
                 </motion.div>
 
-                {/* Título principal */}
+                {/* Título principal con revelado letra a letra */}
                 <motion.h1
                     className="font-display font-black text-secundario leading-none mb-6"
                     style={{ fontSize: 'clamp(3rem, 10vw, 8rem)' }} // Tamaño fluido
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8, delay: 0.3 }}
+                    initial="oculto"
+                    animate="visible"
                 >
-                    {/* "DaCapo" con gradiente de color */}
-                    <span className="block texto-gradiente">
-                        {infoGrupo.nombre}
-                    </span>
-                    {/* "Grupo Vocal" en blanco */}
-                    <span className="block text-secundario/90 text-[0.45em] font-sans font-light tracking-[0.3em] uppercase mt-2">
+                    {/* "DaCapo": cada letra aparece con desenfoque -> nitidez */}
+                    <motion.span
+                        className="block"
+                        variants={{ visible: { transition: { staggerChildren: 0.05, delayChildren: 0.55 } } }}
+                    >
+                        {infoGrupo.nombre.split('').map((letra, i) => (
+                            <motion.span
+                                key={i}
+                                className="inline-block texto-gradiente"
+                                variants={{
+                                    oculto: { opacity: 0, y: '0.6em', filter: 'blur(12px)' },
+                                    visible: {
+                                        opacity: 1, y: 0, filter: 'blur(0px)',
+                                        transition: { duration: 0.55, ease: 'easeOut' },
+                                    },
+                                }}
+                            >
+                                {letra}
+                            </motion.span>
+                        ))}
+                    </motion.span>
+                    {/* "Grupo Vocal" con un pequeño retraso */}
+                    <motion.span
+                        className="block text-secundario/90 text-[0.45em] font-sans font-light tracking-[0.3em] uppercase mt-[0.35em]"
+                        variants={{
+                            oculto: { opacity: 0, y: 16 },
+                            visible: { opacity: 1, y: 0, transition: { delay: 1.2, duration: 0.6 } },
+                        }}
+                    >
                         {infoGrupo.subtitulo}
-                    </span>
+                    </motion.span>
                 </motion.h1>
 
                 {/* Línea decorativa */}
@@ -222,7 +248,7 @@ const HeroSection = () => {
 
                 {/* Descripción */}
                 <motion.p
-                    className="text-white/60 text-lg md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed"
+                    className="t-muted-high text-lg md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.7 }}
@@ -271,19 +297,22 @@ const HeroSection = () => {
                         { valor: `${infoGrupo.totalIntegrantes}`, etiqueta: 'Coristas' },
                         { valor: `${infoGrupo.totalPartituras}+`, etiqueta: 'Partituras' },
                     ].map((stat, i) => (
-                        <div key={i} className="text-center p-4 rounded-xl bg-white/5 border border-white/10">
+                        <div key={i} className="text-center p-4 rounded-xl bg-sutil border borde-subtle">
                             <div className="text-3xl font-display font-bold texto-gradiente">{stat.valor}</div>
-                            <div className="text-xs text-white/50 uppercase tracking-widest mt-1">{stat.etiqueta}</div>
+                            <div className="text-xs t-muted uppercase tracking-widest mt-1">{stat.etiqueta}</div>
                         </div>
                     ))}
                 </motion.div>
             </div>
 
+            {/* ---- MARQUEE MUSICAL (banda infinita) ---- */}
+            <MarqueeMusical />
+
             {/* ---- INDICADOR DE SCROLL (flecha hacia abajo) ---- */}
             <motion.button
                 onClick={() => irASeccion('#nosotros')}
-                className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/30 hover:text-khaki
-                   transition-colors duration-300"
+                className="absolute bottom-20 left-1/2 -translate-x-1/2 t-muted-low hover:text-khaki
+                   transition-colors duration-300 z-[5]"
                 animate={{ y: [0, 10, 0] }}          // Animación de rebote vertical
                 transition={{ duration: 2, repeat: Infinity }} // Se repite infinitamente
             >

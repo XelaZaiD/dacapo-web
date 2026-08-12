@@ -37,27 +37,24 @@ export default {
       // Para cambiar un color, reemplaza el valor hexadecimal.
       // Ejemplo: 'vinotinto': '#722F37'  ->  'vinotinto': '#8B0000'
       colors: {
-        // --- Colores Principales ---
-        'primario': '#000000',       // Negro Profundo - Fondo principal modo oscuro
-        'secundario': '#FFFFFF',     // Blanco Puro - Textos y fondos modo claro
+        'primario': '#000000',
+        'secundario': 'var(--text-primary)',
 
-        // --- Colores de Acento (los más importantes visualmente) ---
         'vinotinto': {
-          DEFAULT: '#722F37',        // Vinotinto principal para botones y destacados
-          'claro': '#9B4450',        // Versión más clara para hovers
-          'oscuro': '#4A1E23',       // Versión más oscura para fondos sutiles
+          DEFAULT: '#722F37',
+          'claro': '#9B4450',
+          'oscuro': '#4A1E23',
         },
         'khaki': {
-          DEFAULT: '#F0E68C',        // Khaki/Dorado para detalles y badges
-          'claro': '#F5EDA0',        // Versión más clara
-          'oscuro': '#C8C070',       // Versión más oscura
+          DEFAULT: '#F0E68C',
+          'claro': '#F5EDA0',
+          'oscuro': '#C8C070',
         },
 
-        // --- Fondos Alternativos ---
-        'fondo-oscuro': '#0B0C10',   // Gris ultra oscuro (fondo principal)
-        'fondo-card': '#121212',     // Fondo de tarjetas en modo oscuro
-        'fondo-medio': '#1A1B1F',   // Fondo de secciones intermedias
-        'fondo-claro': '#F8F5F0',   // Fondo marfil para modo claro
+        'fondo-oscuro': 'var(--bg-primary)',
+        'fondo-card': 'var(--bg-card)',
+        'fondo-medio': 'var(--bg-medio)',
+        'fondo-claro': '#F8F5F0',
       },
 
       // ====================================================
@@ -102,6 +99,11 @@ export default {
           '0%': { backgroundPosition: '-1000px 0' },
           '100%': { backgroundPosition: '1000px 0' },
         },
+        // Marquee infinito (banda de texto desplazándose)
+        'marquee': {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
       },
       animation: {
         'float-up': 'float-up 6s ease-in-out infinite',
@@ -109,14 +111,14 @@ export default {
         'eq-bar': 'eq-bar 0.8s ease-in-out infinite',
         'fade-in-up': 'fade-in-up 0.6s ease-out forwards',
         'shimmer': 'shimmer 2s linear infinite',
+        'marquee': 'marquee 30s linear infinite',
       },
 
-      // Sombras personalizadas
       boxShadow: {
-        'glow-vinotinto': '0 0 20px rgba(114, 47, 55, 0.5)',
-        'glow-khaki': '0 0 20px rgba(240, 230, 140, 0.3)',
-        'card': '0 4px 16px rgba(0,0,0,0.4)',
-        'card-hover': '0 8px 32px rgba(114, 47, 55, 0.3)',
+        'glow-vinotinto': 'var(--shadow-glow-vinotinto)',
+        'glow-khaki': 'var(--shadow-glow-khaki)',
+        'card': 'var(--shadow-card)',
+        'card-hover': 'var(--shadow-card-hover)',
       },
 
       // Estilos de fondo para glassmorphism

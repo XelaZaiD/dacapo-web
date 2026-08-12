@@ -75,7 +75,7 @@ export type Evento = {
 };
 
 // ============================================================
-// TIPO: Pista de Audio
+// DATOS: Chatbot y Asistente
 // ============================================================
 export type PistaAudio = {
     id: string;
@@ -122,7 +122,8 @@ export type ConfiguracionSecciones = {
     mostrarEventos: boolean;
     mostrarDonaciones: boolean;
     mostrarBiblioteca: boolean;
-    mostrarChatbot: boolean;
+    tipoAsistente: 'ninguno' | 'chatbot' | 'whatsapp';
+    numeroWhatsapp: string;
 };
 
 // ============================================================
@@ -143,7 +144,7 @@ export type InfoGrupo = {
         instagram?: string;
         facebook?: string;
         youtube?: string;
-        whatsapp?: string;
+        tiktok?: string;
     };
 };
 
@@ -160,11 +161,12 @@ export const infoGrupoDefault: InfoGrupo = {
     totalConciertos: 48,
     totalIntegrantes: 24,
     totalPartituras: 120,
-    emailContacto: 'contacto@dacapogrupovocal.com',
+    emailContacto: 'dcgrupovocal@gmail.com',
     redesSociales: {
-        instagram: 'https://instagram.com/dacapogrupovocal',
-        facebook: 'https://facebook.com/dacapogrupovocal',
-        youtube: 'https://youtube.com/@dacapogrupovocal',
+        instagram: 'https://www.instagram.com/dacapo_ve/',
+        facebook: 'https://www.facebook.com/D.C.GrupoVocal.ve/',
+        youtube: 'https://www.youtube.com/@dacapogrupovocal',
+        tiktok: 'https://www.tiktok.com/@dacapo_ve',
     },
 };
 
@@ -447,7 +449,8 @@ export const configuracionSeccionesDefault: ConfiguracionSecciones = {
     mostrarEventos: true,
     mostrarDonaciones: true,
     mostrarBiblioteca: true,
-    mostrarChatbot: true,
+    tipoAsistente: 'chatbot',
+    numeroWhatsapp: '584241721311',
 };
 
 // ============================================================

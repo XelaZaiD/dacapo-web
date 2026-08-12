@@ -17,15 +17,19 @@ import SeccionAudiciones from '../components/sections/Audiciones';
 import SeccionContacto from '../components/sections/Contacto';
 import ReproductorAudio from '../components/ui/ReproductorAudio';
 import Chatbot from '../components/ui/Chatbot';
+import BotonWhatsApp from '../components/ui/BotonWhatsApp';
 import Footer from '../components/layout/Footer';
+import EfectoCursor from '../components/ui/EfectoCursor';
+import { useApp } from '../context/AppContext';
 
 const PaginaPrincipal = () => {
+    const { configuracionSecciones } = useApp();
+
     return (
         <>
-            {/* Barra de navegación fija en la parte superior */}
+            <EfectoCursor />
             <Navbar />
 
-            {/* Contenido principal: todas las secciones en orden */}
             <main>
                 <HeroSection />
                 <SobreNosotros />
@@ -37,12 +41,12 @@ const PaginaPrincipal = () => {
                 <SeccionContacto />
             </main>
 
-            {/* Pie de página */}
             <Footer />
 
-            {/* Componentes flotantes (siempre visibles) */}
             <ReproductorAudio />
-            <Chatbot />
+
+            {configuracionSecciones.tipoAsistente === 'chatbot' && <Chatbot />}
+            {configuracionSecciones.tipoAsistente === 'whatsapp' && <BotonWhatsApp />}
         </>
     );
 };

@@ -12,6 +12,7 @@ import { motion, useInView } from 'framer-motion';
 import { Calendar, MapPin, Clock, Ticket, ExternalLink, Music } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Evento } from '../../data/mockData';
+import CarruselMovil from '../ui/CarruselMovil';
 
 // Función que formatea una fecha ISO a texto legible en español
 // Ejemplo: "2025-09-15T19:30:00" → "15 de septiembre de 2025"
@@ -63,7 +64,7 @@ const TarjetaEvento = ({ evento, indice }: { evento: Evento; indice: number }) =
 
     return (
         <motion.div
-            className="card-glass rounded-2xl overflow-hidden group border border-white/10
+            className="card-glass rounded-2xl overflow-hidden group border borde-subtle
                  hover:border-vinotinto/40 transition-all duration-300"
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -71,7 +72,7 @@ const TarjetaEvento = ({ evento, indice }: { evento: Evento; indice: number }) =
             transition={{ duration: 0.5, delay: indice * 0.1 }}
         >
             {/* Barra de color según si es futuro o pasado */}
-            <div className={`h-1 w-full ${esFuturo ? 'bg-gradient-to-r from-vinotinto to-khaki' : 'bg-white/10'}`} />
+            <div className={`h-1 w-full ${esFuturo ? 'bg-gradient-to-r from-vinotinto to-khaki' : 'bg-sutil-hover'}`} />
 
             <div className="p-6 md:p-8">
                 <div className="flex flex-col md:flex-row gap-6">
@@ -84,11 +85,11 @@ const TarjetaEvento = ({ evento, indice }: { evento: Evento; indice: number }) =
                             <span className="text-2xl font-display font-bold text-vinotinto-claro leading-none">
                                 {new Date(evento.fecha).getDate()}
                             </span>
-                            <span className="text-xs text-white/50 uppercase tracking-wider mt-1">
+                            <span className="text-xs t-muted uppercase tracking-wider mt-1">
                                 {new Date(evento.fecha).toLocaleDateString('es-ES', { month: 'short' })}
                             </span>
                         </div>
-                        <div className="text-xs text-white/40 mt-2">
+                        <div className="text-xs t-muted mt-2">
                             {new Date(evento.fecha).getFullYear()}
                         </div>
                     </div>
@@ -108,23 +109,23 @@ const TarjetaEvento = ({ evento, indice }: { evento: Evento; indice: number }) =
                         </h3>
 
                         {/* Descripción */}
-                        <p className="text-white/50 text-sm leading-relaxed mb-4">
+                        <p className="t-muted text-sm leading-relaxed mb-4">
                             {evento.descripcion}
                         </p>
 
                         {/* Detalles: lugar, hora, dirección */}
                         <div className="flex flex-col sm:flex-row gap-3 mb-5 text-sm">
-                            <div className="flex items-center gap-2 text-white/60">
+                            <div className="flex items-center gap-2 t-muted-high">
                                 <MapPin className="w-4 h-4 text-vinotinto-claro flex-shrink-0" />
                                 <span>{evento.lugar}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-white/60">
+                            <div className="flex items-center gap-2 t-muted-high">
                                 <Clock className="w-4 h-4 text-vinotinto-claro flex-shrink-0" />
                                 <span>{formatearFecha(evento.fecha)} · {formatearHora(evento.fecha)}</span>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 text-white/40 text-xs mb-5">
+                        <div className="flex items-center gap-2 t-muted text-xs mb-5">
                             <MapPin className="w-3 h-3" />
                             {evento.direccion}
                         </div>
@@ -161,7 +162,7 @@ const TarjetaEvento = ({ evento, indice }: { evento: Evento; indice: number }) =
                                     href={evento.urlMapa}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="btn-ghost text-sm py-2 px-4 text-white/50 hover:text-white"
+                                    className="btn-ghost text-sm py-2 px-4 t-muted hover:text-secundario"
                                 >
                                     <ExternalLink className="w-4 h-4" />
                                     Ver en Mapa
@@ -208,26 +209,31 @@ const SeccionEventos = () => {
                     </span>
                     <h2 className="titulo-seccion mb-4">Próximos Eventos</h2>
                     <div className="linea-decorativa mx-auto mb-6" />
-                    <p className="text-white/50 max-w-2xl mx-auto">
+                    <p className="t-muted max-w-2xl mx-auto">
                         No te pierdas las próximas presentaciones de DaCapo Grupo Vocal.
                     </p>
                 </motion.div>
 
-                {/* Lista de eventos */}
+                {/* Carrusel de eventos (solo móvil; en sm+ vuelve a la lista apilada) */}
                 {eventosActivos.length > 0 ? (
-                    <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-                        {eventosActivos.map((evento, indice) => (
-                            <TarjetaEvento key={evento.id} evento={evento} indice={indice} />
-                        ))}
+                    <div className="max-w-4xl mx-auto">
+                        <CarruselMovil
+                            slides={eventosActivos.map((evento, indice) => (
+                                <TarjetaEvento key={evento.id} evento={evento} indice={indice} />
+                            ))}
+                            claseSlide="w-[85%] sm:w-full"
+                            apiladoSm
+                            ariaLabel="Carrusel de próximos eventos"
+                        />
                     </div>
                 ) : (
                     // Mensaje cuando no hay eventos
                     <div className="text-center py-20">
-                        <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                        <div className="w-20 h-20 rounded-full bg-sutil flex items-center justify-center mx-auto mb-4">
                             <Music className="w-10 h-10 text-white/20" />
                         </div>
-                        <p className="text-white/40 text-lg">Próximamente nuevas fechas</p>
-                        <p className="text-white/30 text-sm mt-2">
+                        <p className="t-muted text-lg">Próximamente nuevas fechas</p>
+                        <p className="t-muted-low text-sm mt-2">
                             Sigue nuestras redes sociales para ser el primero en enterarte.
                         </p>
                     </div>
