@@ -120,7 +120,7 @@ const PentagramaAnimado = () => {
 // COMPONENTE PRINCIPAL: HeroSection
 // ============================================================
 const HeroSection = () => {
-    const { infoGrupo, configuracionSecciones } = useApp();
+    const { infoGrupo, configuracionSecciones, integrantes } = useApp();
 
     // Calcula los años de trayectoria desde la fecha de fundación
     const aniosTrayectoria = new Date().getFullYear() - infoGrupo.anioFundacion;
@@ -294,7 +294,7 @@ const HeroSection = () => {
                     {[
                         { valor: `${aniosTrayectoria}+`, etiqueta: 'Años' },
                         { valor: `${infoGrupo.totalConciertos}+`, etiqueta: 'Conciertos' },
-                        { valor: `${infoGrupo.totalIntegrantes}`, etiqueta: 'Coristas' },
+                        { valor: `${integrantes.length}`, etiqueta: 'Coristas' },
                         { valor: `${infoGrupo.totalPartituras}+`, etiqueta: 'Partituras' },
                     ].map((stat, i) => (
                         <div key={i} className="text-center p-4 rounded-xl bg-sutil border borde-subtle">

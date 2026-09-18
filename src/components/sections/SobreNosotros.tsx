@@ -60,7 +60,7 @@ const ContadorAnimado = ({ valorFinal, sufijo = '' }: { valorFinal: number; sufi
 // COMPONENTE PRINCIPAL: SobreNosotros
 // ============================================================
 const SobreNosotros = () => {
-    const { infoGrupo } = useApp();
+    const { infoGrupo, integrantes } = useApp();
     const ref = useRef(null);
     const estaEnPantalla = useInView(ref, { once: true, margin: '-100px' });
 
@@ -70,7 +70,7 @@ const SobreNosotros = () => {
     const estadisticas = [
         { icono: <Star className="w-6 h-6" />, valor: aniosTrayectoria, sufijo: '+', etiqueta: 'Años de Trayectoria' },
         { icono: <Music className="w-6 h-6" />, valor: infoGrupo.totalConciertos, sufijo: '+', etiqueta: 'Conciertos Realizados' },
-        { icono: <Users className="w-6 h-6" />, valor: infoGrupo.totalIntegrantes, sufijo: '', etiqueta: 'Integrantes Activos' },
+        { icono: <Users className="w-6 h-6" />, valor: integrantes.length, sufijo: '', etiqueta: 'Integrantes Activos' },
         { icono: <Heart className="w-6 h-6" />, valor: infoGrupo.totalPartituras, sufijo: '+', etiqueta: 'Partituras en Repertorio' },
     ];
 

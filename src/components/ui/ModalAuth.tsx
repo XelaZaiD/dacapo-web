@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, LogIn, UserPlus, Eye, EyeOff, AlertCircle, Music } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -15,8 +16,8 @@ type Props = { alCerrar: () => void };
 
 // Credenciales de prueba para que el usuario las vea fácilmente
 const USUARIOS_DEMO = [
-    { rol: 'Admin', email: 'admin@dacapo.com', password: 'admin123', color: 'text-khaki' },
-    { rol: 'Usuario', email: 'usuario@dacapo.com', password: 'user123', color: 'text-blue-300' },
+    { rol: 'Admin', email: 'admin@dacapo.com', password: 'admin123', color: 'text-[#8A7A3E] dark:text-khaki' },
+    { rol: 'Usuario', email: 'usuario@dacapo.com', password: 'user123', color: 'text-blue-700 dark:text-blue-300' },
 ];
 
 const ModalAuth = ({ alCerrar }: Props) => {
@@ -56,7 +57,7 @@ const ModalAuth = ({ alCerrar }: Props) => {
         }
     };
 
-    return (
+    return createPortal(
         <motion.div
             className="fixed inset-0 z-[60] flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
@@ -64,10 +65,10 @@ const ModalAuth = ({ alCerrar }: Props) => {
             exit={{ opacity: 0 }}
             onClick={alCerrar}
         >
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+            <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-md" />
 
             <motion.div
-                className="relative card-glass rounded-2xl max-w-md w-full p-8 z-10"
+                className="relative card-modal max-w-md w-full p-8 z-10"
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.9, y: 20 }}
@@ -119,8 +120,8 @@ const ModalAuth = ({ alCerrar }: Props) => {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0 }}
                         >
-                            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                            <p className="text-red-300 text-xs">{error}</p>
+                            <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-red-600 dark:text-red-300 text-xs">{error}</p>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -201,7 +202,8 @@ const ModalAuth = ({ alCerrar }: Props) => {
                     </div>
                 )}
             </motion.div>
-        </motion.div>
+        </motion.div>,
+        document.body
     );
 };
 

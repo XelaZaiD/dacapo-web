@@ -69,7 +69,7 @@ const SeccionContacto = () => {
                             <div className="card-glass rounded-2xl p-12 text-center h-full flex flex-col items-center justify-center">
                                 <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30
                                 flex items-center justify-center mb-6">
-                                    <CheckCircle className="w-8 h-8 text-emerald-400" />
+                                    <CheckCircle className="w-8 h-8 text-emerald-700 dark:text-emerald-400" />
                                 </div>
                                 <h3 className="text-xl font-display font-bold text-secundario mb-3">
                                     ¡Mensaje Enviado!

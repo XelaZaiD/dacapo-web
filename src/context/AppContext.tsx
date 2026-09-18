@@ -31,6 +31,7 @@ import React, {
     useContext,       // Hook para "suscribirse" y leer el contexto
     useState,         // Hook para guardar datos que pueden cambiar
     useEffect,        // Hook para ejecutar código cuando algo cambia
+    useCallback,      // Hook para memorizar funciones (estables entre renders)
     ReactNode         // Tipo de TypeScript para "cualquier componente hijo"
 } from 'react';
 
@@ -45,14 +46,41 @@ import {
     ConfiguracionSecciones,
     InfoGrupo,
     EntradaChatbot,
-    integrantesDefault,
-    partiturasDefault,
+    VistasBiblioteca,
+    VistasIntegrantes,
+    vistasBibliotecaDefault,
+    vistasIntegrantesDefault,
     eventosDefault,
-    pistasAudioDefault,
-    configuracionSeccionesDefault,
+    configuracionSeccionesInicial,
     infoGrupoDefault,
     respuestasChatbotDefault,
 } from '../data/mockData';
+import {
+    supabase,
+    obtenerIntegrantesDB,
+    agregarIntegranteDB,
+    editarIntegranteDB,
+    eliminarIntegranteDB,
+    obtenerPistasDB,
+    agregarPistaDB,
+    editarPistaDB,
+    eliminarPistaDB,
+    obtenerPartiturasDB,
+    agregarPartituraDB,
+    editarPartituraDB,
+    eliminarPartituraDB,
+    eliminarArchivoStorageSupabase,
+    obtenerConfiguracionDB,
+    guardarConfiguracionDB,
+} from '../services/supabase';
+
+// ============================================================
+// TIPO: Estado de carga de los datos que vienen de Supabase
+// ============================================================
+// 'cargando' → consulta en curso
+// 'listo'    → el servicio respondió (con o sin datos)
+// 'error'    → el servicio no respondió (falló la conexión)
+export type EstadoCarga = 'cargando' | 'listo' | 'error';
 
 // ============================================================
 // TIPO: Define la "forma" del usuario logueado
@@ -75,6 +103,13 @@ type AppContextType = {
     partituras: Partitura[];
     eventos: Evento[];
     pistasAudio: PistaAudio[];
+    // Estado de la carga desde Supabase: 'cargando' | 'listo' | 'error'.
+    // La app lo usa para mostrar estados amigables (cargando / sin datos / error).
+    estadoPartituras: EstadoCarga;
+    estadoPistas: EstadoCarga;
+    estadoIntegrantes: EstadoCarga;
+    reintentarIntegrantes: () => void;
+    reintentarPartituras: () => void;
     solicitudesAudicion: SolicitudAudicion[];
     mensajesContacto: MensajeContacto[];
     configuracionSecciones: ConfiguracionSecciones;
@@ -100,10 +135,18 @@ type AppContextType = {
     editarIntegrante: (id: string, datos: Partial<Integrante>) => void;
     eliminarIntegrante: (id: string) => void;
 
+    // --- Vistas de Integrantes (configuración pública desde Supabase) ---
+    vistasIntegrantes: VistasIntegrantes;
+    toggleVistaIntegrante: (vista: keyof VistasIntegrantes) => void;
+
     // --- Funciones para Partituras ---
     agregarPartitura: (partitura: Omit<Partitura, 'id' | 'fechaSubida'>) => void;
     editarPartitura: (id: string, datos: Partial<Partitura>) => void;
     eliminarPartitura: (id: string) => void;
+
+    // --- Vistas de la Biblioteca (configuración pública desde Supabase) ---
+    vistasBiblioteca: VistasBiblioteca;
+    toggleVistaBiblioteca: (vista: keyof VistasBiblioteca) => void;
 
     // --- Funciones para Eventos ---
     agregarEvento: (evento: Omit<Evento, 'id'>) => void;
@@ -112,6 +155,7 @@ type AppContextType = {
 
     // --- Funciones para Pistas de Audio ---
     agregarPista: (pista: Omit<PistaAudio, 'id'>) => void;
+    editarPista: (id: string, datos: Partial<PistaAudio>) => void;
     eliminarPista: (id: string) => void;
 
     // --- Funciones para Info del Grupo ---
@@ -177,6 +221,11 @@ const CLAVES_LS = {
     MODO_OSCURO: 'dacapo_modo_oscuro',
     USUARIOS_REGISTRADOS: 'dacapo_usuarios_registrados',
     ASISTENTE: 'dacapo_config_asistente',
+    VISTAS_BIBLIOTECA: 'dacapo_vistas_biblioteca',
+    CLAVE_CONFIG_VISTAS: 'vistas_biblioteca',
+    CLAVE_CONFIG_SECCIONES: 'config_secciones',
+    VISTAS_INTEGRANTES: 'dacapo_vistas_integrantes',
+    CLAVE_CONFIG_VISTAS_INTEGRANTES: 'vistas_integrantes',
 };
 
 // ============================================================
@@ -204,11 +253,6 @@ function guardarEnLocalStorage<T>(clave: string, valor: T): void {
         console.warn('No se pudo guardar en LocalStorage:', clave);
     }
 }
-
-// ============================================================
-// CONFIGURACIÓN DEL ASISTENTE
-// ============================================================
-export const WHATSAPP_PHONE_NUMBER = '584241721311';
 
 // ============================================================
 // USUARIOS DE PRUEBA (en Fase 1 sin Supabase)
@@ -253,11 +297,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     const [integrantes, setIntegrantes] = useState<Integrante[]>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.INTEGRANTES, integrantesDefault)
+        leerDesdeLocalStorage(CLAVES_LS.INTEGRANTES, [])
     );
 
     const [partituras, setPartituras] = useState<Partitura[]>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.PARTITURAS, partiturasDefault)
+        leerDesdeLocalStorage(CLAVES_LS.PARTITURAS, [])
     );
 
     const [eventos, setEventos] = useState<Evento[]>(() =>
@@ -265,8 +309,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     const [pistasAudio, setPistasAudio] = useState<PistaAudio[]>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.PISTAS, pistasAudioDefault)
+        leerDesdeLocalStorage(CLAVES_LS.PISTAS, [])
     );
+
+    // Estado de la última carga contra Supabase
+    const [estadoPartituras, setEstadoPartituras] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
+    const [estadoPistas, setEstadoPistas] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
+    const [estadoIntegrantes, setEstadoIntegrantes] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
 
     const [solicitudesAudicion, setSolicitudesAudicion] = useState<SolicitudAudicion[]>(() =>
         leerDesdeLocalStorage(CLAVES_LS.SOLICITUDES, [])
@@ -277,8 +326,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     const [configuracionSecciones, setConfiguracionSecciones] = useState<ConfiguracionSecciones>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.CONFIG_SECCIONES, configuracionSeccionesDefault)
+        leerDesdeLocalStorage(CLAVES_LS.CONFIG_SECCIONES, configuracionSeccionesInicial)
     );
+
+    // Vistas disponibles en la Biblioteca pública (Grid/Lista/Shelf/Mosaico).
+    // El administrador puede activar/desactivarlas; se persiste en Supabase.
+    const [vistasBiblioteca, setVistasBiblioteca] = useState<VistasBiblioteca>(() => {
+        const guardadas = leerDesdeLocalStorage<VistasBiblioteca | null>(CLAVES_LS.VISTAS_BIBLIOTECA, null);
+        if (guardadas) return { ...vistasBibliotecaDefault, ...guardadas };
+        return vistasBibliotecaDefault;
+    });
+
+    // Vistas disponibles en la sección pública de Integrantes (Grid/SATB/Lista/Mosaico).
+    // El administrador puede activar/desactivarlas; se persiste en Supabase.
+    const [vistasIntegrantes, setVistasIntegrantes] = useState<VistasIntegrantes>(() => {
+        const guardadas = leerDesdeLocalStorage<VistasIntegrantes | null>(CLAVES_LS.VISTAS_INTEGRANTES, null);
+        if (guardadas) return { ...vistasIntegrantesDefault, ...guardadas };
+        return vistasIntegrantesDefault;
+    });
 
     const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(() =>
         leerDesdeLocalStorage(CLAVES_LS.USUARIO, null)
@@ -322,8 +387,121 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.CONFIG_SECCIONES, configuracionSecciones); }, [configuracionSecciones]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.USUARIO, usuarioActual); }, [usuarioActual]);
 
+    // Carga las pistas de audio desde Supabase.
+    // Si la consulta falla, conservamos lo guardado en el navegador (caché local).
+    const cargarPistas = useCallback(() => {
+        if (!supabase) {
+            setEstadoPistas('error');
+            return;
+        }
+        setEstadoPistas('cargando');
+        obtenerPistasDB()
+            .then(pistas => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía),
+                // así se limpian los datos de ejemplo antiguos del navegador.
+                setPistasAudio(pistas ?? []);
+                setEstadoPistas('listo');
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar las pistas (se mantienen las guardadas):', err);
+                setEstadoPistas('error');
+            });
+    }, []);
+
+    // Carga las partituras desde Supabase.
+    // Si la consulta falla, conservamos lo guardado en el navegador (caché local).
+    const cargarPartituras = useCallback(() => {
+        if (!supabase) {
+            setEstadoPartituras('error');
+            return;
+        }
+        setEstadoPartituras('cargando');
+        obtenerPartiturasDB()
+            .then(lista => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía)
+                setPartituras(lista ?? []);
+                setEstadoPartituras('listo');
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar las partituras (se mantienen las guardadas):', err);
+                setEstadoPartituras('error');
+            });
+    }, []);
+
+    // Carga los integrantes desde Supabase.
+    // Si la consulta falla, conservamos lo guardado en el navegador (caché local).
+    const cargarIntegrantes = useCallback(() => {
+        if (!supabase) {
+            setEstadoIntegrantes('error');
+            return;
+        }
+        setEstadoIntegrantes('cargando');
+        obtenerIntegrantesDB()
+            .then(lista => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía),
+                // así se limpian los datos de ejemplo antiguos del navegador.
+                setIntegrantes(lista ?? []);
+                setEstadoIntegrantes('listo');
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar los integrantes (se mantienen los guardados):', err);
+                setEstadoIntegrantes('error');
+            });
+    }, []);
+
+    // Al cargar la app: obtenemos partituras, pistas de audio, integrantes y vistas del Admin
+    useEffect(() => {
+        cargarPartituras();
+        cargarPistas();
+        cargarIntegrantes();
+
+        if (supabase) {
+            obtenerConfiguracionDB<VistasBiblioteca>(CLAVES_LS.CLAVE_CONFIG_VISTAS)
+                .then(config => {
+                    if (config) {
+                        setVistasBiblioteca(prev => ({ ...prev, ...config }));
+                        guardarEnLocalStorage(CLAVES_LS.VISTAS_BIBLIOTECA, { ...vistasBibliotecaDefault, ...config });
+                    }
+                })
+                .catch(err => {
+                    console.warn('ℹ️ Usando vistas locales (Supabase no disponible o error):', err);
+                });
+
+            obtenerConfiguracionDB<VistasIntegrantes>(CLAVES_LS.CLAVE_CONFIG_VISTAS_INTEGRANTES)
+                .then(config => {
+                    if (config) {
+                        setVistasIntegrantes(prev => ({ ...prev, ...config }));
+                        guardarEnLocalStorage(CLAVES_LS.VISTAS_INTEGRANTES, { ...vistasIntegrantesDefault, ...config });
+                    }
+                })
+                .catch(err => {
+                    console.warn('ℹ️ Usando vistas de integrantes locales (Supabase no disponible o error):', err);
+                });
+
+            obtenerConfiguracionDB<ConfiguracionSecciones>(CLAVES_LS.CLAVE_CONFIG_SECCIONES)
+                .then(config => {
+                    if (config) {
+                        setConfiguracionSecciones({ ...configuracionSeccionesInicial, ...config });
+                        guardarEnLocalStorage(CLAVES_LS.CONFIG_SECCIONES, { ...configuracionSeccionesInicial, ...config });
+                    }
+                })
+                .catch(err => {
+                    console.warn('ℹ️ Usando secciones locales (Supabase no disponible o error):', err);
+                });
+        }
+    }, [cargarPartituras, cargarPistas, cargarIntegrantes]);
+
+    // Reintentar manualmente la carga de integrantes (botón de los estados de error)
+    const reintentarIntegrantes = () => {
+        cargarIntegrantes();
+    };
+
+    // Reintentar manualmente la carga de partituras (botón de los estados de error)
+    const reintentarPartituras = () => {
+        cargarPartituras();
+    };
+
     // ============================================================
-    // FUNCIONES DE AUTENTICACIÓN (simuladas en Fase 1)
     // ============================================================
 
     /**
@@ -393,11 +571,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // ============================================================
 
     const agregarIntegrante = (datos: Omit<Integrante, 'id'>) => {
-        const nuevoIntegrante: Integrante = {
-            ...datos,
-            id: `int-${Date.now()}`, // ID único basado en el tiempo actual
-        };
+        const idTemp = `int-${Date.now()}`;
+        const nuevoIntegrante: Integrante = { ...datos, id: idTemp };
         setIntegrantes(prev => [...prev, nuevoIntegrante]);
+
+        if (supabase) {
+            agregarIntegranteDB(datos).then(integranteDB => {
+                if (integranteDB) {
+                    setIntegrantes(prev => prev.map(i => i.id === idTemp ? integranteDB : i));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar el integrante en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const editarIntegrante = (id: string, datos: Partial<Integrante>) => {
@@ -409,11 +595,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     : integrante                   // Si no, devuelve el mismo sin cambios
             )
         );
+
+        if (supabase) {
+            editarIntegranteDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el integrante en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const eliminarIntegrante = (id: string) => {
+        const integrante = integrantes.find(i => i.id === id);
         // "filter" devuelve un nuevo array sin el elemento eliminado
         setIntegrantes(prev => prev.filter(i => i.id !== id));
+
+        if (supabase && integrante) {
+            eliminarIntegranteDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar el integrante en Supabase:', err);
+            });
+            // Mejor esfuerzo: borrar también la foto del Storage si se subió ahí
+            if (integrante.foto && integrante.foto.includes('/object/public/integrantes/')) {
+                eliminarArchivoStorageSupabase('integrantes', integrante.foto);
+            }
+        }
+    };
+
+    // Activa/desactiva una vista de la sección Integrantes (Grid/SATB/Lista/Mosaico)
+    const toggleVistaIntegrante = (vista: keyof VistasIntegrantes) => {
+        const siguiente: VistasIntegrantes = { ...vistasIntegrantes, [vista]: !vistasIntegrantes[vista] };
+        setVistasIntegrantes(siguiente);
+        guardarEnLocalStorage(CLAVES_LS.VISTAS_INTEGRANTES, siguiente);
+        if (supabase) {
+            guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_VISTAS_INTEGRANTES, siguiente);
+        }
     };
 
     // ============================================================
@@ -421,22 +634,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // ============================================================
 
     const agregarPartitura = (datos: Omit<Partitura, 'id' | 'fechaSubida'>) => {
+        const idTemp = `par-${Date.now()}`;
         const nuevaPartitura: Partitura = {
             ...datos,
-            id: `par-${Date.now()}`,
+            id: idTemp,
             fechaSubida: new Date().toISOString(),
         };
         setPartituras(prev => [...prev, nuevaPartitura]);
+
+        if (supabase) {
+            agregarPartituraDB(datos).then(partituraDB => {
+                if (partituraDB) {
+                    setPartituras(prev => prev.map(p => p.id === idTemp ? partituraDB : p));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar la partitura en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const editarPartitura = (id: string, datos: Partial<Partitura>) => {
         setPartituras(prev =>
             prev.map(p => p.id === id ? { ...p, ...datos } : p)
         );
+
+        if (supabase) {
+            editarPartituraDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar la partitura en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const eliminarPartitura = (id: string) => {
+        const partitura = partituras.find(p => p.id === id);
         setPartituras(prev => prev.filter(p => p.id !== id));
+
+        if (supabase && partitura) {
+            // Borrado definitivo de la base de datos
+            eliminarPartituraDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar la partitura en Supabase:', err);
+            });
+            // Mejor esfuerzo: borrar también el PDF del Storage si se guardó ahí
+            if (partitura.urlPdf) {
+                eliminarArchivoStorageSupabase('partituras', partitura.urlPdf);
+            }
+            if (partitura.urlPortada && partitura.urlPortada.includes('/object/public/')) {
+                eliminarArchivoStorageSupabase('partituras', partitura.urlPortada);
+            }
+        }
+    };
+
+    // Activa/desactiva una vista de la Biblioteca (Grid/Lista/Shelf/Mosaico)
+    const toggleVistaBiblioteca = (vista: keyof VistasBiblioteca) => {
+        const siguiente: VistasBiblioteca = { ...vistasBiblioteca, [vista]: !vistasBiblioteca[vista] };
+        setVistasBiblioteca(siguiente);
+        guardarEnLocalStorage(CLAVES_LS.VISTAS_BIBLIOTECA, siguiente);
+        if (supabase) {
+            guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_VISTAS, siguiente);
+        }
     };
 
     // ============================================================
@@ -461,12 +716,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // ============================================================
 
     const agregarPista = (datos: Omit<PistaAudio, 'id'>) => {
-        const nuevaPista: PistaAudio = { ...datos, id: `pis-${Date.now()}` };
+        const idTemp = `pis-${Date.now()}`;
+        const nuevaPista: PistaAudio = { ...datos, id: idTemp };
         setPistasAudio(prev => [...prev, nuevaPista]);
+
+        if (supabase) {
+            agregarPistaDB(datos).then(pistaDB => {
+                if (pistaDB) {
+                    setPistasAudio(prev => prev.map(p => p.id === idTemp ? pistaDB : p));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar la pista en Supabase (se mantiene local):', err);
+            });
+        }
+    };
+
+    const editarPista = (id: string, datos: Partial<PistaAudio>) => {
+        setPistasAudio(prev => prev.map(p => p.id === id ? { ...p, ...datos } : p));
+
+        if (supabase) {
+            editarPistaDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar la pista en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const eliminarPista = (id: string) => {
         setPistasAudio(prev => prev.filter(p => p.id !== id));
+
+        if (supabase) {
+            eliminarPistaDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar la pista en Supabase:', err);
+            });
+        }
     };
 
     // ============================================================
@@ -478,10 +760,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const toggleSeccion = (seccion: keyof ConfiguracionSecciones) => {
-        setConfiguracionSecciones(prev => ({
-            ...prev,
-            [seccion]: !prev[seccion], // Invierte el valor booleano (true -> false, false -> true)
-        }));
+        const siguiente: ConfiguracionSecciones = {
+            ...configuracionSecciones,
+            [seccion]: !configuracionSecciones[seccion], // Invierte el valor booleano (true -> false, false -> true)
+        };
+        setConfiguracionSecciones(siguiente);
+        if (supabase) {
+            guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_SECCIONES, siguiente);
+        }
     };
 
     const enviarSolicitudAudicion = (datos: Omit<SolicitudAudicion, 'id' | 'fechaEnvio' | 'estado'>) => {
@@ -521,19 +807,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const actualizarAsistente = (nuevasConfig: Partial<{ tipoAsistente: 'ninguno' | 'chatbot' | 'whatsapp'; numeroWhatsapp: string }>) => {
-        setConfiguracionSecciones(prev => {
-            const actualizado = { ...prev };
-            if (nuevasConfig.tipoAsistente !== undefined) {
-                actualizado.tipoAsistente = nuevasConfig.tipoAsistente;
-                if (nuevasConfig.tipoAsistente === 'whatsapp' && !actualizado.numeroWhatsapp) {
-                    actualizado.numeroWhatsapp = WHATSAPP_PHONE_NUMBER;
-                }
-            }
-            if (nuevasConfig.numeroWhatsapp !== undefined) {
-                actualizado.numeroWhatsapp = nuevasConfig.numeroWhatsapp;
-            }
-            return actualizado;
-        });
+        const siguiente: ConfiguracionSecciones = { ...configuracionSecciones };
+        if (nuevasConfig.tipoAsistente !== undefined) {
+            siguiente.tipoAsistente = nuevasConfig.tipoAsistente;
+        }
+        if (nuevasConfig.numeroWhatsapp !== undefined) {
+            siguiente.numeroWhatsapp = nuevasConfig.numeroWhatsapp;
+        }
+        setConfiguracionSecciones(siguiente);
+        if (supabase) {
+            guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_SECCIONES, siguiente);
+        }
     };
 
     // ============================================================
@@ -555,6 +839,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         partituras,
         eventos,
         pistasAudio,
+        estadoPartituras,
+        estadoPistas,
+        estadoIntegrantes,
+        reintentarIntegrantes,
+        reintentarPartituras,
         solicitudesAudicion,
         mensajesContacto,
         configuracionSecciones,
@@ -568,13 +857,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         agregarIntegrante,
         editarIntegrante,
         eliminarIntegrante,
+        vistasIntegrantes,
+        toggleVistaIntegrante,
         agregarPartitura,
         editarPartitura,
         eliminarPartitura,
+        vistasBiblioteca,
+        toggleVistaBiblioteca,
         agregarEvento,
         editarEvento,
         eliminarEvento,
         agregarPista,
+        editarPista,
         eliminarPista,
         actualizarInfoGrupo,
         toggleSeccion,
