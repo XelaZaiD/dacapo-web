@@ -187,7 +187,7 @@ const Navbar = () => {
                                                 )}
                                                 <button
                                                     onClick={() => { cerrarSesion(); setMenuUsuarioAbierto(false); }}
-                                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400
+                                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400
                                      hover:bg-sutil-hover transition-colors"
                                                 >
                                                     <LogOut className="w-4 h-4" />

@@ -195,7 +195,7 @@ const Chatbot = () => {
                                         {[0, 1, 2].map(i => (
                                             <div
                                                 key={i}
-                                                className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce"
+                                                className="w-1.5 h-1.5 rounded-full bg-black/40 dark:bg-white/40 animate-bounce"
                                                 style={{ animationDelay: `${i * 0.15}s` }}
                                             />
                                         ))}

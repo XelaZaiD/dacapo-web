@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, SkipBack, SkipForward, Music, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import AvisoTemporal from './AvisoTemporal';
 
 const EcualizadorAnimado = ({ reproduciendo }: { reproduciendo: boolean }) => {
     const barras = [
@@ -54,7 +56,7 @@ const BarraProgreso = ({
     return (
         <div className="flex items-center gap-2 w-full">
             <span className="text-[10px] t-muted w-8 text-right tabular-nums">{formatearTiempo(progreso)}</span>
-            <div ref={barraRef} className="flex-1 h-1 bg-sutil-hover rounded-full cursor-pointer group relative" onClick={manejarClic}>
+            <div ref={barraRef} className="flex-1 h-1 bg-black/15 dark:bg-white/10 rounded-full cursor-pointer group relative" onClick={manejarClic}>
                 <div className="h-full bg-gradient-to-r from-vinotinto to-khaki rounded-full" style={{ width: `${porcentaje}%` }} />
                 <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                     style={{ left: `${porcentaje}%`, transform: 'translate(-50%, -50%)' }} />
@@ -65,7 +67,7 @@ const BarraProgreso = ({
 };
 
 const ReproductorAudio = () => {
-    const { pistasAudio } = useApp();
+    const { pistasAudio, estadoPistas } = useApp();
     const [indicePistaActual, setIndicePistaActual] = useState(0);
     const [estaReproduciendo, setEstaReproduciendo] = useState(false);
     const [progreso, setProgreso] = useState(0);
@@ -108,31 +110,74 @@ const ReproductorAudio = () => {
         setProgreso(nuevoTiempo);
     };
 
-    if (!pistaActual) return null;
+    if (!pistaActual && !abierto) {
+        return (
+            <div className="fixed bottom-4 left-4 z-40">
+                <motion.button
+                    onClick={() => setAbierto(true)}
+                    onMouseEnter={() => setHoverVinilo(true)}
+                    onMouseLeave={() => setHoverVinilo(false)}
+                    className="w-14 h-14 rounded-full bg-vinotinto/60 shadow-glow-vinotinto
+                        flex items-center justify-center transition-all duration-300 relative opacity-70"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="Próximamente música de DaCapo"
+                >
+                    <motion.div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 
+                        border-2 borde-medium flex items-center justify-center relative overflow-hidden"
+                        style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)' }}
+                    >
+                        <div className="absolute inset-2 rounded-full border borde-subtle" />
+                        <div className="absolute inset-3 rounded-full border borde-subtle" />
+                        <div className="absolute inset-4 rounded-full border borde-subtle" />
+                        <div className="w-5 h-5 rounded-full bg-vinotinto/80 flex items-center justify-center z-10 ring-1 ring-white/20">
+                            <div className="w-2 h-2 rounded-full bg-white" />
+                        </div>
+                    </motion.div>
+                    <AnimatePresence>
+                        {hoverVinilo && (
+                            <motion.div
+                                className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none"
+                                initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5 }}
+                                transition={{ duration: 0.2 }}
+                            >
+                                <span className="text-[9px] bg-vinotinto text-white px-2 py-1 rounded-full shadow-glow-vinotinto">
+                                    ♪ Próximamente música de DaCapo ♪
+                                </span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </motion.button>
+            </div>
+        );
+    }
 
     return (
         <>
-            {/* Elemento <audio> oculto que maneja la reproducción real */}
-            <audio
-                ref={audioRef}
-                src={pistaActual.urlAudio}
-                onTimeUpdate={() => setProgreso(audioRef.current?.currentTime || 0)}
-                onLoadedMetadata={() => setDuracion(audioRef.current?.duration || 0)}
-                onEnded={pistaSiguiente}
-            />
+            {/* Elemento <audio> oculto que maneja la reproducción real (solo si hay pista) */}
+            {pistaActual && (
+                <audio
+                    ref={audioRef}
+                    src={pistaActual.urlAudio}
+                    onTimeUpdate={() => setProgreso(audioRef.current?.currentTime || 0)}
+                    onLoadedMetadata={() => setDuracion(audioRef.current?.duration || 0)}
+                    onEnded={pistaSiguiente}
+                />
+            )}
 
             {/* ---- REPRODUCTOR EXPANDIDO (modal centrado) ---- */}
-            <AnimatePresence>
+            {createPortal(
+                <AnimatePresence>
                 {abierto && (
                     <motion.div
-                        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+                        className="fixed inset-0 z-[70] bg-black/60 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={() => setAbierto(false)}
                     >
                         <motion.div
-                            className="bg-fondo-oscuro/95 backdrop-blur-xl border borde-subtle rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+                            className="card-modal w-full max-w-md overflow-hidden"
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
@@ -151,76 +196,95 @@ const ReproductorAudio = () => {
                                 </div>
                                 <button
                                     onClick={() => setAbierto(false)}
-                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-red-500/10 t-muted hover:text-red-400 transition-all"
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-red-500/10 t-muted hover:text-red-600 dark:hover:text-red-400 transition-all"
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
 
                             {/* Contenido */}
-                            <div className="p-6 space-y-5">
-                                {/* Info pista */}
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-xl bg-vinotinto/30 flex items-center justify-center overflow-hidden relative flex-shrink-0">
-                                        {pistaActual.portada ? (
-                                            <img src={pistaActual.portada} alt={pistaActual.titulo} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <Music className="w-7 h-7 text-vinotinto-claro" />
-                                        )}
-                                        {estaReproduciendo && (
-                                            <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center">
-                                                <EcualizadorAnimado reproduciendo={estaReproduciendo} />
+                            <div className="p-6">
+                                {pistaActual ? (
+                                    <div className="space-y-5">
+                                        {/* Info pista */}
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-14 h-14 rounded-xl bg-vinotinto/30 flex items-center justify-center overflow-hidden relative flex-shrink-0">
+                                                {pistaActual.portada ? (
+                                                    <img src={pistaActual.portada} alt={pistaActual.titulo} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <Music className="w-7 h-7 text-vinotinto-claro" />
+                                                )}
+                                                {estaReproduciendo && (
+                                                    <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center">
+                                                        <EcualizadorAnimado reproduciendo={estaReproduciendo} />
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-base font-bold text-secundario truncate">{pistaActual.titulo}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-xs t-muted truncate">{pistaActual.compositor}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Barra de progreso */}
+                                        <BarraProgreso progreso={progreso} duracion={duracion} alCambiarProgreso={cambiarProgreso} />
+
+                                        {/* Controles */}
+                                        <div className="flex items-center justify-center gap-6">
+                                            <button onClick={pistaAnterior} className="w-10 h-10 flex items-center justify-center t-muted hover:text-secundario transition-colors rounded-full hover:bg-sutil-hover">
+                                                <SkipBack className="w-5 h-5" />
+                                            </button>
+                                            <button
+                                                onClick={togglePlay}
+                                                className="w-14 h-14 rounded-full bg-vinotinto hover:bg-vinotinto-claro flex items-center justify-center transition-all duration-300 shadow-glow-vinotinto"
+                                            >
+                                                {estaReproduciendo
+                                                    ? <Pause className="w-6 h-6 text-white fill-white" />
+                                                    : <Play className="w-6 h-6 text-white fill-white ml-1" />
+                                                }
+                                            </button>
+                                            <button onClick={pistaSiguiente} className="w-10 h-10 flex items-center justify-center t-muted hover:text-secundario transition-colors rounded-full hover:bg-sutil-hover">
+                                                <SkipForward className="w-5 h-5" />
+                                            </button>
+                                        </div>
+
+                                        {/* Lista de pistas */}
+                                        <div className="flex gap-1.5 overflow-x-auto sin-scrollbar pt-2 border-t borde-subtle">
+                                            {pistasAudio.map((pista, i) => (
+                                                <button
+                                                    key={pista.id}
+                                                    onClick={() => { setIndicePistaActual(i); setEstaReproduciendo(true); }}
+className={`flex-shrink-0 text-[9px] px-2 py-1 rounded-md transition-all ${i === indicePistaActual
+                                                        ? 'bg-vinotinto text-white'
+                                                        : 'bg-black/5 dark:bg-white/5 t-muted border border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10'
+                                                    }`}
+                                                >
+                                                    {pista.titulo.substring(0, 12)}{pista.titulo.length > 12 ? '...' : ''}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-base font-bold text-secundario truncate">{pistaActual.titulo}</p>
-                                        <p className="text-xs t-muted truncate">{pistaActual.compositor}</p>
+                                ) : (
+                                    /* Estado vacío: sin pistas en la base de datos */
+                                    <div className="py-8 text-center space-y-4">
+                                        <div className="w-14 h-14 mx-auto rounded-xl bg-vinotinto/10 flex items-center justify-center">
+                                            <Music className="w-7 h-7 text-vinotinto-claro opacity-50" />
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-secundario">Próximamente música de DaCapo</p>
+                                            <p className="text-xs t-muted mt-1">Estamos preparando nuestro repertorio para compartirlo con ustedes.</p>
+                                        </div>
                                     </div>
-                                </div>
-
-                                {/* Barra de progreso */}
-                                <BarraProgreso progreso={progreso} duracion={duracion} alCambiarProgreso={cambiarProgreso} />
-
-                                {/* Controles */}
-                                <div className="flex items-center justify-center gap-6">
-                                    <button onClick={pistaAnterior} className="w-10 h-10 flex items-center justify-center t-muted hover:text-secundario transition-colors rounded-full hover:bg-sutil-hover">
-                                        <SkipBack className="w-5 h-5" />
-                                    </button>
-                                    <button
-                                        onClick={togglePlay}
-                                        className="w-14 h-14 rounded-full bg-vinotinto hover:bg-vinotinto-claro flex items-center justify-center transition-all duration-300 shadow-glow-vinotinto"
-                                    >
-                                        {estaReproduciendo
-                                            ? <Pause className="w-6 h-6 text-white fill-white" />
-                                            : <Play className="w-6 h-6 text-white fill-white ml-1" />
-                                        }
-                                    </button>
-                                    <button onClick={pistaSiguiente} className="w-10 h-10 flex items-center justify-center t-muted hover:text-secundario transition-colors rounded-full hover:bg-sutil-hover">
-                                        <SkipForward className="w-5 h-5" />
-                                    </button>
-                                </div>
-
-                                {/* Lista de pistas */}
-                                <div className="flex gap-1.5 overflow-x-auto sin-scrollbar pt-2 border-t borde-subtle">
-                                    {pistasAudio.map((pista, i) => (
-                                        <button
-                                            key={pista.id}
-                                            onClick={() => { setIndicePistaActual(i); setEstaReproduciendo(true); }}
-                                            className={`flex-shrink-0 text-[9px] px-2 py-1 rounded-md transition-all ${i === indicePistaActual
-                                                    ? 'bg-vinotinto text-white'
-                                                    : 'bg-sutil t-muted hover:bg-sutil-hover'
-                                                }`}
-                                        >
-                                            {pista.titulo.substring(0, 12)}{pista.titulo.length > 12 ? '...' : ''}
-                                        </button>
-                                    ))}
-                                </div>
+                                )}
                             </div>
                         </motion.div>
                     </motion.div>
                 )}
-            </AnimatePresence>
+                </AnimatePresence>,
+                document.body
+            )}
 
             {/* ---- ICONO DE VINILO (siempre visible, esquina inferior izquierda) ---- */}
             <div className="fixed bottom-4 left-4 z-40">
@@ -281,13 +345,19 @@ const ReproductorAudio = () => {
                                 transition={{ duration: 0.2 }}
                             >
                                 <span className="text-[9px] bg-vinotinto text-white px-2 py-1 rounded-full shadow-glow-vinotinto">
-                                    ♪ Escúchanos! ♪
+                                    {pistaActual ? '♪ Escúchanos! ♪' : '♪ Próximamente música ♪'}
                                 </span>
                             </motion.div>
                         )}
                     </AnimatePresence>
                 </motion.button>
             </div>
+
+            {/* Aviso cuando el servicio falló pero se escuchan las pistas guardadas */}
+            <AvisoTemporal
+                visibilidad={estadoPistas === 'error' && pistasAudio.length > 0}
+                mensaje="No se pudieron actualizar las pistas. Estás escuchando las guardadas."
+            />
         </>
     );
 };

@@ -50,9 +50,9 @@ const generarLinkGoogleCalendar = (evento: Evento): string => {
 
 // Colores para el tipo de entrada
 const COLORES_TIPO: Record<string, string> = {
-    'Libre': 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+    'Libre': 'text-emerald-700 dark:text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
     'Con entrada': 'text-vinotinto-claro bg-vinotinto/10 border-vinotinto/30',
-    'Donación voluntaria': 'text-khaki bg-khaki/10 border-khaki/30',
+    'Donación voluntaria': 'text-[#8A7A3E] dark:text-khaki bg-khaki/10 border-khaki/30',
 };
 
 // ============================================================

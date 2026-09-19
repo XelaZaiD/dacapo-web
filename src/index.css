@@ -205,6 +205,11 @@
     @apply bg-sutil backdrop-blur-md border borde-subtle rounded-xl shadow-card hover:shadow-card-hover transition-all duration-300;
   }
 
+  /* --- Tarjeta opaca para modales (legible en modo claro y oscuro) --- */
+  .card-modal {
+    @apply bg-fondo-card border borde-subtle rounded-2xl shadow-2xl;
+  }
+
   /* --- Sección con ancho máximo centrado --- */
   .contenedor {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
@@ -243,6 +248,13 @@
     @apply block text-sm font-medium t-muted-high mb-2;
   }
 
+  /* --- Selects compactos (para barras de filtros) --- */
+  .select-campo {
+    @apply bg-sutil border borde-medium rounded-lg px-3 py-2 text-xs text-secundario cursor-pointer
+           focus:outline-none focus:border-vinotinto focus:ring-1 focus:ring-vinotinto/50
+           transition-colors duration-200 min-w-fit shrink-0;
+  }
+
   /* --- Pentagrama decorativo (líneas de música) --- */
   .pentagrama-line {
     @apply absolute w-full h-px bg-gradient-to-r from-transparent via-[var(--border-subtle)] to-transparent;
@@ -262,6 +274,27 @@
   .card-3d:hover {
     transform: perspective(1000px) rotateX(-2deg) rotateY(2deg) translateY(-4px);
   }
+}
+
+/* ============================================================
+   MENÚS DESPLEGABLES NATIVOS (<select>) EN DÍA / NOCHE
+   ============================================================
+   "color-scheme" le dice al navegador (Chrome, Edge, etc.)
+   cómo pintar el menú nativo que se despliega al abrir un <select>.
+   Sin esto, en modo oscuro el menú mantiene fondo blanco con texto
+   negro/blanco y se pierde la legibilidad.
+   ============================================================ */
+:root {
+  color-scheme: dark;
+}
+
+:root:not(.dark) {
+  color-scheme: light;
+}
+
+select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
 }
 
 /* ============================================================

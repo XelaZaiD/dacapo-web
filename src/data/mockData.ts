@@ -37,7 +37,13 @@ export type Integrante = {
     biografia: string;       // Mini-biografía del integrante
     esDirectivo: boolean;    // ¿Es parte de la directiva?
     cargo?: string;          // Cargo si es directivo (opcional, por eso el "?")
+    orden?: number;          // Control de exhibición (menor primero)
+    anioIngreso?: number;    // Ej: 2019 → "Desde 2019" en las tarjetas
+    urlInstagram?: string;   // Perfil de Instagram (opcional)
 };
+
+// Cuerdas vocales del coro (reutilizable para filtros y formularios)
+export const CUERDAS_INTEGRANTE = ['Soprano', 'Contralto', 'Tenor', 'Bajo'] as const;
 
 // ============================================================
 // TIPO: Partitura en la Biblioteca
@@ -51,10 +57,75 @@ export type Partitura = {
     dificultad: 'Básico' | 'Intermedio' | 'Avanzado';
     estilo: string;          // Ej: "Barroco", "Contemporáneo", "Gospel"
     epoca: string;           // Ej: "Siglo XVII", "Contemporáneo"
+    tonalidad?: string;      // Ej: "Sol mayor", "Re menor"
+    compas?: string;         // Ej: "4/4", "3/4", "6/8"
+    paginas?: number;        // Número de páginas del PDF
     descripcion: string;
     urlPdf?: string;         // URL del archivo PDF (opcional hasta que tengas Storage)
     urlPortada?: string;     // URL de imagen de portada (opcional)
+    descargable: boolean;    // Administrador activa/desactiva el botón "Descargar"
+    activo: boolean;         // "Ocultar" temporalmente sin borrar (false = no aparece en la web)
     fechaSubida: string;
+};
+
+// Valores posibles y listas reutilizables de la Biblioteca de Partituras
+export const CUERDAS_PARTITURA = ['Soprano', 'Contralto', 'Tenor', 'Bajo'] as const;
+export const DIFICULTADES_PARTITURA = ['Básico', 'Intermedio', 'Avanzado'] as const;
+export const ESTILOS_PARTITURA = [
+    'Barroco',
+    'Renacentista',
+    'Clásico',
+    'Romántico',
+    'Gospel / Espiritual',
+    'Contemporáneo',
+    'Popular Latinoamericano',
+    'Popular',
+    'Folclórico',
+    'Sacro / Litúrgico',
+    'Jazz',
+    'Otro',
+];
+export const EPOCAS_PARTITURA = [
+    'Renacimiento',
+    'Barroco',
+    'Siglo XVIII',
+    'Siglo XIX',
+    'Siglo XX',
+    'Contemporáneo',
+];
+
+// ============================================================
+// TIPO: Configuración de vistas de la Biblioteca (persistida en Supabase)
+// ============================================================
+export type VistasBiblioteca = {
+    grid: boolean;
+    lista: boolean;
+    shelf: boolean;
+    mosaico: boolean;
+};
+
+export const vistasBibliotecaDefault: VistasBiblioteca = {
+    grid: true,
+    lista: true,
+    shelf: true,
+    mosaico: true,
+};
+
+// ============================================================
+// TIPO: Configuración de vistas de Integrantes (persistida en Supabase)
+// ============================================================
+export type VistasIntegrantes = {
+    grid: boolean;      // Tarjetas en columnas con filtros por cuerda
+    satb: boolean;      // Paneles temáticos por cuerda (S/A/T/B)
+    lista: boolean;     // Directorio/roster elegante estilo programa de concierto
+    mosaico: boolean;   // Vitrina de fotos de altura variable
+};
+
+export const vistasIntegrantesDefault: VistasIntegrantes = {
+    grid: true,
+    satb: true,
+    lista: true,
+    mosaico: true,
 };
 
 // ============================================================
@@ -171,205 +242,6 @@ export const infoGrupoDefault: InfoGrupo = {
 };
 
 // ============================================================
-// DATOS DE EJEMPLO: Integrantes del Coro
-// ============================================================
-// Formato: https://api.dicebear.com/7.x/avataaars/svg?seed=NOMBRE
-// (Genera avatars únicos y gratuitos basados en el nombre)
-export const integrantesDefault: Integrante[] = [
-    // --- SOPRANOS ---
-    {
-        id: 'sop-001',
-        nombre: 'María Alejandra Rodríguez',
-        cuerda: 'Soprano',
-        rangoVocal: 'C4 - G5',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MariaAlejandra&backgroundColor=b6e3f4',
-        biografia: 'Graduada con honores del Conservatorio Nacional. Solista invitada en más de 20 producciones nacionales. Su timbre cálido y su técnica impecable la convierten en uno de los pilares de la sección.',
-        esDirectivo: false,
-    },
-    {
-        id: 'sop-002',
-        nombre: 'Valentina Castro Méndez',
-        cuerda: 'Soprano',
-        rangoVocal: 'D4 - A5',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Valentina&backgroundColor=ffdfbf',
-        biografia: 'Con formación en canto lírico y popular, Valentina aporta una versatilidad única. Ha participado en festivales corales internacionales en Argentina y España.',
-        esDirectivo: true,
-        cargo: 'Presidenta',
-    },
-    {
-        id: 'sop-003',
-        nombre: 'Daniela Moreno Pérez',
-        cuerda: 'Soprano',
-        rangoVocal: 'B3 - F#5',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Daniela&backgroundColor=c0aede',
-        biografia: 'Docente de música y directora coral con 8 años de experiencia. Su formación pedagógica enriquece los ensayos con ejercicios técnicos innovadores.',
-        esDirectivo: false,
-    },
-    // --- CONTRALTOS ---
-    {
-        id: 'con-001',
-        nombre: 'Laura Sofía Gómez',
-        cuerda: 'Contralto',
-        rangoVocal: 'G3 - D5',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=LauraSofia&backgroundColor=d1d4f9',
-        biografia: 'Su voz profunda y aterciopelada ha cautivado audiencias en más de 30 presentaciones. Especialista en repertorio renacentista y barroco.',
-        esDirectivo: false,
-    },
-    {
-        id: 'con-002',
-        nombre: 'Ana Isabel Torres',
-        cuerda: 'Contralto',
-        rangoVocal: 'F3 - C5',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=AnaIsabel&backgroundColor=ffd5dc',
-        biografia: 'Especialista en música latinoamericana y folclórica, Ana aporta una riqueza cultural invaluable al repertorio de DaCapo. Compositora y arreglista aficionada.',
-        esDirectivo: true,
-        cargo: 'Secretaria',
-    },
-    {
-        id: 'con-003',
-        nombre: 'Carmen Lucía Vargas',
-        cuerda: 'Contralto',
-        rangoVocal: 'A3 - E5',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=CarmenLucia&backgroundColor=b6e3f4',
-        biografia: 'Con formación en teatro musical y ópera, Carmen lleva una expresividad escénica que eleva cada presentación. Miembro fundadora de DaCapo.',
-        esDirectivo: false,
-    },
-    // --- TENORES ---
-    {
-        id: 'ten-001',
-        nombre: 'Diego Alejandro Martínez',
-        cuerda: 'Tenor',
-        rangoVocal: 'C3 - A4',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DiegoAlejandro&backgroundColor=ffdfbf',
-        biografia: 'Tenor lírico con 12 años de trayectoria profesional. Ha cantado en las principales salas de concierto del país y es referente en el repertorio operático.',
-        esDirectivo: false,
-    },
-    {
-        id: 'ten-002',
-        nombre: 'Carlos Eduardo López',
-        cuerda: 'Tenor',
-        rangoVocal: 'B2 - G4',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=CarlosEduardo&backgroundColor=c0aede',
-        biografia: 'Director Musical de DaCapo. Graduado en Musicología con maestría en Dirección Coral. Su visión artística define la identidad sonora del grupo.',
-        esDirectivo: true,
-        cargo: 'Director Musical',
-    },
-    {
-        id: 'ten-003',
-        nombre: 'Andrés Felipe Ruiz',
-        cuerda: 'Tenor',
-        rangoVocal: 'C3 - F4',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=AndresFelipe&backgroundColor=d1d4f9',
-        biografia: 'Ingeniero de sonido y cantante. Su conocimiento técnico de la acústica aporta una perspectiva única en los ensayos y grabaciones del grupo.',
-        esDirectivo: false,
-    },
-    // --- BAJOS ---
-    {
-        id: 'baj-001',
-        nombre: 'Roberto Carlos Herrera',
-        cuerda: 'Bajo',
-        rangoVocal: 'E2 - D4',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=RobertoCarlos&backgroundColor=ffd5dc',
-        biografia: 'Su imponente voz grave es el cimiento sonoro de DaCapo. Concertista con experiencia en más de 15 países y referente del canto profundo en la región.',
-        esDirectivo: false,
-    },
-    {
-        id: 'baj-002',
-        nombre: 'Manuel Jesús Sánchez',
-        cuerda: 'Bajo',
-        rangoVocal: 'C2 - B3',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ManuelJesus&backgroundColor=b6e3f4',
-        biografia: 'Bilingüe (español-inglés), Manuel amplía el repertorio coral con obras anglosajonas y latinas. Apasionado por el jazz coral y el barbershop.',
-        esDirectivo: true,
-        cargo: 'Tesorero',
-    },
-    {
-        id: 'baj-003',
-        nombre: 'José Antonio Díaz',
-        cuerda: 'Bajo',
-        rangoVocal: 'D2 - C4',
-        foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=JoseAntonio&backgroundColor=ffdfbf',
-        biografia: 'Miembro fundador y uno de los pilares históricos del grupo. Con más de 20 años en distintos coros, aporta experiencia y sabiduría musical insustituibles.',
-        esDirectivo: false,
-    },
-];
-
-// ============================================================
-// DATOS DE EJEMPLO: Partituras
-// ============================================================
-export const partiturasDefault: Partitura[] = [
-    {
-        id: 'par-001',
-        titulo: 'Cantate Domino',
-        compositor: 'Claudio Monteverdi',
-        cuerdas: ['Soprano', 'Contralto', 'Tenor', 'Bajo'],
-        dificultad: 'Intermedio',
-        estilo: 'Barroco',
-        epoca: 'Siglo XVII',
-        descripcion: 'Motete a cuatro voces de uno de los maestros del período barroco. Requiere buena afinación y control del legato.',
-        fechaSubida: '2024-01-15T10:00:00',
-    },
-    {
-        id: 'par-002',
-        titulo: 'Ave Verum Corpus',
-        compositor: 'Wolfgang Amadeus Mozart',
-        cuerdas: ['Soprano', 'Contralto', 'Tenor', 'Bajo'],
-        dificultad: 'Básico',
-        estilo: 'Clásico',
-        epoca: 'Siglo XVIII',
-        descripcion: 'Una de las obras corales más bellas del repertorio clásico. Perfecta para comenzar con Mozart.',
-        fechaSubida: '2024-02-01T10:00:00',
-    },
-    {
-        id: 'par-003',
-        titulo: 'Hallelujah',
-        compositor: 'George F. Händel',
-        arreglista: 'Carlos López',
-        cuerdas: ['Soprano', 'Contralto', 'Tenor', 'Bajo'],
-        dificultad: 'Avanzado',
-        estilo: 'Barroco',
-        epoca: 'Siglo XVIII',
-        descripcion: 'El icónico coro del Mesías. Arreglo especial con cadencias adicionales para conjuntos pequeños.',
-        fechaSubida: '2024-03-10T10:00:00',
-    },
-    {
-        id: 'par-004',
-        titulo: 'Bésame Mucho',
-        compositor: 'Consuelo Velázquez',
-        arreglista: 'María Rodríguez',
-        cuerdas: ['Soprano', 'Contralto'],
-        dificultad: 'Básico',
-        estilo: 'Popular Latinoamericano',
-        epoca: 'Siglo XX',
-        descripcion: 'Arreglo a dos voces femeninas de esta icónica canción del bolero latinoamericano.',
-        fechaSubida: '2024-04-05T10:00:00',
-    },
-    {
-        id: 'par-005',
-        titulo: 'Gloria in Excelsis Deo',
-        compositor: 'Antonio Vivaldi',
-        cuerdas: ['Soprano', 'Contralto', 'Tenor', 'Bajo'],
-        dificultad: 'Avanzado',
-        estilo: 'Barroco',
-        epoca: 'Siglo XVIII',
-        descripcion: 'Movimiento del Gloria RV 589. Exige velocidad técnica y precisión rítmica en todas las cuerdas.',
-        fechaSubida: '2024-05-20T10:00:00',
-    },
-    {
-        id: 'par-006',
-        titulo: 'Swing Low, Sweet Chariot',
-        compositor: 'Tradicional (Espiritual Afroamericano)',
-        arreglista: 'Andrés Ruiz',
-        cuerdas: ['Tenor', 'Bajo'],
-        dificultad: 'Básico',
-        estilo: 'Gospel / Espiritual',
-        epoca: 'Siglo XIX',
-        descripcion: 'Arreglo a dos voces masculinas de este clásico espiritual. Énfasis en la expresividad y el ritmo.',
-        fechaSubida: '2024-06-01T10:00:00',
-    },
-];
-
-// ============================================================
 // DATOS DE EJEMPLO: Eventos y Conciertos
 // ============================================================
 export const eventosDefault: Evento[] = [
@@ -409,48 +281,17 @@ export const eventosDefault: Evento[] = [
 ];
 
 // ============================================================
-// DATOS DE EJEMPLO: Pistas de Audio
+// ESTADO INICIAL DE SECCIONES (sin datos en Supabase)
 // ============================================================
-// Nota: Usamos URLs de audio de ejemplo. En el proyecto real,
-// estas serán URLs de archivos en Supabase Storage.
-export const pistasAudioDefault: PistaAudio[] = [
-    {
-        id: 'pis-001',
-        titulo: 'Ave Verum Corpus',
-        compositor: 'W.A. Mozart',
-        duracion: '3:24',
-        // Audio de ejemplo gratuito (libres de derechos)
-        urlAudio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-        portada: 'https://api.dicebear.com/7.x/shapes/svg?seed=Mozart',
-    },
-    {
-        id: 'pis-002',
-        titulo: 'Cantate Domino',
-        compositor: 'C. Monteverdi',
-        duracion: '4:12',
-        urlAudio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-        portada: 'https://api.dicebear.com/7.x/shapes/svg?seed=Monteverdi',
-    },
-    {
-        id: 'pis-003',
-        titulo: 'Bésame Mucho',
-        compositor: 'C. Velázquez',
-        duracion: '3:45',
-        urlAudio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-        portada: 'https://api.dicebear.com/7.x/shapes/svg?seed=Besame',
-    },
-];
-
-// ============================================================
-// CONFIGURACIÓN DEFAULT DE SECCIONES
-// ============================================================
-export const configuracionSeccionesDefault: ConfiguracionSecciones = {
-    mostrarAudiciones: true,
-    mostrarEventos: true,
-    mostrarDonaciones: true,
-    mostrarBiblioteca: true,
-    tipoAsistente: 'chatbot',
-    numeroWhatsapp: '584241721311',
+// La fuente de verdad es la tabla `configuracion` (clave `config_secciones`).
+// Este estado solo se usa como respaldo vacío mientras Supabase no responde.
+export const configuracionSeccionesInicial: ConfiguracionSecciones = {
+    mostrarAudiciones: false,
+    mostrarEventos: false,
+    mostrarDonaciones: false,
+    mostrarBiblioteca: false,
+    tipoAsistente: 'ninguno',
+    numeroWhatsapp: '',
 };
 
 // ============================================================

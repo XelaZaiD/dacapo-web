@@ -124,7 +124,7 @@ const SeccionAudiciones = () => {
                         >
                             <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30
                               flex items-center justify-center mx-auto mb-6">
-                                <CheckCircle className="w-8 h-8 text-emerald-400" />
+                                <CheckCircle className="w-8 h-8 text-emerald-700 dark:text-emerald-400" />
                             </div>
                             <h3 className="text-2xl font-display font-bold text-secundario mb-3">
                                 ¡Solicitud Enviada!
@@ -166,7 +166,7 @@ const SeccionAudiciones = () => {
                                         onChange={e => actualizarCampo('nombre', e.target.value)}
                                     />
                                     {errores.nombre && (
-                                        <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                                        <p className="text-red-600 dark:text-red-400 text-xs mt-1 flex items-center gap-1">
                                             <AlertCircle className="w-3 h-3" /> {errores.nombre}
                                         </p>
                                     )}
@@ -186,7 +186,7 @@ const SeccionAudiciones = () => {
                                         onChange={e => actualizarCampo('email', e.target.value)}
                                     />
                                     {errores.email && (
-                                        <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                                        <p className="text-red-600 dark:text-red-400 text-xs mt-1 flex items-center gap-1">
                                             <AlertCircle className="w-3 h-3" /> {errores.email}
                                         </p>
                                     )}
@@ -228,7 +228,7 @@ const SeccionAudiciones = () => {
                                         <option value="No sé / A evaluar">No sé / A evaluar</option>
                                     </select>
                                     {errores.tipoVoz && (
-                                        <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                                        <p className="text-red-600 dark:text-red-400 text-xs mt-1 flex items-center gap-1">
                                             <AlertCircle className="w-3 h-3" /> {errores.tipoVoz}
                                         </p>
                                     )}
@@ -249,7 +249,7 @@ const SeccionAudiciones = () => {
                                     onChange={e => actualizarCampo('experiencia', e.target.value)}
                                 />
                                 {errores.experiencia && (
-                                    <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                                    <p className="text-red-600 dark:text-red-400 text-xs mt-1 flex items-center gap-1">
                                         <AlertCircle className="w-3 h-3" /> {errores.experiencia}
                                     </p>
                                 )}

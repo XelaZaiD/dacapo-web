@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle } from 'lucide-react';
-import { useApp, WHATSAPP_PHONE_NUMBER } from '../../context/AppContext';
+import { useApp } from '../../context/AppContext';
 
 const BotonWhatsApp = () => {
     const { configuracionSecciones } = useApp();
     const [hover, setHover] = useState(false);
 
-    if (configuracionSecciones.tipoAsistente !== 'whatsapp') return null;
+    const numero = configuracionSecciones.numeroWhatsapp;
 
-    const numero = configuracionSecciones.numeroWhatsapp || WHATSAPP_PHONE_NUMBER;
+    if (configuracionSecciones.tipoAsistente !== 'whatsapp' || !numero) return null;
     const url = `https://wa.me/${numero}`;
 
     return (
