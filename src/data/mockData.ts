@@ -269,6 +269,11 @@ export type InfoGrupo = {
         youtube?: string;
         tiktok?: string;
     };
+    frasesBanner: string[];        // Frases de la cinta musical del Hero
+    ubicacion?: string;            // Nombre de la ciudad/zona (ej: "El Hatillo, Caracas")
+    mapaUrl?: string;              // Enlace a Google Maps
+    telefono?: string;             // Teléfono de contacto adicional
+    logoUrl?: string;              // Logo/foto oficial del grupo (bucket integrantes/logos)
 };
 
 // ============================================================
@@ -291,6 +296,17 @@ export const infoGrupoDefault: InfoGrupo = {
         youtube: 'https://www.youtube.com/@dacapogrupovocal',
         tiktok: 'https://www.tiktok.com/@dacapo_ve',
     },
+    frasesBanner: [
+        'DaCapo',
+        'Grupo Vocal',
+        'Música Coral',
+        'Armonía',
+        'Repertorio Clásico',
+        'Contemporáneo',
+    ],
+    ubicacion: 'El Hatillo, Caracas',
+    telefono: '',
+    logoUrl: '',
 };
 
 // ============================================================

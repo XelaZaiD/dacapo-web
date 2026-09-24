@@ -249,6 +249,7 @@ const CLAVES_LS = {
     VISTAS_INTEGRANTES: 'dacapo_vistas_integrantes',
     CLAVE_CONFIG_VISTAS_INTEGRANTES: 'vistas_integrantes',
     CLAVE_CONFIG_INFO_GRUPO: 'info_general',
+    CLAVE_CONFIG_BANNER: 'banner_frases',
 };
 
 // ============================================================
@@ -561,6 +562,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 })
                 .catch(err => {
                     console.warn('ℹ️ Usando información del grupo local (Supabase no disponible o error):', err);
+                });
+
+            obtenerConfiguracionDB<string[]>(CLAVES_LS.CLAVE_CONFIG_BANNER)
+                .then(frases => {
+                    if (Array.isArray(frases) && frases.length) {
+                        setInfoGrupo(prev => ({ ...prev, frasesBanner: frases }));
+                    }
+                })
+                .catch(err => {
+                    console.warn('ℹ️ Usando frases del banner local (Supabase no disponible o error):', err);
                 });
         }
     }, [cargarPartituras, cargarPistas, cargarIntegrantes, cargarVideos, cargarFotosGaleria]);
@@ -924,6 +935,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_INFO_GRUPO, siguiente).catch(err => {
                 console.warn('⚠️ No se pudo guardar la información del grupo en Supabase (se mantiene local):', err);
             });
+            if (datos.frasesBanner) {
+                guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_BANNER, datos.frasesBanner).catch(err => {
+                    console.warn('⚠️ No se pudieron guardar las frases del banner en Supabase:', err);
+                });
+            }
         }
     };
 

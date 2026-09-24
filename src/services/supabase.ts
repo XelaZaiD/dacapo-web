@@ -1013,5 +1013,37 @@ export const subirFotoGaleriaSupabase = async (archivo: File): Promise<string | 
     return urlData.publicUrl;
 };
 
+/**
+ * Subir el logo/foto oficial del grupo al Storage de Supabase (bucket 'integrantes', carpeta 'logos')
+ */
+export const subirLogoGrupoSupabase = async (archivo: File): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = (archivo.name.split('.').pop() || 'jpg').toLowerCase();
+    const nombreLimpio = archivo.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(new RegExp(`\\.${extension}$`, 'i'), '');
+    const rutaArchivo = `logos/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('integrantes')
+        .upload(rutaArchivo, archivo, {
+            contentType: archivo.type || 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error al subir el logo del grupo:', error);
+        return null;
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('integrantes')
+        .getPublicUrl(rutaArchivo);
+
+    return urlData.publicUrl;
+};
+
 // Exportamos el cliente principal
 export default supabase;

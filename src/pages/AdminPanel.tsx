@@ -8,7 +8,7 @@
  * ============================================================
  */
 
-import { useState } from 'react';
+import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,11 +18,12 @@ import {
     Plus, Pencil, Trash2, X, Check, Shield, ArrowLeft,
     Mail, Mic, Upload, Play, Pause, Disc, Loader2, AlertCircle,
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
-    ArrowUp, ArrowDown, Video, Image as ImageIcon
+    ArrowUp, ArrowDown, Video, Image as ImageIcon,
+    Lock, AtSign, ExternalLink, Music2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
-import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase } from '../services/supabase';
+import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase, subirLogoGrupoSupabase } from '../services/supabase';
 import AvisoTemporal from '../components/ui/AvisoTemporal';
 
 // ============================================================
@@ -89,88 +90,149 @@ const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
 };
 
 // ============================================================
-// MÓDULO: Dashboard (resumen estadístico)
+// MÓDULO: Dashboard (resumen estadístico + info del grupo)
 // ============================================================
-type FormInfoGrupo = {
-    nombre: string;
-    subtitulo: string;
-    descripcion: string;
-    mision: string;
-    vision: string;
-    anioFundacion: number;
-    totalConciertos: number;
-    totalIntegrantes: number;
-    totalPartituras: number;
-    emailContacto: string;
-    instagram: string;
-    facebook: string;
-    youtube: string;
-    tiktok: string;
+
+// Campo con edición en línea: muestra el valor + lápiz; al pulsar
+// el lápiz se vuelve un input/textarea y Enter (✓ para campos largos)
+// guarda, Escape cancela.
+const CampoEditable = ({ etiqueta, valor, alGuardar, multilinea = false, placeholder, icono }: {
+    etiqueta: string;
+    valor: string;
+    alGuardar: (valor: string) => void;
+    multilinea?: boolean;
+    placeholder?: string;
+    icono?: ReactNode;
+}) => {
+    const [editando, setEditando] = useState(false);
+    const [borrador, setBorrador] = useState(valor);
+
+    const iniciar = () => {
+        setBorrador(valor);
+        setEditando(true);
+    };
+
+    const guardar = () => {
+        alGuardar(borrador);
+        setEditando(false);
+    };
+
+    const cancelar = () => setEditando(false);
+
+    if (editando) {
+        return (
+            <div className="w-full">
+                <p className="text-[11px] uppercase tracking-wider t-muted-low mb-1">{etiqueta}</p>
+                {multilinea ? (
+                    <div className="flex items-start gap-2">
+                        <textarea
+                            autoFocus
+                            rows={2}
+                            className="input-campo flex-1 resize-none"
+                            value={borrador}
+                            onChange={e => setBorrador(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Escape') cancelar(); }}
+                            placeholder={placeholder}
+                        />
+                        <button onClick={guardar} title="Guardar" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
+                            <Check className="w-4 h-4" />
+                        </button>
+                    </div>
+                ) : (
+                    <input
+                        autoFocus
+                        className="input-campo w-full"
+                        value={borrador}
+                        onChange={e => setBorrador(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') guardar(); if (e.key === 'Escape') cancelar(); }}
+                        onBlur={guardar}
+                        placeholder={placeholder}
+                    />
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="group flex items-center justify-between gap-2">
+            <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wider t-muted-low mb-0.5 flex items-center gap-1">{icono}{etiqueta}</p>
+                <p className="text-sm t-muted-high break-words">
+                    {valor.trim() ? valor : <span className="italic t-muted-low">Sin definir</span>}
+                </p>
+            </div>
+            <button
+                onClick={iniciar}
+                title={`Editar ${etiqueta}`}
+                className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-secundario/60 hover:text-vinotinto hover:bg-vinotinto/10 transition-all bg-sutil/60"
+            >
+                <Pencil className="w-3.5 h-3.5" />
+            </button>
+        </div>
+    );
 };
 
-const formInfoGrupoInicial: FormInfoGrupo = {
-    nombre: '',
-    subtitulo: '',
-    descripcion: '',
-    mision: '',
-    vision: '',
-    anioFundacion: new Date().getFullYear(),
-    totalConciertos: 0,
-    totalIntegrantes: 0,
-    totalPartituras: 0,
-    emailContacto: '',
-    instagram: '',
-    facebook: '',
-    youtube: '',
-    tiktok: '',
-};
-
-const formInfoDesdeDatos = (g: InfoGrupo): FormInfoGrupo => ({
-    nombre: g.nombre,
-    subtitulo: g.subtitulo,
-    descripcion: g.descripcion,
-    mision: g.mision,
-    vision: g.vision,
-    anioFundacion: g.anioFundacion,
-    totalConciertos: g.totalConciertos,
-    totalIntegrantes: g.totalIntegrantes,
-    totalPartituras: g.totalPartituras,
-    emailContacto: g.emailContacto,
-    instagram: g.redesSociales?.instagram || '',
-    facebook: g.redesSociales?.facebook || '',
-    youtube: g.redesSociales?.youtube || '',
-    tiktok: g.redesSociales?.tiktok || '',
-});
+// Contador sincronizado con otro módulo (no editable): muestra un tooltip
+// que explica que el valor proviene de los registros reales de ese módulo.
+const ContadorSincronizado = ({ etiqueta, icono, valor, tooltip, modulo, alNavegar }: {
+    etiqueta: string;
+    icono: ReactNode;
+    valor: number;
+    tooltip: string;
+    modulo: string;
+    alNavegar: (modulo: string) => void;
+}) => (
+    <button
+        onClick={() => alNavegar(modulo)}
+        title={tooltip}
+        className="card-glass rounded-xl p-4 text-left w-full group hover:border-vinotinto/50 hover:shadow-glow-vinotinto transition-all duration-300 cursor-pointer"
+    >
+        <div className="flex items-center justify-between mb-2">
+            <p className="text-xs t-muted uppercase tracking-wider flex items-center gap-1.5">{icono}{etiqueta}</p>
+            <Lock className="w-3.5 h-3.5 text-khaki/70" />
+        </div>
+        <p className="text-3xl font-display font-bold text-secundario">{valor}</p>
+        <p className="text-[11px] t-muted-low mt-1">Automático · ver módulo</p>
+    </button>
+);
 
 const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void }) => {
     const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo, actualizarInfoGrupo } = useApp();
-    const [mostrarFormInfo, setMostrarFormInfo] = useState(false);
-    const [formInfo, setFormInfo] = useState<FormInfoGrupo>(formInfoGrupoInicial);
+    const [subiendoLogo, setSubiendoLogo] = useState(false);
+    const [nuevaFrase, setNuevaFrase] = useState('');
 
     const solicitudesPendientes = solicitudesAudicion.filter(s => s.estado === 'Pendiente').length;
     const mensajesNoLeidos = mensajesContacto.filter(m => !m.leido).length;
+    const conciertosRealizados = eventos.filter(e => e.activo && new Date(e.fecha).getTime() <= Date.now()).length;
+    const aniosTrayectoria = Math.max(0, new Date().getFullYear() - infoGrupo.anioFundacion);
 
-    const guardarInfoGrupo = () => {
-        if (!formInfo.nombre.trim()) return;
-        actualizarInfoGrupo({
-            nombre: formInfo.nombre.trim(),
-            subtitulo: formInfo.subtitulo.trim(),
-            descripcion: formInfo.descripcion.trim(),
-            mision: formInfo.mision.trim(),
-            vision: formInfo.vision.trim(),
-            anioFundacion: formInfo.anioFundacion,
-            totalConciertos: formInfo.totalConciertos,
-            totalIntegrantes: formInfo.totalIntegrantes,
-            totalPartituras: formInfo.totalPartituras,
-            emailContacto: formInfo.emailContacto.trim(),
-            redesSociales: {
-                instagram: formInfo.instagram.trim(),
-                facebook: formInfo.facebook.trim(),
-                youtube: formInfo.youtube.trim(),
-                tiktok: formInfo.tiktok.trim(),
-            },
-        });
-        setMostrarFormInfo(false);
+    const aplicar = (datos: Partial<InfoGrupo>) => actualizarInfoGrupo(datos);
+
+    const subirLogo = async (e: ChangeEvent<HTMLInputElement>) => {
+        const archivo = e.target.files?.[0] ?? null;
+        e.target.value = '';
+        if (!archivo) return;
+        setSubiendoLogo(true);
+        const url = await subirLogoGrupoSupabase(archivo);
+        setSubiendoLogo(false);
+        if (url) aplicar({ logoUrl: url });
+    };
+
+    const agregarFrase = () => {
+        const frase = nuevaFrase.trim();
+        if (!frase) return;
+        aplicar({ frasesBanner: [...(infoGrupo.frasesBanner || []), frase] });
+        setNuevaFrase('');
+    };
+
+    const actualizarFrase = (indice: number, valor: string) => {
+        const frases = [...(infoGrupo.frasesBanner || [])];
+        frases[indice] = valor;
+        aplicar({ frasesBanner: frases });
+    };
+
+    const quitarFrase = (indice: number) => {
+        aplicar({ frasesBanner: (infoGrupo.frasesBanner || []).filter((_, i) => i !== indice) });
     };
 
     const stats = [
@@ -178,6 +240,13 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
         { etiqueta: 'Partituras', valor: partituras.length, color: 'text-amber-600 dark:text-amber-400', modulo: 'partituras' },
         { etiqueta: 'Eventos', valor: eventos.filter(e => e.activo).length, color: 'text-blue-600 dark:text-blue-400', modulo: 'eventos' },
         { etiqueta: 'Solicitudes Pendientes', valor: solicitudesPendientes, color: 'text-khaki', modulo: 'audiciones', alerta: solicitudesPendientes > 0 },
+    ];
+
+    const redes = [
+        { clave: 'instagram' as const, etiqueta: 'Instagram', icono: <AtSign className="w-3.5 h-3.5" /> },
+        { clave: 'facebook' as const, etiqueta: 'Facebook', icono: <ExternalLink className="w-3.5 h-3.5" /> },
+        { clave: 'youtube' as const, etiqueta: 'YouTube', icono: <Play className="w-3.5 h-3.5" /> },
+        { clave: 'tiktok' as const, etiqueta: 'TikTok', icono: <Music2 className="w-3.5 h-3.5" /> },
     ];
 
     return (
@@ -230,22 +299,147 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                 )}
             </button>
 
-            {/* Info del grupo */}
-            <div className="card-glass rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
+            {/* Información del Grupo (edición en línea) */}
+            <div className="card-glass rounded-xl p-6 space-y-6">
+                <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-secundario">Información del Grupo</h3>
-                    <button
-                        onClick={() => { setFormInfo(formInfoDesdeDatos(infoGrupo)); setMostrarFormInfo(true); }}
-                        className="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all"
-                    >
-                        <Pencil className="w-3.5 h-3.5" /> Editar
-                    </button>
+                    <p className="text-[11px] t-muted-low">Pulsa el lápiz para editar en el sitio · Enter guarda</p>
                 </div>
-                <div className="grid sm:grid-cols-2 gap-4 text-sm t-muted-high">
-                    <div><span className="t-muted-low">Nombre:</span> {infoGrupo.nombre} {infoGrupo.subtitulo}</div>
-                    <div><span className="t-muted-low">Fundado:</span> {infoGrupo.anioFundacion}</div>
-                    <div><span className="t-muted-low">Email:</span> {infoGrupo.emailContacto}</div>
-                    <div><span className="t-muted-low">Conciertos:</span> {infoGrupo.totalConciertos} · <span className="t-muted-low">Integrantes:</span> {infoGrupo.totalIntegrantes} · <span className="t-muted-low">Partituras:</span> {infoGrupo.totalPartituras}</div>
+
+                {/* Identidad + logo */}
+                <div className="flex flex-col md:flex-row gap-5">
+                    <div className="flex flex-col items-center gap-2 shrink-0">
+                        <div className="relative w-24 h-24 rounded-2xl overflow-hidden bg-sutil border borde-subtle flex items-center justify-center">
+                            {infoGrupo.logoUrl ? (
+                                <img src={infoGrupo.logoUrl} alt="Logo del grupo" className="w-full h-full object-cover" />
+                            ) : (
+                                <Music className="w-10 h-10 text-vinotinto-claro" />
+                            )}
+                        </div>
+                        <label className="cursor-pointer">
+                            <input type="file" accept="image/*" className="hidden" onChange={subirLogo} />
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg bg-sutil hover:bg-sutil-hover text-secundario transition-all">
+                                {subiendoLogo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} Logo
+                            </span>
+                        </label>
+                        {infoGrupo.logoUrl && (
+                            <button onClick={() => aplicar({ logoUrl: '' })} className="text-[11px] text-red-600 dark:text-red-400 hover:underline">Quitar</button>
+                        )}
+                    </div>
+
+                    <div className="flex-1 space-y-4 min-w-0">
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            <CampoEditable etiqueta="Nombre del grupo" valor={infoGrupo.nombre} alGuardar={v => aplicar({ nombre: v })} placeholder="DaCapo" />
+                            <CampoEditable etiqueta="Subtítulo" valor={infoGrupo.subtitulo} alGuardar={v => aplicar({ subtitulo: v })} placeholder="Grupo Vocal" />
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            <CampoEditable etiqueta="Año de fundación" valor={String(infoGrupo.anioFundacion)} alGuardar={v => aplicar({ anioFundacion: Number(v) || new Date().getFullYear() })} placeholder="2019" />
+                            <div className="flex flex-col justify-center">
+                                <div className="flex items-center gap-3 text-sm t-muted-high">
+                                    <span className="w-2 h-2 rounded-full bg-khaki/70" />
+                                    <span>Fundado en <b>{infoGrupo.anioFundacion}</b> · <b className="text-vinotinto">{aniosTrayectoria}</b> años de trayectoria</span>
+                                </div>
+                                <p className="text-[11px] t-muted-low mt-1 pl-5">Años calculados automáticamente desde el año de fundación</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Descripción / Misión / Visión */}
+                <div className="space-y-4">
+                    <CampoEditable etiqueta="Descripción" valor={infoGrupo.descripcion} multilinea alGuardar={v => aplicar({ descripcion: v })} placeholder="¿Quiénes son?" />
+                    <div className="grid sm:grid-cols-2 gap-4">
+                        <CampoEditable etiqueta="Misión" valor={infoGrupo.mision} multilinea alGuardar={v => aplicar({ mision: v })} placeholder="Misión del grupo" />
+                        <CampoEditable etiqueta="Visión" valor={infoGrupo.vision} multilinea alGuardar={v => aplicar({ vision: v })} placeholder="Visión del grupo" />
+                    </div>
+                </div>
+
+                {/* Contacto */}
+                <div className="grid sm:grid-cols-2 gap-4 border-t borde-subtle pt-4">
+                    <CampoEditable etiqueta="Email de contacto" valor={infoGrupo.emailContacto} alGuardar={v => aplicar({ emailContacto: v })} placeholder="correo@dacapo.com" />
+                    <CampoEditable etiqueta="Teléfono" valor={infoGrupo.telefono || ''} alGuardar={v => aplicar({ telefono: v })} placeholder="+58 412 000 0000" />
+                    <CampoEditable etiqueta="Ubicación" valor={infoGrupo.ubicacion || ''} alGuardar={v => aplicar({ ubicacion: v })} placeholder="Ciudad, país" />
+                    <CampoEditable etiqueta="Mapa (enlace)" valor={infoGrupo.mapaUrl || ''} alGuardar={v => aplicar({ mapaUrl: v })} placeholder="https://maps.google.com/..." />
+                </div>
+
+                {/* Contadores sincronizados */}
+                <div className="border-t borde-subtle pt-5">
+                    <p className="text-xs t-muted mb-3 flex items-center gap-1.5">
+                        <Lock className="w-3 h-3 text-khaki/70" /> Estos valores se sincronizan automáticamente con sus módulos (no se editan aquí)
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <ContadorSincronizado
+                            etiqueta="Conciertos"
+                            icono={<Calendar className="w-3.5 h-3.5" />}
+                            valor={conciertosRealizados}
+                            modulo="eventos"
+                            tooltip="Se sincroniza con el módulo Eventos: suma los eventos activos con fecha ya pasada. Registra un evento con fecha pasada para sumarlo a la métrica histórica."
+                            alNavegar={onNavigate}
+                        />
+                        <ContadorSincronizado
+                            etiqueta="Integrantes"
+                            icono={<Users className="w-3.5 h-3.5" />}
+                            valor={integrantes.length}
+                            modulo="integrantes"
+                            tooltip="Se sincroniza con el módulo Integrantes: es el total de miembros registrados."
+                            alNavegar={onNavigate}
+                        />
+                        <ContadorSincronizado
+                            etiqueta="Partituras"
+                            icono={<BookOpen className="w-3.5 h-3.5" />}
+                            valor={partituras.length}
+                            modulo="partituras"
+                            tooltip="Se sincroniza con el módulo Partituras: es el total de partituras registradas."
+                            alNavegar={onNavigate}
+                        />
+                    </div>
+                </div>
+
+                {/* Redes sociales */}
+                <div className="border-t borde-subtle pt-5">
+                    <p className="text-xs t-muted mb-3">Redes sociales (aparecen en toda la página web)</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                        {redes.map(r => (
+                            <CampoEditable
+                                key={r.clave}
+                                etiqueta={r.etiqueta}
+                                icono={r.icono}
+                                valor={infoGrupo.redesSociales?.[r.clave] || ''}
+                                alGuardar={v => aplicar({ redesSociales: { ...infoGrupo.redesSociales, [r.clave]: v } })}
+                                placeholder={`https://${r.etiqueta.toLowerCase()}.com/...`}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Frases del banner (Hero) */}
+                <div className="border-t borde-subtle pt-5">
+                    <p className="text-xs t-muted mb-1">Cinta musical del inicio (Hero)</p>
+                    <p className="text-[11px] t-muted-low mb-3">Estas frases se deslizan en la parte inferior del inicio.</p>
+                    <div className="space-y-2">
+                        {(infoGrupo.frasesBanner || []).map((frase, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <div className="flex-1 min-w-0">
+                                    <CampoEditable etiqueta={`Frase ${i + 1}`} valor={frase} alGuardar={v => actualizarFrase(i, v)} placeholder="Palabra o frase" />
+                                </div>
+                                <button onClick={() => quitarFrase(i)} title="Quitar frase" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10 transition-all">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                        <input
+                            className="input-campo flex-1"
+                            value={nuevaFrase}
+                            onChange={e => setNuevaFrase(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') agregarFrase(); }}
+                            placeholder="Añadir nueva frase al banner..."
+                        />
+                        <button onClick={agregarFrase} className="btn-ghost text-sm px-3 py-2 shrink-0">
+                            <Plus className="w-4 h-4" /> Añadir
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -261,52 +455,6 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                     <p className="t-muted-low mt-2">En Fase 2 (Supabase), estas credenciales serán reemplazadas por el sistema de Auth real.</p>
                 </div>
             </div>
-
-            {/* Modal: Editar Información del Grupo */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormInfo && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormInfo(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-2xl p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">Editar Información del Grupo</h3>
-                                <button onClick={() => setMostrarFormInfo(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="grid sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Nombre del grupo *</label><input className="input-campo" value={formInfo.nombre} onChange={e => setFormInfo(p => ({ ...p, nombre: e.target.value }))} placeholder="DaCapo" /></div>
-                                    <div><label className="label-campo">Subtítulo</label><input className="input-campo" value={formInfo.subtitulo} onChange={e => setFormInfo(p => ({ ...p, subtitulo: e.target.value }))} placeholder="Grupo Vocal" /></div>
-                                </div>
-                                <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formInfo.descripcion} onChange={e => setFormInfo(p => ({ ...p, descripcion: e.target.value }))} placeholder="¿Quiénes son?" /></div>
-                                <div><label className="label-campo">Misión</label><textarea rows={2} className="input-campo resize-none" value={formInfo.mision} onChange={e => setFormInfo(p => ({ ...p, mision: e.target.value }))} placeholder="Misión del grupo" /></div>
-                                <div><label className="label-campo">Visión</label><textarea rows={2} className="input-campo resize-none" value={formInfo.vision} onChange={e => setFormInfo(p => ({ ...p, vision: e.target.value }))} placeholder="Visión del grupo" /></div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    <div><label className="label-campo">Año fundación</label><input type="number" min={1900} max={2100} className="input-campo" value={formInfo.anioFundacion} onChange={e => setFormInfo(p => ({ ...p, anioFundacion: Number(e.target.value) || new Date().getFullYear() }))} /></div>
-                                    <div><label className="label-campo">Conciertos</label><input type="number" min={0} className="input-campo" value={formInfo.totalConciertos} onChange={e => setFormInfo(p => ({ ...p, totalConciertos: Number(e.target.value) || 0 }))} /></div>
-                                    <div><label className="label-campo">Integrantes</label><input type="number" min={0} className="input-campo" value={formInfo.totalIntegrantes} onChange={e => setFormInfo(p => ({ ...p, totalIntegrantes: Number(e.target.value) || 0 }))} /></div>
-                                    <div><label className="label-campo">Partituras</label><input type="number" min={0} className="input-campo" value={formInfo.totalPartituras} onChange={e => setFormInfo(p => ({ ...p, totalPartituras: Number(e.target.value) || 0 }))} /></div>
-                                </div>
-                                <div><label className="label-campo">Email de contacto</label><input type="email" className="input-campo" value={formInfo.emailContacto} onChange={e => setFormInfo(p => ({ ...p, emailContacto: e.target.value }))} placeholder="correo@dacapo.com" /></div>
-                                <div className="border-t borde-subtle pt-3">
-                                    <p className="text-xs t-muted-low mb-2">Redes Sociales (opcional)</p>
-                                    <div className="grid sm:grid-cols-2 gap-3">
-                                        <div><label className="label-campo">Instagram</label><input className="input-campo" value={formInfo.instagram} onChange={e => setFormInfo(p => ({ ...p, instagram: e.target.value }))} placeholder="https://instagram.com/..." /></div>
-                                        <div><label className="label-campo">Facebook</label><input className="input-campo" value={formInfo.facebook} onChange={e => setFormInfo(p => ({ ...p, facebook: e.target.value }))} placeholder="https://facebook.com/..." /></div>
-                                        <div><label className="label-campo">YouTube</label><input className="input-campo" value={formInfo.youtube} onChange={e => setFormInfo(p => ({ ...p, youtube: e.target.value }))} placeholder="https://youtube.com/@..." /></div>
-                                        <div><label className="label-campo">TikTok</label><input className="input-campo" value={formInfo.tiktok} onChange={e => setFormInfo(p => ({ ...p, tiktok: e.target.value }))} placeholder="https://tiktok.com/@..." /></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => setMostrarFormInfo(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
-                                <button onClick={guardarInfoGrupo} className="btn-primario flex-1 justify-center">
-                                    <Check className="w-4 h-4" /> Guardar
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
         </div>
     );
 };
