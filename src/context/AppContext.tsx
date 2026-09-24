@@ -248,6 +248,7 @@ const CLAVES_LS = {
     CLAVE_CONFIG_SECCIONES: 'config_secciones',
     VISTAS_INTEGRANTES: 'dacapo_vistas_integrantes',
     CLAVE_CONFIG_VISTAS_INTEGRANTES: 'vistas_integrantes',
+    CLAVE_CONFIG_INFO_GRUPO: 'info_general',
 };
 
 // ============================================================
@@ -548,6 +549,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 })
                 .catch(err => {
                     console.warn('ℹ️ Usando secciones locales (Supabase no disponible o error):', err);
+                });
+
+            obtenerConfiguracionDB<InfoGrupo>(CLAVES_LS.CLAVE_CONFIG_INFO_GRUPO)
+                .then(datos => {
+                    if (datos) {
+                        // Combinamos con el default para no perder campos futuros
+                        setInfoGrupo(prev => ({ ...prev, ...datos, redesSociales: { ...prev.redesSociales, ...(datos.redesSociales || {}) } }));
+                        guardarEnLocalStorage(CLAVES_LS.INFO_GRUPO, datos);
+                    }
+                })
+                .catch(err => {
+                    console.warn('ℹ️ Usando información del grupo local (Supabase no disponible o error):', err);
                 });
         }
     }, [cargarPartituras, cargarPistas, cargarIntegrantes, cargarVideos, cargarFotosGaleria]);
@@ -903,7 +916,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // ============================================================
 
     const actualizarInfoGrupo = (datos: Partial<InfoGrupo>) => {
-        setInfoGrupo(prev => ({ ...prev, ...datos }));
+        const siguiente = { ...infoGrupo, ...datos };
+        setInfoGrupo(siguiente);
+        guardarEnLocalStorage(CLAVES_LS.INFO_GRUPO, siguiente);
+
+        if (supabase) {
+            guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_INFO_GRUPO, siguiente).catch(err => {
+                console.warn('⚠️ No se pudo guardar la información del grupo en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const toggleSeccion = (seccion: keyof ConfiguracionSecciones) => {

@@ -21,7 +21,7 @@ import {
     ArrowUp, ArrowDown, Video, Image as ImageIcon
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
+import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
 import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase } from '../services/supabase';
 import AvisoTemporal from '../components/ui/AvisoTemporal';
 
@@ -91,11 +91,87 @@ const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
 // ============================================================
 // MÓDULO: Dashboard (resumen estadístico)
 // ============================================================
+type FormInfoGrupo = {
+    nombre: string;
+    subtitulo: string;
+    descripcion: string;
+    mision: string;
+    vision: string;
+    anioFundacion: number;
+    totalConciertos: number;
+    totalIntegrantes: number;
+    totalPartituras: number;
+    emailContacto: string;
+    instagram: string;
+    facebook: string;
+    youtube: string;
+    tiktok: string;
+};
+
+const formInfoGrupoInicial: FormInfoGrupo = {
+    nombre: '',
+    subtitulo: '',
+    descripcion: '',
+    mision: '',
+    vision: '',
+    anioFundacion: new Date().getFullYear(),
+    totalConciertos: 0,
+    totalIntegrantes: 0,
+    totalPartituras: 0,
+    emailContacto: '',
+    instagram: '',
+    facebook: '',
+    youtube: '',
+    tiktok: '',
+};
+
+const formInfoDesdeDatos = (g: InfoGrupo): FormInfoGrupo => ({
+    nombre: g.nombre,
+    subtitulo: g.subtitulo,
+    descripcion: g.descripcion,
+    mision: g.mision,
+    vision: g.vision,
+    anioFundacion: g.anioFundacion,
+    totalConciertos: g.totalConciertos,
+    totalIntegrantes: g.totalIntegrantes,
+    totalPartituras: g.totalPartituras,
+    emailContacto: g.emailContacto,
+    instagram: g.redesSociales?.instagram || '',
+    facebook: g.redesSociales?.facebook || '',
+    youtube: g.redesSociales?.youtube || '',
+    tiktok: g.redesSociales?.tiktok || '',
+});
+
 const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void }) => {
-    const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo } = useApp();
+    const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo, actualizarInfoGrupo } = useApp();
+    const [mostrarFormInfo, setMostrarFormInfo] = useState(false);
+    const [formInfo, setFormInfo] = useState<FormInfoGrupo>(formInfoGrupoInicial);
 
     const solicitudesPendientes = solicitudesAudicion.filter(s => s.estado === 'Pendiente').length;
     const mensajesNoLeidos = mensajesContacto.filter(m => !m.leido).length;
+
+    const guardarInfoGrupo = () => {
+        if (!formInfo.nombre.trim()) return;
+        actualizarInfoGrupo({
+            nombre: formInfo.nombre.trim(),
+            subtitulo: formInfo.subtitulo.trim(),
+            descripcion: formInfo.descripcion.trim(),
+            mision: formInfo.mision.trim(),
+            vision: formInfo.vision.trim(),
+            anioFundacion: formInfo.anioFundacion,
+            totalConciertos: formInfo.totalConciertos,
+            totalIntegrantes: formInfo.totalIntegrantes,
+            totalPartituras: formInfo.totalPartituras,
+            emailContacto: formInfo.emailContacto.trim(),
+            redesSociales: {
+                instagram: formInfo.instagram.trim(),
+                facebook: formInfo.facebook.trim(),
+                youtube: formInfo.youtube.trim(),
+                tiktok: formInfo.tiktok.trim(),
+            },
+        });
+        setMostrarFormInfo(false);
+    };
 
     const stats = [
         { etiqueta: 'Integrantes', valor: integrantes.length, color: 'text-rose-600 dark:text-rose-400', modulo: 'integrantes' },
@@ -156,14 +232,21 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
 
             {/* Info del grupo */}
             <div className="card-glass rounded-xl p-6">
-                <h3 className="font-semibold text-secundario mb-4">Información del Grupo</h3>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-secundario">Información del Grupo</h3>
+                    <button
+                        onClick={() => { setFormInfo(formInfoDesdeDatos(infoGrupo)); setMostrarFormInfo(true); }}
+                        className="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all"
+                    >
+                        <Pencil className="w-3.5 h-3.5" /> Editar
+                    </button>
+                </div>
                 <div className="grid sm:grid-cols-2 gap-4 text-sm t-muted-high">
                     <div><span className="t-muted-low">Nombre:</span> {infoGrupo.nombre} {infoGrupo.subtitulo}</div>
                     <div><span className="t-muted-low">Fundado:</span> {infoGrupo.anioFundacion}</div>
                     <div><span className="t-muted-low">Email:</span> {infoGrupo.emailContacto}</div>
-                    <div><span className="t-muted-low">Total Conciertos:</span> {infoGrupo.totalConciertos}</div>
+                    <div><span className="t-muted-low">Conciertos:</span> {infoGrupo.totalConciertos} · <span className="t-muted-low">Integrantes:</span> {infoGrupo.totalIntegrantes} · <span className="t-muted-low">Partituras:</span> {infoGrupo.totalPartituras}</div>
                 </div>
-                <p className="text-xs t-muted-low mt-4">Para editar estos datos, ve a mockData.ts → infoGrupoDefault</p>
             </div>
 
             {/* Info de acceso rápido */}
@@ -178,6 +261,52 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                     <p className="t-muted-low mt-2">En Fase 2 (Supabase), estas credenciales serán reemplazadas por el sistema de Auth real.</p>
                 </div>
             </div>
+
+            {/* Modal: Editar Información del Grupo */}
+            {createPortal(<AnimatePresence>
+                {mostrarFormInfo && (
+                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormInfo(false)}>
+                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
+                        <motion.div className="relative card-modal w-full max-w-2xl p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-display font-bold text-lg text-secundario">Editar Información del Grupo</h3>
+                                <button onClick={() => setMostrarFormInfo(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
+                            </div>
+                            <div className="space-y-3">
+                                <div className="grid sm:grid-cols-2 gap-3">
+                                    <div><label className="label-campo">Nombre del grupo *</label><input className="input-campo" value={formInfo.nombre} onChange={e => setFormInfo(p => ({ ...p, nombre: e.target.value }))} placeholder="DaCapo" /></div>
+                                    <div><label className="label-campo">Subtítulo</label><input className="input-campo" value={formInfo.subtitulo} onChange={e => setFormInfo(p => ({ ...p, subtitulo: e.target.value }))} placeholder="Grupo Vocal" /></div>
+                                </div>
+                                <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formInfo.descripcion} onChange={e => setFormInfo(p => ({ ...p, descripcion: e.target.value }))} placeholder="¿Quiénes son?" /></div>
+                                <div><label className="label-campo">Misión</label><textarea rows={2} className="input-campo resize-none" value={formInfo.mision} onChange={e => setFormInfo(p => ({ ...p, mision: e.target.value }))} placeholder="Misión del grupo" /></div>
+                                <div><label className="label-campo">Visión</label><textarea rows={2} className="input-campo resize-none" value={formInfo.vision} onChange={e => setFormInfo(p => ({ ...p, vision: e.target.value }))} placeholder="Visión del grupo" /></div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div><label className="label-campo">Año fundación</label><input type="number" min={1900} max={2100} className="input-campo" value={formInfo.anioFundacion} onChange={e => setFormInfo(p => ({ ...p, anioFundacion: Number(e.target.value) || new Date().getFullYear() }))} /></div>
+                                    <div><label className="label-campo">Conciertos</label><input type="number" min={0} className="input-campo" value={formInfo.totalConciertos} onChange={e => setFormInfo(p => ({ ...p, totalConciertos: Number(e.target.value) || 0 }))} /></div>
+                                    <div><label className="label-campo">Integrantes</label><input type="number" min={0} className="input-campo" value={formInfo.totalIntegrantes} onChange={e => setFormInfo(p => ({ ...p, totalIntegrantes: Number(e.target.value) || 0 }))} /></div>
+                                    <div><label className="label-campo">Partituras</label><input type="number" min={0} className="input-campo" value={formInfo.totalPartituras} onChange={e => setFormInfo(p => ({ ...p, totalPartituras: Number(e.target.value) || 0 }))} /></div>
+                                </div>
+                                <div><label className="label-campo">Email de contacto</label><input type="email" className="input-campo" value={formInfo.emailContacto} onChange={e => setFormInfo(p => ({ ...p, emailContacto: e.target.value }))} placeholder="correo@dacapo.com" /></div>
+                                <div className="border-t borde-subtle pt-3">
+                                    <p className="text-xs t-muted-low mb-2">Redes Sociales (opcional)</p>
+                                    <div className="grid sm:grid-cols-2 gap-3">
+                                        <div><label className="label-campo">Instagram</label><input className="input-campo" value={formInfo.instagram} onChange={e => setFormInfo(p => ({ ...p, instagram: e.target.value }))} placeholder="https://instagram.com/..." /></div>
+                                        <div><label className="label-campo">Facebook</label><input className="input-campo" value={formInfo.facebook} onChange={e => setFormInfo(p => ({ ...p, facebook: e.target.value }))} placeholder="https://facebook.com/..." /></div>
+                                        <div><label className="label-campo">YouTube</label><input className="input-campo" value={formInfo.youtube} onChange={e => setFormInfo(p => ({ ...p, youtube: e.target.value }))} placeholder="https://youtube.com/@..." /></div>
+                                        <div><label className="label-campo">TikTok</label><input className="input-campo" value={formInfo.tiktok} onChange={e => setFormInfo(p => ({ ...p, tiktok: e.target.value }))} placeholder="https://tiktok.com/@..." /></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setMostrarFormInfo(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+                                <button onClick={guardarInfoGrupo} className="btn-primario flex-1 justify-center">
+                                    <Check className="w-4 h-4" /> Guardar
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>, document.body)}
         </div>
     );
 };
