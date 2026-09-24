@@ -27,7 +27,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { PistaAudio, Partitura, Integrante, VideoMedia, FotoGaleria } from '../data/mockData';
+import type { PistaAudio, Partitura, Integrante, VideoMedia, FotoGaleria, SolicitudAudicion, MensajeContacto } from '../data/mockData';
 
 // ============================================================
 // PASO 1: PEGA TUS CREDENCIALES DE SUPABASE AQUÍ
@@ -1043,6 +1043,150 @@ export const subirLogoGrupoSupabase = async (archivo: File): Promise<string | nu
         .getPublicUrl(rutaArchivo);
 
     return urlData.publicUrl;
+};
+
+// ============================================================
+// BUZÓN DE AUDICIONES Y MENSAJES (Módulos 5 y 6, Supabase)
+// ============================================================
+
+const mapearSolicitud = (fila: any): SolicitudAudicion => ({
+    id: fila.id,
+    nombre: fila.nombre,
+    email: fila.email,
+    telefono: fila.telefono || '',
+    tipoVoz: fila.tipo_voz || '',
+    experiencia: fila.experiencia || '',
+    urlAudioPrueba: fila.url_audio_prueba || undefined,
+    fechaEnvio: fila.fecha_envio,
+    estado: (fila.estado as SolicitudAudicion['estado']) || 'Pendiente',
+});
+
+export const obtenerSolicitudesAudicionDB = async (): Promise<SolicitudAudicion[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('solicitudes_audicion') as any)
+        .select('*')
+        .order('fecha_envio', { ascending: false });
+
+    if (error) {
+        console.error('Error al obtener solicitudes de audición:', error);
+        return null;
+    }
+    return (data ?? []).map(mapearSolicitud);
+};
+
+export const agregarSolicitudAudicionDB = async (datos: Omit<SolicitudAudicion, 'id' | 'fechaEnvio' | 'estado'>): Promise<SolicitudAudicion | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('solicitudes_audicion') as any)
+        .insert({
+            nombre: datos.nombre,
+            email: datos.email,
+            telefono: datos.telefono || null,
+            tipo_voz: datos.tipoVoz || null,
+            experiencia: datos.experiencia || null,
+            url_audio_prueba: datos.urlAudioPrueba || null,
+        })
+        .select()
+        .single();
+
+    if (error || !data) {
+        console.error('Error al insertar solicitud de audición:', error);
+        return null;
+    }
+    return mapearSolicitud(data);
+};
+
+export const actualizarEstadoSolicitudDB = async (id: string, estado: SolicitudAudicion['estado']): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('solicitudes_audicion') as any)
+        .update({ estado })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al actualizar el estado de la solicitud:', error);
+        return false;
+    }
+    return true;
+};
+
+export const eliminarSolicitudAudicionDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('solicitudes_audicion') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar solicitud de audición:', error);
+        return false;
+    }
+    return true;
+};
+
+const mapearMensaje = (fila: any): MensajeContacto => ({
+    id: fila.id,
+    nombre: fila.nombre,
+    email: fila.email,
+    asunto: fila.asunto || '',
+    mensaje: fila.mensaje || '',
+    fechaEnvio: fila.fecha_envio,
+    leido: fila.leido === true,
+});
+
+export const obtenerMensajesContactoDB = async (): Promise<MensajeContacto[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('mensajes_contacto') as any)
+        .select('*')
+        .order('fecha_envio', { ascending: false });
+
+    if (error) {
+        console.error('Error al obtener mensajes de contacto:', error);
+        return null;
+    }
+    return (data ?? []).map(mapearMensaje);
+};
+
+export const agregarMensajeContactoDB = async (datos: Omit<MensajeContacto, 'id' | 'fechaEnvio' | 'leido'>): Promise<MensajeContacto | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('mensajes_contacto') as any)
+        .insert({
+            nombre: datos.nombre,
+            email: datos.email,
+            asunto: datos.asunto || null,
+            mensaje: datos.mensaje,
+        })
+        .select()
+        .single();
+
+    if (error || !data) {
+        console.error('Error al insertar mensaje de contacto:', error);
+        return null;
+    }
+    return mapearMensaje(data);
+};
+
+export const marcarMensajeLeidoDB = async (id: string, leido = true): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('mensajes_contacto') as any)
+        .update({ leido })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al marcar mensaje como leído:', error);
+        return false;
+    }
+    return true;
+};
+
+export const eliminarMensajeContactoDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('mensajes_contacto') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar mensaje de contacto:', error);
+        return false;
+    }
+    return true;
 };
 
 // Exportamos el cliente principal

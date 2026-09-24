@@ -22,7 +22,7 @@ import {
     Lock, AtSign, ExternalLink, Music2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
+import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
 import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase, subirLogoGrupoSupabase } from '../services/supabase';
 import AvisoTemporal from '../components/ui/AvisoTemporal';
 
@@ -2507,32 +2507,69 @@ const ModuloPartituras = () => {
 };
 
 // ============================================================
-// MÓDULO: Buzón de Audiciones
+// MÓDULO: Buzón de Audiciones (conectado a Supabase)
 // ============================================================
 const ModuloBuzonAudiciones = () => {
-    const { solicitudesAudicion, marcarSolicitudRevisada } = useApp();
+    const { solicitudesAudicion, marcarSolicitudRevisada, eliminarSolicitudAudicion } = useApp();
     const [paginaAudiciones, setPaginaAudiciones] = useState(1);
+    const [filtroEstado, setFiltroEstado] = useState<SolicitudAudicion['estado'] | 'Todas'>('Todas');
+    const [confirmandoBorrar, setConfirmandoBorrar] = useState<string | null>(null);
     const COLORES_ESTADO: Record<string, string> = {
         'Pendiente': 'text-amber-700 dark:text-amber-400 bg-amber-400/10',
         'Revisada': 'text-blue-700 dark:text-blue-400 bg-blue-400/10',
         'Aceptada': 'text-emerald-700 dark:text-emerald-400 bg-emerald-400/10',
         'Rechazada': 'text-red-600 dark:text-red-400 bg-red-400/10',
     };
+    const ESTADOS_FILTRO = ['Todas', 'Pendiente', 'Revisada', 'Aceptada', 'Rechazada'] as const;
 
     const solicitudesInvertidas = [...solicitudesAudicion].reverse();
-    const totalPaginasAudiciones = Math.max(1, Math.ceil(solicitudesAudicion.length / REGISTROS_POR_PAGINA));
+    const filtradas = filtroEstado === 'Todas'
+        ? solicitudesInvertidas
+        : solicitudesInvertidas.filter(s => s.estado === filtroEstado);
+    const totalPaginasAudiciones = Math.max(1, Math.ceil(filtradas.length / REGISTROS_POR_PAGINA));
     const paginaAudicionesClamp = Math.min(paginaAudiciones, totalPaginasAudiciones);
-    const solicitudesPaginadas = solicitudesInvertidas.slice(
+    const solicitudesPaginadas = filtradas.slice(
         (paginaAudicionesClamp - 1) * REGISTROS_POR_PAGINA,
         paginaAudicionesClamp * REGISTROS_POR_PAGINA
     );
+
+    const confirmarBorrar = (id: string) => {
+        if (confirmandoBorrar === id) {
+            eliminarSolicitudAudicion(id);
+            setConfirmandoBorrar(null);
+        } else {
+            setConfirmandoBorrar(id);
+        }
+    };
 
     return (
         <div className="space-y-6">
             <div>
                 <h2 className="text-2xl font-display font-bold text-secundario mb-1">Buzón de Audiciones</h2>
-                <p className="t-muted text-sm">{solicitudesAudicion.filter(s => s.estado === 'Pendiente').length} pendientes de revisión</p>
+                <p className="t-muted text-sm">{solicitudesAudicion.filter(s => s.estado === 'Pendiente').length} pendientes de revisión · {solicitudesAudicion.length} en total</p>
             </div>
+
+            {/* Filtro por estado */}
+            {solicitudesAudicion.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                    {ESTADOS_FILTRO.map(estado => (
+                        <button
+                            key={estado}
+                            onClick={() => { setFiltroEstado(estado); setPaginaAudiciones(1); }}
+                            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                                filtroEstado === estado
+                                    ? 'bg-vinotinto text-white border-vinotinto'
+                                    : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
+                            }`}
+                        >
+                            {estado}
+                            {estado !== 'Todas' && (
+                                <span className="ml-1 opacity-70">({solicitudesAudicion.filter(s => s.estado === estado).length})</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {solicitudesAudicion.length === 0 ? (
                 <div className="card-glass rounded-xl p-12 text-center t-muted-low">
@@ -2541,34 +2578,56 @@ const ModuloBuzonAudiciones = () => {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {solicitudesPaginadas.map(s => (
-                        <div key={s.id} className="card-glass rounded-xl p-5 space-y-3">
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <p className="font-medium text-secundario">{s.nombre}</p>
-                                    <p className="text-xs t-muted">{s.email} · {s.telefono}</p>
-                                    <p className="text-xs text-vinotinto-claro mt-1">Voz: {s.tipoVoz}</p>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                    <span className={`badge text-[10px] ${COLORES_ESTADO[s.estado]}`}>{s.estado}</span>
-                                    <p className="text-[10px] t-muted-low mt-1">{new Date(s.fechaEnvio).toLocaleDateString('es-ES')}</p>
-                                </div>
-                            </div>
-                            <p className="text-xs t-muted bg-sutil rounded-lg p-3">{s.experiencia}</p>
-                            {s.urlAudioPrueba && <a href={s.urlAudioPrueba} target="_blank" rel="noopener noreferrer" className="text-xs text-khaki hover:underline flex items-center gap-1"><ChevronRight className="w-3 h-3" /> Ver audio de prueba</a>}
-                            <div className="flex gap-2 flex-wrap">
-                                {(['Pendiente', 'Revisada', 'Aceptada', 'Rechazada'] as const).map(estado => (
-                                    <button key={estado} onClick={() => marcarSolicitudRevisada(s.id, estado)}
-                                        className={`text-xs px-3 py-1 rounded-full border transition-all ${s.estado === estado
-                                                ? `${COLORES_ESTADO[estado]} border-current`
-                                                : 'borde-subtle t-muted-low hover:borde-medium'
-                                            }`}>
-                                        {estado}
-                                    </button>
-                                ))}
-                            </div>
+                    {solicitudesPaginadas.length === 0 ? (
+                        <div className="card-glass rounded-xl p-12 text-center t-muted-low">
+                            <p>No hay solicitudes con ese estado</p>
                         </div>
-                    ))}
+                    ) : (
+                        solicitudesPaginadas.map(s => (
+                            <div key={s.id} className="card-glass rounded-xl p-5 space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p className="font-medium text-secundario">{s.nombre}</p>
+                                        <p className="text-xs t-muted">{s.email} · {s.telefono || 'Sin teléfono'}</p>
+                                        <p className="text-xs text-vinotinto-claro mt-1">Voz: {s.tipoVoz || 'Sin especificar'}</p>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                        <span className={`badge text-[10px] ${COLORES_ESTADO[s.estado]}`}>{s.estado}</span>
+                                        <p className="text-[10px] t-muted-low mt-1">{new Date(s.fechaEnvio).toLocaleDateString('es-ES')}</p>
+                                    </div>
+                                </div>
+                                <p className="text-xs t-muted bg-sutil rounded-lg p-3">{s.experiencia}</p>
+                                {s.urlAudioPrueba && (
+                                    <a href={s.urlAudioPrueba} target="_blank" rel="noopener noreferrer" className="text-xs text-khaki hover:underline flex items-center gap-1">
+                                        <Play className="w-3 h-3" /> Ver audio de prueba
+                                    </a>
+                                )}
+                                <div className="flex gap-2 flex-wrap items-center">
+                                    {(['Pendiente', 'Revisada', 'Aceptada', 'Rechazada'] as const).map(estado => (
+                                        <button key={estado} onClick={() => marcarSolicitudRevisada(s.id, estado)}
+                                            className={`text-xs px-3 py-1 rounded-full border transition-all ${s.estado === estado
+                                                    ? `${COLORES_ESTADO[estado]} border-current`
+                                                    : 'borde-subtle t-muted-low hover:borde-medium'
+                                                }`}>
+                                            {estado}
+                                        </button>
+                                    ))}
+                                    <button
+                                        onClick={() => confirmarBorrar(s.id)}
+                                        className={`ml-auto text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                                            confirmandoBorrar === s.id
+                                                ? 'bg-red-600 text-white border-red-600'
+                                                : 'text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10'
+                                        }`}
+                                        title={confirmandoBorrar === s.id ? 'Clic de nuevo para confirmar' : 'Eliminar solicitud'}
+                                    >
+                                        <Trash2 className="w-3 h-3 inline mr-1" />
+                                        {confirmandoBorrar === s.id ? '¿Confirmar?' : 'Eliminar'}
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
                     <PaginadorRegistros
                         pagina={paginaAudicionesClamp}
                         totalPaginas={totalPaginasAudiciones}
@@ -2581,26 +2640,75 @@ const ModuloBuzonAudiciones = () => {
 };
 
 // ============================================================
-// MÓDULO: Buzón de Mensajes
+// MÓDULO: Buzón de Mensajes (conectado a Supabase)
 // ============================================================
 const ModuloBuzonMensajes = () => {
-    const { mensajesContacto, marcarMensajeLeido } = useApp();
+    const { mensajesContacto, marcarMensajeLeido, eliminarMensajeContacto } = useApp();
     const [paginaMensajes, setPaginaMensajes] = useState(1);
+    const [filtroLeido, setFiltroLeido] = useState<'Todos' | 'No leídos' | 'Leídos'>('Todos');
+    const [confirmandoBorrar, setConfirmandoBorrar] = useState<string | null>(null);
 
     const mensajesInvertidos = [...mensajesContacto].reverse();
-    const totalPaginasMensajes = Math.max(1, Math.ceil(mensajesContacto.length / REGISTROS_POR_PAGINA));
+    const filtrados = filtroLeido === 'Todos'
+        ? mensajesInvertidos
+        : filtroLeido === 'Leídos'
+            ? mensajesInvertidos.filter(m => m.leido)
+            : mensajesInvertidos.filter(m => !m.leido);
+    const totalPaginasMensajes = Math.max(1, Math.ceil(filtrados.length / REGISTROS_POR_PAGINA));
     const paginaMensajesClamp = Math.min(paginaMensajes, totalPaginasMensajes);
-    const mensajesPaginados = mensajesInvertidos.slice(
+    const mensajesPaginados = filtrados.slice(
         (paginaMensajesClamp - 1) * REGISTROS_POR_PAGINA,
         paginaMensajesClamp * REGISTROS_POR_PAGINA
     );
 
+    const noLeidos = mensajesContacto.filter(m => !m.leido).length;
+
+    const confirmarBorrar = (id: string) => {
+        if (confirmandoBorrar === id) {
+            eliminarMensajeContacto(id);
+            setConfirmandoBorrar(null);
+        } else {
+            setConfirmandoBorrar(id);
+        }
+    };
+
+    const marcarTodosComoLeidos = () => {
+        mensajesContacto.forEach(m => { if (!m.leido) marcarMensajeLeido(m.id); });
+    };
+
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-display font-bold text-secundario mb-1">Buzón de Mensajes</h2>
-                <p className="t-muted text-sm">{mensajesContacto.filter(m => !m.leido).length} sin leer</p>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Buzón de Mensajes</h2>
+                    <p className="t-muted text-sm">{noLeidos} sin leer · {mensajesContacto.length} en total</p>
+                </div>
+                {noLeidos > 0 && (
+                    <button onClick={marcarTodosComoLeidos} className="btn-ghost text-sm px-3 py-2">
+                        <Check className="w-4 h-4" /> Marcar todos como leídos
+                    </button>
+                )}
             </div>
+
+            {/* Filtro por estado de lectura */}
+            {mensajesContacto.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                    {(['Todos', 'No leídos', 'Leídos'] as const).map(estado => (
+                        <button
+                            key={estado}
+                            onClick={() => { setFiltroLeido(estado); setPaginaMensajes(1); }}
+                            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                                filtroLeido === estado
+                                    ? 'bg-vinotinto text-white border-vinotinto'
+                                    : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
+                            }`}
+                        >
+                            {estado}
+                            {estado === 'No leídos' && <span className="ml-1 opacity-70">({noLeidos})</span>}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {mensajesContacto.length === 0 ? (
                 <div className="card-glass rounded-xl p-12 text-center t-muted-low">
@@ -2609,27 +2717,51 @@ const ModuloBuzonMensajes = () => {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {mensajesPaginados.map(m => (
-                        <div key={m.id} className={`card-glass rounded-xl p-5 border transition-all ${m.leido ? 'borde-subtle' : 'border-vinotinto/30'}`}>
-                            <div className="flex items-start justify-between gap-3 mb-3">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <p className="font-medium text-secundario text-sm">{m.nombre}</p>
-                                        {!m.leido && <div className="w-2 h-2 rounded-full bg-vinotinto animate-pulse" />}
-                                    </div>
-                                    <p className="text-xs t-muted">{m.email}</p>
-                                </div>
-                                <p className="text-xs t-muted-low flex-shrink-0">{new Date(m.fechaEnvio).toLocaleDateString('es-ES')}</p>
-                            </div>
-                            {m.asunto && <p className="text-xs text-khaki mb-2">Asunto: {m.asunto}</p>}
-                            <p className="text-sm t-muted-high bg-sutil rounded-lg p-3">{m.mensaje}</p>
-                            {!m.leido && (
-                                <button onClick={() => marcarMensajeLeido(m.id)} className="mt-3 text-xs t-muted hover:text-secundario transition-colors flex items-center gap-1">
-                                    <Check className="w-3 h-3" /> Marcar como leído
-                                </button>
-                            )}
+                    {mensajesPaginados.length === 0 ? (
+                        <div className="card-glass rounded-xl p-12 text-center t-muted-low">
+                            <p>No hay mensajes con ese filtro</p>
                         </div>
-                    ))}
+                    ) : (
+                        mensajesPaginados.map(m => (
+                            <div key={m.id} className={`card-glass rounded-xl p-5 transition-all ${m.leido ? 'borde-subtle' : 'border-vinotinto/30'}`}>
+                                <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium text-secundario text-sm">{m.nombre}</p>
+                                            {!m.leido && <div className="w-2 h-2 rounded-full bg-vinotinto animate-pulse" />}
+                                        </div>
+                                        <p className="text-xs t-muted">{m.email}</p>
+                                    </div>
+                                    <p className="text-xs t-muted-low flex-shrink-0">{new Date(m.fechaEnvio).toLocaleDateString('es-ES')}</p>
+                                </div>
+                                {m.asunto && <p className="text-xs text-khaki mb-2">Asunto: {m.asunto}</p>}
+                                <p className="text-sm t-muted-high bg-sutil rounded-lg p-3">{m.mensaje}</p>
+                                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                    {m.leido ? (
+                                        <button onClick={() => marcarMensajeLeido(m.id, false)} className="text-xs t-muted hover:text-secundario transition-colors flex items-center gap-1">
+                                            <EyeOff className="w-3 h-3" /> Marcar como no leído
+                                        </button>
+                                    ) : (
+                                        <button onClick={() => marcarMensajeLeido(m.id)} className="text-xs t-muted hover:text-secundario transition-colors flex items-center gap-1">
+                                            <Check className="w-3 h-3" /> Marcar como leído
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => confirmarBorrar(m.id)}
+                                        className={`ml-auto text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                                            confirmandoBorrar === m.id
+                                                ? 'bg-red-600 text-white border-red-600'
+                                                : 'text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10'
+                                        }`}
+                                        title={confirmandoBorrar === m.id ? 'Clic de nuevo para confirmar' : 'Eliminar mensaje'}
+                                    >
+                                        <Trash2 className="w-3 h-3 inline mr-1" />
+                                        {confirmandoBorrar === m.id ? '¿Confirmar?' : 'Eliminar'}
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
                     <PaginadorRegistros
                         pagina={paginaMensajesClamp}
                         totalPaginas={totalPaginasMensajes}

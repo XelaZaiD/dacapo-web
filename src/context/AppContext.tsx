@@ -82,6 +82,14 @@ import {
     agregarFotoGaleriaDB,
     editarFotoGaleriaDB,
     eliminarFotoGaleriaDB,
+    obtenerSolicitudesAudicionDB,
+    agregarSolicitudAudicionDB,
+    actualizarEstadoSolicitudDB,
+    eliminarSolicitudAudicionDB,
+    obtenerMensajesContactoDB,
+    agregarMensajeContactoDB,
+    marcarMensajeLeidoDB,
+    eliminarMensajeContactoDB,
 } from '../services/supabase';
 
 // ============================================================
@@ -190,7 +198,9 @@ type AppContextType = {
 
     // --- Funciones para el Admin (Buzón) ---
     marcarSolicitudRevisada: (id: string, estado: SolicitudAudicion['estado']) => void;
-    marcarMensajeLeido: (id: string) => void;
+    eliminarSolicitudAudicion: (id: string) => void;
+    marcarMensajeLeido: (id: string, leido?: boolean) => void;
+    eliminarMensajeContacto: (id: string) => void;
 
     // --- Configuración del Asistente ---
     actualizarAsistente: (config: Partial<{ tipoAsistente: 'ninguno' | 'chatbot' | 'whatsapp'; numeroWhatsapp: string }>) => void;
@@ -510,6 +520,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
     }, []);
 
+    // Carga las solicitudes de audición desde Supabase (buzón del admin).
+    const cargarSolicitudesAudicion = useCallback(() => {
+        if (!supabase) return;
+        obtenerSolicitudesAudicionDB()
+            .then(lista => {
+                setSolicitudesAudicion(lista ?? []);
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar las solicitudes de audición (se mantienen las locales):', err);
+            });
+    }, []);
+
+    // Carga los mensajes de contacto desde Supabase (buzón del admin).
+    const cargarMensajesContacto = useCallback(() => {
+        if (!supabase) return;
+        obtenerMensajesContactoDB()
+            .then(lista => {
+                setMensajesContacto(lista ?? []);
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar los mensajes de contacto (se mantienen los locales):', err);
+            });
+    }, []);
+
     // Al cargar la app: obtenemos partituras, pistas de audio, integrantes y vistas del Admin
     useEffect(() => {
         cargarPartituras();
@@ -517,6 +551,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         cargarIntegrantes();
         cargarVideos();
         cargarFotosGaleria();
+        cargarSolicitudesAudicion();
+        cargarMensajesContacto();
 
         if (supabase) {
             obtenerConfiguracionDB<VistasBiblioteca>(CLAVES_LS.CLAVE_CONFIG_VISTAS)
@@ -574,7 +610,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     console.warn('ℹ️ Usando frases del banner local (Supabase no disponible o error):', err);
                 });
         }
-    }, [cargarPartituras, cargarPistas, cargarIntegrantes, cargarVideos, cargarFotosGaleria]);
+    }, [cargarPartituras, cargarPistas, cargarIntegrantes, cargarVideos, cargarFotosGaleria, cargarSolicitudesAudicion, cargarMensajesContacto]);
 
     // Reintentar manualmente la carga de integrantes (botón de los estados de error)
     const reintentarIntegrantes = () => {
@@ -955,35 +991,89 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const enviarSolicitudAudicion = (datos: Omit<SolicitudAudicion, 'id' | 'fechaEnvio' | 'estado'>) => {
-        const solicitud: SolicitudAudicion = {
+        // Optimista: agregamos la solicitud de inmediato con una id temporal.
+        const solicitudTemporal: SolicitudAudicion = {
             ...datos,
             id: `sol-${Date.now()}`,
             fechaEnvio: new Date().toISOString(),
             estado: 'Pendiente',
         };
-        setSolicitudesAudicion(prev => [...prev, solicitud]);
+        setSolicitudesAudicion(prev => [...prev, solicitudTemporal]);
+
+        if (supabase) {
+            agregarSolicitudAudicionDB(datos)
+                .then(guardada => {
+                    if (guardada) {
+                        // Reemplazamos la temporal por la definitiva (viene con id y fecha reales)
+                        setSolicitudesAudicion(prev => prev.map(s => s.id === solicitudTemporal.id ? guardada : s));
+                    }
+                })
+                .catch(err => {
+                    console.warn('⚠️ No se pudo guardar la solicitud en Supabase (queda local):', err);
+                });
+        }
     };
 
     const enviarMensajeContacto = (datos: Omit<MensajeContacto, 'id' | 'fechaEnvio' | 'leido'>) => {
-        const mensaje: MensajeContacto = {
+        const mensajeTemporal: MensajeContacto = {
             ...datos,
             id: `msg-${Date.now()}`,
             fechaEnvio: new Date().toISOString(),
             leido: false,
         };
-        setMensajesContacto(prev => [...prev, mensaje]);
+        setMensajesContacto(prev => [...prev, mensajeTemporal]);
+
+        if (supabase) {
+            agregarMensajeContactoDB(datos)
+                .then(guardado => {
+                    if (guardado) {
+                        setMensajesContacto(prev => prev.map(m => m.id === mensajeTemporal.id ? guardado : m));
+                    }
+                })
+                .catch(err => {
+                    console.warn('⚠️ No se pudo guardar el mensaje en Supabase (queda local):', err);
+                });
+        }
     };
 
     const marcarSolicitudRevisada = (id: string, estado: SolicitudAudicion['estado']) => {
         setSolicitudesAudicion(prev =>
             prev.map(s => s.id === id ? { ...s, estado } : s)
         );
+        if (supabase) {
+            actualizarEstadoSolicitudDB(id, estado).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el estado de la solicitud en Supabase:', err);
+            });
+        }
     };
 
-    const marcarMensajeLeido = (id: string) => {
+    const eliminarSolicitudAudicion = (id: string) => {
+        setSolicitudesAudicion(prev => prev.filter(s => s.id !== id));
+        if (supabase) {
+            eliminarSolicitudAudicionDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar la solicitud en Supabase:', err);
+            });
+        }
+    };
+
+    const marcarMensajeLeido = (id: string, leido = true) => {
         setMensajesContacto(prev =>
-            prev.map(m => m.id === id ? { ...m, leido: true } : m)
+            prev.map(m => m.id === id ? { ...m, leido } : m)
         );
+        if (supabase) {
+            marcarMensajeLeidoDB(id, leido).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el mensaje en Supabase:', err);
+            });
+        }
+    };
+
+    const eliminarMensajeContacto = (id: string) => {
+        setMensajesContacto(prev => prev.filter(m => m.id !== id));
+        if (supabase) {
+            eliminarMensajeContactoDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar el mensaje en Supabase:', err);
+            });
+        }
     };
 
     const toggleModoOscuro = () => {
@@ -1067,7 +1157,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         enviarSolicitudAudicion,
         enviarMensajeContacto,
         marcarSolicitudRevisada,
+        eliminarSolicitudAudicion,
         marcarMensajeLeido,
+        eliminarMensajeContacto,
         actualizarAsistente,
         modoOscuro,
         toggleModoOscuro,
