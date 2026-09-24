@@ -27,7 +27,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { PistaAudio, Partitura, Integrante } from '../data/mockData';
+import type { PistaAudio, Partitura, Integrante, VideoMedia, FotoGaleria } from '../data/mockData';
 
 // ============================================================
 // PASO 1: PEGA TUS CREDENCIALES DE SUPABASE AQUÍ
@@ -753,6 +753,264 @@ export const guardarConfiguracionDB = async (clave: string, valor: unknown): Pro
             .insert([{ clave, valor }]);
         if (error) console.error('Error al insertar configuración:', error);
     }
+};
+
+// ============================================================
+// FUNCIONES PARA PRESENTACIONES & MEDIA (Módulo 7 - Supabase)
+// ============================================================
+
+/**
+ * Obtener todos los videos desde Supabase (tabla 'videos')
+ */
+export const obtenerVideosDB = async (): Promise<VideoMedia[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+        .from('videos')
+        .select('*')
+        .order('orden', { ascending: true });
+
+    if (error) {
+        console.error('Error al obtener videos:', error);
+        return null;
+    }
+
+    return (data || []).map((row: any) => ({
+        id: row.id,
+        titulo: row.titulo,
+        descripcion: row.descripcion || '',
+        tipoOrigen: row.tipo_origen || 'youtube',
+        youtubeId: row.youtube_id || '',
+        urlVideo: row.url_video,
+        categoria: row.categoria || 'Concierto',
+        destacado: row.destacado || false,
+        duracion: row.duracion || '',
+        orden: row.orden || 0,
+        activo: row.activo !== false,
+        fechaSubida: row.created_at || new Date().toISOString(),
+    }));
+};
+
+/**
+ * Agregar un nuevo video a Supabase (tabla 'videos')
+ */
+export const agregarVideoDB = async (video: Omit<VideoMedia, 'id' | 'fechaSubida'>): Promise<VideoMedia | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('videos') as any)
+        .insert([{
+            titulo: video.titulo,
+            descripcion: video.descripcion,
+            tipo_origen: video.tipoOrigen,
+            youtube_id: video.youtubeId || null,
+            url_video: video.urlVideo,
+            categoria: video.categoria,
+            destacado: video.destacado,
+            duracion: video.duracion || null,
+            orden: video.orden,
+            activo: video.activo,
+        }])
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error al agregar video:', error);
+        return null;
+    }
+
+    return {
+        id: data.id,
+        titulo: data.titulo,
+        descripcion: data.descripcion || '',
+        tipoOrigen: data.tipo_origen || 'youtube',
+        youtubeId: data.youtube_id || '',
+        urlVideo: data.url_video,
+        categoria: data.categoria || 'Concierto',
+        destacado: data.destacado || false,
+        duracion: data.duracion || '',
+        orden: data.orden || 0,
+        activo: data.activo !== false,
+        fechaSubida: data.created_at || new Date().toISOString(),
+    };
+};
+
+/**
+ * Editar un video existente en Supabase
+ */
+export const editarVideoDB = async (id: string, datos: Partial<VideoMedia>): Promise<boolean> => {
+    if (!supabase) return false;
+    const updateData: Record<string, any> = {};
+    if (datos.titulo !== undefined) updateData.titulo = datos.titulo;
+    if (datos.descripcion !== undefined) updateData.descripcion = datos.descripcion;
+    if (datos.tipoOrigen !== undefined) updateData.tipo_origen = datos.tipoOrigen;
+    if (datos.youtubeId !== undefined) updateData.youtube_id = datos.youtubeId;
+    if (datos.urlVideo !== undefined) updateData.url_video = datos.urlVideo;
+    if (datos.categoria !== undefined) updateData.categoria = datos.categoria;
+    if (datos.destacado !== undefined) updateData.destacado = datos.destacado;
+    if (datos.duracion !== undefined) updateData.duracion = datos.duracion;
+    if (datos.orden !== undefined) updateData.orden = datos.orden;
+    if (datos.activo !== undefined) updateData.activo = datos.activo;
+
+    const { error } = await (supabase.from('videos') as any)
+        .update(updateData)
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al actualizar video:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Eliminar un video en Supabase
+ */
+export const eliminarVideoDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('videos') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar video:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Obtener todas las fotos de galería desde Supabase (tabla 'galeria_fotos')
+ */
+export const obtenerFotosGaleriaDB = async (): Promise<FotoGaleria[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+        .from('galeria_fotos')
+        .select('*')
+        .order('orden', { ascending: true });
+
+    if (error) {
+        console.error('Error al obtener fotos de galería:', error);
+        return null;
+    }
+
+    return (data || []).map((row: any) => ({
+        id: row.id,
+        urlFoto: row.url_foto,
+        titulo: row.titulo,
+        enlaceTexto: row.enlace_texto || '',
+        enlaceUrl: row.enlace_url || '',
+        categoria: row.categoria || 'General',
+        orden: row.orden || 0,
+        activo: row.activo !== false,
+        fechaSubida: row.created_at || new Date().toISOString(),
+    }));
+};
+
+/**
+ * Agregar una nueva foto de galería a Supabase
+ */
+export const agregarFotoGaleriaDB = async (foto: Omit<FotoGaleria, 'id' | 'fechaSubida'>): Promise<FotoGaleria | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('galeria_fotos') as any)
+        .insert([{
+            url_foto: foto.urlFoto,
+            titulo: foto.titulo,
+            enlace_texto: foto.enlaceTexto || null,
+            enlace_url: foto.enlaceUrl || null,
+            categoria: foto.categoria,
+            orden: foto.orden,
+            activo: foto.activo,
+        }])
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error al agregar foto de galería:', error);
+        return null;
+    }
+
+    return {
+        id: data.id,
+        urlFoto: data.url_foto,
+        titulo: data.titulo,
+        enlaceTexto: data.enlace_texto || '',
+        enlaceUrl: data.enlace_url || '',
+        categoria: data.categoria || 'General',
+        orden: data.orden || 0,
+        activo: data.activo !== false,
+        fechaSubida: data.created_at || new Date().toISOString(),
+    };
+};
+
+/**
+ * Editar una foto de galería existente en Supabase
+ */
+export const editarFotoGaleriaDB = async (id: string, datos: Partial<FotoGaleria>): Promise<boolean> => {
+    if (!supabase) return false;
+    const updateData: Record<string, any> = {};
+    if (datos.urlFoto !== undefined) updateData.url_foto = datos.urlFoto;
+    if (datos.titulo !== undefined) updateData.titulo = datos.titulo;
+    if (datos.enlaceTexto !== undefined) updateData.enlace_texto = datos.enlaceTexto;
+    if (datos.enlaceUrl !== undefined) updateData.enlace_url = datos.enlaceUrl;
+    if (datos.categoria !== undefined) updateData.categoria = datos.categoria;
+    if (datos.orden !== undefined) updateData.orden = datos.orden;
+    if (datos.activo !== undefined) updateData.activo = datos.activo;
+
+    const { error } = await (supabase.from('galeria_fotos') as any)
+        .update(updateData)
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al actualizar foto de galería:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Eliminar una foto de galería en Supabase
+ */
+export const eliminarFotoGaleriaDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('galeria_fotos') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar foto de galería:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Subir una foto de galería al Storage de Supabase (bucket 'galeria', carpeta 'galeria')
+ */
+export const subirFotoGaleriaSupabase = async (archivo: File): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = (archivo.name.split('.').pop() || 'jpg').toLowerCase();
+    const nombreLimpio = archivo.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(new RegExp(`\\.${extension}$`, 'i'), '');
+    const rutaArchivo = `galeria/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('galeria')
+        .upload(rutaArchivo, archivo, {
+            contentType: archivo.type || 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error al subir foto de galería:', error);
+        return null;
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('galeria')
+        .getPublicUrl(rutaArchivo);
+
+    return urlData.publicUrl;
 };
 
 // Exportamos el cliente principal

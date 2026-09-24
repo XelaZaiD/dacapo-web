@@ -13,10 +13,14 @@ import CarruselMovil from '../ui/CarruselMovil';
 import { useApp } from '../../context/AppContext';
 import { VideoMedia } from '../../data/mockData';
 
+type TarjetaVideoProps = {
+    video: VideoMedia;
+};
+
 // ============================================================
 // COMPONENTE: TarjetaVideo
 // ============================================================
-const TarjetaVideo = ({ video }: { video: VideoMedia }) => {
+const TarjetaVideo = ({ video }: TarjetaVideoProps) => {
     const [reproduciendo, setReproduciendo] = useState(false);
 
     return (
@@ -85,8 +89,8 @@ const SeccionPresentaciones = () => {
     const estaEnPantalla = useInView(ref, { once: true, margin: '-100px' });
     const [indiceCarrusel, setIndiceCarrusel] = useState(0);
 
-    const videosVisibles = videosMedia.filter(v => v.visible);
-    const fotosVisibles = fotosGaleria.filter(f => f.visible);
+    const videosVisibles = videosMedia.filter(v => v.activo);
+    const fotosVisibles = fotosGaleria.filter(f => f.activo);
 
     const hayVideos = videosVisibles.length > 0;
     const hayFotos = fotosVisibles.length > 0;
@@ -164,7 +168,7 @@ const SeccionPresentaciones = () => {
                                 <AnimatePresence mode="wait">
                                     <motion.img
                                         key={indiceSeguro}
-                                        src={fotosVisibles[indiceSeguro].src}
+                                        src={fotosVisibles[indiceSeguro].urlFoto}
                                         alt={fotosVisibles[indiceSeguro].titulo}
                                         className="w-full h-full object-cover"
                                         initial={{ opacity: 0, x: 50 }}
@@ -177,6 +181,16 @@ const SeccionPresentaciones = () => {
                                 {/* Descripción de la foto */}
                                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70">
                                     <p className="text-white font-medium">{fotosVisibles[indiceSeguro].titulo}</p>
+                                    {fotosVisibles[indiceSeguro].enlaceUrl && (
+                                        <a
+                                            href={fotosVisibles[indiceSeguro].enlaceUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-vinotinto-luz hover:underline mt-1"
+                                        >
+                                            {fotosVisibles[indiceSeguro].enlaceTexto || 'Ver más'}
+                                        </a>
+                                    )}
                                     <p className="t-muted text-sm">{indiceSeguro + 1} / {fotosVisibles.length}</p>
                                 </div>
                             </div>
@@ -211,7 +225,7 @@ const SeccionPresentaciones = () => {
                                     className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 ${indice === indiceSeguro ? 'border-vinotinto' : 'border-transparent opacity-60 hover:opacity-80'
                                         }`}
                                 >
-                                    <img src={foto.src} alt={foto.titulo} className="w-full h-full object-cover" />
+                                    <img src={foto.urlFoto} alt={foto.titulo} className="w-full h-full object-cover" />
                                 </button>
                             ))}
                         </div>

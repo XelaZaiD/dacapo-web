@@ -56,8 +56,6 @@ import {
     configuracionSeccionesInicial,
     infoGrupoDefault,
     respuestasChatbotDefault,
-    videosMediaDefault,
-    fotosGaleriaDefault,
 } from '../data/mockData';
 import {
     supabase,
@@ -76,6 +74,14 @@ import {
     eliminarArchivoStorageSupabase,
     obtenerConfiguracionDB,
     guardarConfiguracionDB,
+    obtenerVideosDB,
+    agregarVideoDB,
+    editarVideoDB,
+    eliminarVideoDB,
+    obtenerFotosGaleriaDB,
+    agregarFotoGaleriaDB,
+    editarFotoGaleriaDB,
+    eliminarFotoGaleriaDB,
 } from '../services/supabase';
 
 // ============================================================
@@ -342,11 +348,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     const [videosMedia, setVideosMedia] = useState<VideoMedia[]>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.VIDEOS_MEDIA, videosMediaDefault)
+        leerDesdeLocalStorage(CLAVES_LS.VIDEOS_MEDIA, [])
     );
 
     const [fotosGaleria, setFotosGaleria] = useState<FotoGaleria[]>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.FOTOS_GALERIA, fotosGaleriaDefault)
+        leerDesdeLocalStorage(CLAVES_LS.FOTOS_GALERIA, [])
     );
 
     const [configuracionSecciones, setConfiguracionSecciones] = useState<ConfiguracionSecciones>(() =>
@@ -475,11 +481,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
     }, []);
 
+    // Carga los videos desde Supabase.
+    // Si la consulta falla, conservamos lo guardado en el navegador (caché local).
+    const cargarVideos = useCallback(() => {
+        if (!supabase) return;
+        obtenerVideosDB()
+            .then(lista => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía)
+                setVideosMedia(lista ?? []);
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar los videos (se mantienen los guardados):', err);
+            });
+    }, []);
+
+    // Carga las fotos de galería desde Supabase.
+    const cargarFotosGaleria = useCallback(() => {
+        if (!supabase) return;
+        obtenerFotosGaleriaDB()
+            .then(lista => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía)
+                setFotosGaleria(lista ?? []);
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar las fotos de galería (se mantienen las guardadas):', err);
+            });
+    }, []);
+
     // Al cargar la app: obtenemos partituras, pistas de audio, integrantes y vistas del Admin
     useEffect(() => {
         cargarPartituras();
         cargarPistas();
         cargarIntegrantes();
+        cargarVideos();
+        cargarFotosGaleria();
 
         if (supabase) {
             obtenerConfiguracionDB<VistasBiblioteca>(CLAVES_LS.CLAVE_CONFIG_VISTAS)
@@ -515,7 +550,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     console.warn('ℹ️ Usando secciones locales (Supabase no disponible o error):', err);
                 });
         }
-    }, [cargarPartituras, cargarPistas, cargarIntegrantes]);
+    }, [cargarPartituras, cargarPistas, cargarIntegrantes, cargarVideos, cargarFotosGaleria]);
 
     // Reintentar manualmente la carga de integrantes (botón de los estados de error)
     const reintentarIntegrantes = () => {
@@ -782,37 +817,85 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // ============================================================
 
     const agregarVideoMedia = (datos: Omit<VideoMedia, 'id' | 'fechaSubida'>) => {
+        const idTemp = `vid-${Date.now()}`;
         const nuevoVideo: VideoMedia = {
             ...datos,
-            id: `vid-${Date.now()}`,
+            id: idTemp,
             fechaSubida: new Date().toISOString(),
         };
         setVideosMedia(prev => [...prev, nuevoVideo]);
+
+        if (supabase) {
+            agregarVideoDB(datos).then(videoDB => {
+                if (videoDB) {
+                    setVideosMedia(prev => prev.map(v => v.id === idTemp ? videoDB : v));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar el video en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const editarVideoMedia = (id: string, datos: Partial<VideoMedia>) => {
         setVideosMedia(prev => prev.map(v => v.id === id ? { ...v, ...datos } : v));
+
+        if (supabase) {
+            editarVideoDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el video en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const eliminarVideoMedia = (id: string) => {
+        const video = videosMedia.find(v => v.id === id);
         setVideosMedia(prev => prev.filter(v => v.id !== id));
+
+        if (supabase && video) {
+            eliminarVideoDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar el video en Supabase:', err);
+            });
+        }
     };
 
     const agregarFotoGaleria = (datos: Omit<FotoGaleria, 'id' | 'fechaSubida'>) => {
+        const idTemp = `foto-${Date.now()}`;
         const nuevaFoto: FotoGaleria = {
             ...datos,
-            id: `foto-${Date.now()}`,
+            id: idTemp,
             fechaSubida: new Date().toISOString(),
         };
         setFotosGaleria(prev => [...prev, nuevaFoto]);
+
+        if (supabase) {
+            agregarFotoGaleriaDB(datos).then(fotoDB => {
+                if (fotoDB) {
+                    setFotosGaleria(prev => prev.map(f => f.id === idTemp ? fotoDB : f));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar la foto en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const editarFotoGaleria = (id: string, datos: Partial<FotoGaleria>) => {
         setFotosGaleria(prev => prev.map(f => f.id === id ? { ...f, ...datos } : f));
+
+        if (supabase) {
+            editarFotoGaleriaDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar la foto en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const eliminarFotoGaleria = (id: string) => {
+        const foto = fotosGaleria.find(f => f.id === id);
         setFotosGaleria(prev => prev.filter(f => f.id !== id));
+
+        if (supabase && foto) {
+            eliminarFotoGaleriaDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar la foto en Supabase:', err);
+            });
+        }
     };
 
     // ============================================================

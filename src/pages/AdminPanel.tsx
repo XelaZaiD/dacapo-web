@@ -1132,14 +1132,20 @@ type FormVideoMedia = {
     descripcion: string;
     urlYoutube: string;
     categoria: string;
-    visible: boolean;
+    destacado: boolean;
+    duracion: string;
+    orden: number;
+    activo: boolean;
 };
 
 type FormFotoGaleria = {
     titulo: string;
     src: string;
     categoria: string;
-    visible: boolean;
+    enlaceTexto: string;
+    enlaceUrl: string;
+    orden: number;
+    activo: boolean;
 };
 
 const ModuloMedia = () => {
@@ -1151,13 +1157,13 @@ const ModuloMedia = () => {
     const [paginaVideos, setPaginaVideos] = useState(1);
     const [mostrarFormVideo, setMostrarFormVideo] = useState(false);
     const [editandoVideo, setEditandoVideo] = useState<VideoMedia | null>(null);
-    const [formVideo, setFormVideo] = useState<FormVideoMedia>({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], visible: true });
+    const [formVideo, setFormVideo] = useState<FormVideoMedia>({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', orden: 0, activo: true });
 
     // --- Estado de Fotos ---
     const [paginaFotos, setPaginaFotos] = useState(1);
     const [mostrarFormFoto, setMostrarFormFoto] = useState(false);
     const [editandoFoto, setEditandoFoto] = useState<FotoGaleria | null>(null);
-    const [formFoto, setFormFoto] = useState<FormFotoGaleria>({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], visible: true });
+    const [formFoto, setFormFoto] = useState<FormFotoGaleria>({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', orden: 0, activo: true });
 
     // --- Utilidad para extraer el ID de un video de YouTube ---
     const extraerYoutubeId = (url: string): string => {
@@ -1195,9 +1201,14 @@ const ModuloMedia = () => {
         const datos = {
             titulo: formVideo.titulo.trim(),
             descripcion: formVideo.descripcion.trim(),
+            tipoOrigen: 'youtube' as const,
             youtubeId,
+            urlVideo: formVideo.urlYoutube.trim(),
             categoria: formVideo.categoria,
-            visible: formVideo.visible,
+            destacado: formVideo.destacado,
+            duracion: formVideo.duracion.trim(),
+            orden: formVideo.orden,
+            activo: formVideo.activo,
         };
         if (editandoVideo) {
             editarVideoMedia(editandoVideo.id, datos);
@@ -1206,12 +1217,12 @@ const ModuloMedia = () => {
         }
         setMostrarFormVideo(false);
         setEditandoVideo(null);
-        setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], visible: true });
+        setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', orden: 0, activo: true });
     };
 
     const abrirEditarVideo = (v: VideoMedia) => {
         setEditandoVideo(v);
-        setFormVideo({ titulo: v.titulo, descripcion: v.descripcion, urlYoutube: v.youtubeId, categoria: v.categoria, visible: v.visible });
+        setFormVideo({ titulo: v.titulo, descripcion: v.descripcion, urlYoutube: v.youtubeId, categoria: v.categoria, destacado: v.destacado, duracion: v.duracion, orden: v.orden, activo: v.activo });
         setMostrarFormVideo(true);
     };
 
@@ -1219,9 +1230,12 @@ const ModuloMedia = () => {
         if (!formFoto.titulo.trim() || !formFoto.src.trim()) return;
         const datos = {
             titulo: formFoto.titulo.trim(),
-            src: formFoto.src.trim(),
+            urlFoto: formFoto.src.trim(),
             categoria: formFoto.categoria,
-            visible: formFoto.visible,
+            enlaceTexto: formFoto.enlaceTexto.trim(),
+            enlaceUrl: formFoto.enlaceUrl.trim(),
+            orden: formFoto.orden,
+            activo: formFoto.activo,
         };
         if (editandoFoto) {
             editarFotoGaleria(editandoFoto.id, datos);
@@ -1230,12 +1244,12 @@ const ModuloMedia = () => {
         }
         setMostrarFormFoto(false);
         setEditandoFoto(null);
-        setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], visible: true });
+        setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', orden: 0, activo: true });
     };
 
     const abrirEditarFoto = (f: FotoGaleria) => {
         setEditandoFoto(f);
-        setFormFoto({ titulo: f.titulo, src: f.src, categoria: f.categoria, visible: f.visible });
+        setFormFoto({ titulo: f.titulo, src: f.urlFoto, categoria: f.categoria, enlaceTexto: f.enlaceTexto || '', enlaceUrl: f.enlaceUrl || '', orden: f.orden, activo: f.activo });
         setMostrarFormFoto(true);
     };
 
@@ -1279,7 +1293,7 @@ const ModuloMedia = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-secundario">Videos de YouTube</h3>
-                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], visible: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
+                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', orden: 0, activo: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
                             <Plus className="w-4 h-4" /> Añadir Video
                         </button>
                     </div>
@@ -1292,7 +1306,7 @@ const ModuloMedia = () => {
                     ) : (
                         <div className="space-y-2">
                             {videosPaginados.map(v => (
-                                <div key={v.id} className={`card-glass rounded-xl p-4 flex items-center gap-4 transition-all ${v.visible ? '' : 'opacity-60'}`}>
+                                <div key={v.id} className={`card-glass rounded-xl p-4 flex items-center gap-4 transition-all ${v.activo ? '' : 'opacity-60'}`}>
                                     {/* Miniatura */}
                                     <img
                                         src={`https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`}
@@ -1305,22 +1319,28 @@ const ModuloMedia = () => {
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <p className="font-medium text-secundario text-sm truncate">{v.titulo}</p>
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-sutil t-muted">{v.categoria}</span>
-                                            {!v.visible && (
+                                            {v.destacado && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+                                                    Destacado
+                                                </span>
+                                            )}
+                                            {!v.activo && (
                                                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
                                                     Oculta
                                                 </span>
                                             )}
                                         </div>
                                         <p className="text-xs t-muted truncate mt-0.5">{v.descripcion || `youtube.com/watch?v=${v.youtubeId}`}</p>
+                                        <p className="text-[11px] t-muted mt-0.5">Duración: {v.duracion || '—'} · Orden: {v.orden}</p>
                                     </div>
                                     {/* Acciones */}
                                     <div className="flex gap-1.5">
                                         <button
-                                            onClick={() => editarVideoMedia(v.id, { visible: !v.visible })}
-                                            title={v.visible ? 'Ocultar de la web' : 'Mostrar en la web'}
+                                            onClick={() => editarVideoMedia(v.id, { activo: !v.activo })}
+                                            title={v.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
                                             className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                         >
-                                            {v.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                            {v.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                         </button>
                                         <button onClick={() => abrirEditarVideo(v)} title="Editar"
                                             className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
@@ -1348,7 +1368,7 @@ const ModuloMedia = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-secundario">Galería de Fotos</h3>
-                        <button onClick={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], visible: true }); setMostrarFormFoto(true); }} className="btn-primario text-sm py-2 px-4">
+                        <button onClick={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', orden: 0, activo: true }); setMostrarFormFoto(true); }} className="btn-primario text-sm py-2 px-4">
                             <Plus className="w-4 h-4" /> Añadir Foto
                         </button>
                     </div>
@@ -1361,10 +1381,10 @@ const ModuloMedia = () => {
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {fotosPaginadas.map(f => (
-                                <div key={f.id} className={`card-glass rounded-xl overflow-hidden transition-all ${f.visible ? '' : 'opacity-60'}`}>
+                                <div key={f.id} className={`card-glass rounded-xl overflow-hidden transition-all ${f.activo ? '' : 'opacity-60'}`}>
                                     <div className="aspect-video relative">
-                                        <img src={f.src} alt={f.titulo} className="w-full h-full object-cover" />
-                                        {!f.visible && (
+                                        <img src={f.urlFoto} alt={f.titulo} className="w-full h-full object-cover" />
+                                        {!f.activo && (
                                             <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/80 text-white font-semibold">
                                                 Oculta
                                             </span>
@@ -1372,14 +1392,14 @@ const ModuloMedia = () => {
                                     </div>
                                     <div className="p-3">
                                         <p className="font-medium text-secundario text-sm truncate">{f.titulo}</p>
-                                        <p className="text-[11px] t-muted mt-0.5">{f.categoria}</p>
+                                        <p className="text-[11px] t-muted mt-0.5">{f.categoria} · Orden {f.orden}</p>
                                         <div className="flex gap-1.5 mt-2">
                                             <button
-                                                onClick={() => editarFotoGaleria(f.id, { visible: !f.visible })}
-                                                title={f.visible ? 'Ocultar de la web' : 'Mostrar en la web'}
+                                                onClick={() => editarFotoGaleria(f.id, { activo: !f.activo })}
+                                                title={f.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
                                                 className="flex-1 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                             >
-                                                {f.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                {f.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                             </button>
                                             <button onClick={() => abrirEditarFoto(f)} title="Editar"
                                                 className="flex-1 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
@@ -1434,8 +1454,16 @@ const ModuloMedia = () => {
                                         {CATEGORIAS_VIDEO.map(c => <option key={c}>{c}</option>)}
                                     </select>
                                 </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="label-campo">Duración (ej: 4:35)</label><input className="input-campo" value={formVideo.duracion} onChange={e => setFormVideo(p => ({ ...p, duracion: e.target.value }))} placeholder="4:35" /></div>
+                                    <div><label className="label-campo">Orden</label><input type="number" min={0} className="input-campo" value={formVideo.orden} onChange={e => setFormVideo(p => ({ ...p, orden: Number(e.target.value) || 0 }))} /></div>
+                                </div>
                                 <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="videoVisible" checked={formVideo.visible} onChange={e => setFormVideo(p => ({ ...p, visible: e.target.checked }))} className="cursor-pointer" />
+                                    <input type="checkbox" id="videoDestacado" checked={formVideo.destacado} onChange={e => setFormVideo(p => ({ ...p, destacado: e.target.checked }))} className="cursor-pointer" />
+                                    <label htmlFor="videoDestacado" className="text-sm t-muted-high">Destacado en la web</label>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="videoVisible" checked={formVideo.activo} onChange={e => setFormVideo(p => ({ ...p, activo: e.target.checked }))} className="cursor-pointer" />
                                     <label htmlFor="videoVisible" className="text-sm t-muted-high">Visible en la web</label>
                                 </div>
                             </div>
@@ -1470,8 +1498,11 @@ const ModuloMedia = () => {
                                         {CATEGORIAS_FOTO.map(c => <option key={c}>{c}</option>)}
                                     </select>
                                 </div>
+                                <div><label className="label-campo">Texto del enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceTexto} onChange={e => setFormFoto(p => ({ ...p, enlaceTexto: e.target.value }))} placeholder="Ver reseña del concierto" /></div>
+                                <div><label className="label-campo">URL de enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceUrl} onChange={e => setFormFoto(p => ({ ...p, enlaceUrl: e.target.value }))} placeholder="https://..." /></div>
+                                <div><label className="label-campo">Orden</label><input type="number" min={0} className="input-campo" value={formFoto.orden} onChange={e => setFormFoto(p => ({ ...p, orden: Number(e.target.value) || 0 }))} /></div>
                                 <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="fotoVisible" checked={formFoto.visible} onChange={e => setFormFoto(p => ({ ...p, visible: e.target.checked }))} className="cursor-pointer" />
+                                    <input type="checkbox" id="fotoVisible" checked={formFoto.activo} onChange={e => setFormFoto(p => ({ ...p, activo: e.target.checked }))} className="cursor-pointer" />
                                     <label htmlFor="fotoVisible" className="text-sm t-muted-high">Visible en la web</label>
                                 </div>
                             </div>

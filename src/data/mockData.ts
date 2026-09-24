@@ -174,89 +174,55 @@ export type SolicitudAudicion = {
 
 // ============================================================
 // TIPO: Video de la sección Presentaciones & Media
+// (Coincide con la tabla public.videos de Supabase - Módulo 7)
 // ============================================================
 export type VideoMedia = {
     id: string;
     titulo: string;
     descripcion: string;
-    youtubeId: string;       // ID del video de YouTube (después de v=)
+    tipoOrigen: 'youtube' | 'archivo';   // 'youtube' | 'archivo'
+    youtubeId: string;                   // ID del video de YouTube (si tipoOrigen = 'youtube')
+    urlVideo: string;                    // URL de YouTube o URL del archivo en Storage
     categoria: string;
-    visible: boolean;        // Si es false, no aparece en la web
+    destacado: boolean;                  // Video destacado en la web
+    duracion: string;                    // Ej: "4:35" (opcional)
+    orden: number;                       // Posición al mostrar
+    activo: boolean;                     // Si es false, no aparece en la web
     fechaSubida: string;
 };
 
 // ============================================================
 // TIPO: Foto de la Galería
+// (Coincide con la tabla public.galeria_fotos de Supabase - Módulo 7)
 // ============================================================
 export type FotoGaleria = {
     id: string;
+    urlFoto: string;                     // URL en bucket 'galeria' o enlace externo
     titulo: string;
-    src: string;             // URL de la imagen
+    enlaceTexto?: string;                // Opcional (ej: "Ver reseña del concierto")
+    enlaceUrl?: string;                  // Opcional (ej: "https://...")
     categoria: string;
-    visible: boolean;        // Si es false, no aparece en la web
+    orden: number;                       // Posición al mostrar
+    activo: boolean;                     // Si es false, no aparece en la web
     fechaSubida: string;
 };
 
 // Categorías reutilizables para videos y fotos
 export const CATEGORIAS_VIDEO = [
-    'Conciertos',
-    'Festivales',
-    'Navideño',
-    'Detrás de cámaras',
-    'Entrevistas',
-    'Otro',
+    'Concierto',
+    'Festival',
+    'Ensayo',
+    'Videoclip',
+    'A Capella',
 ] as const;
 
 export const CATEGORIAS_FOTO = [
     'Conciertos',
-    'Ensayos',
-    'Festivales',
     'Giras',
-    'Detrás de cámaras',
-    'Otro',
+    'Ensayos',
+    'Backstage',
+    'General',
 ] as const;
-
-// ============================================================
-// DATOS DE EJEMPLO: Videos y Fotos (Presentaciones & Media)
-// ============================================================
-export const videosMediaDefault: VideoMedia[] = [
-    {
-        id: 'vid-001',
-        titulo: 'Ave Verum Corpus - DaCapo Grupo Vocal',
-        descripcion: 'Presentación en el Teatro Municipal · Diciembre 2024',
-        youtubeId: 'HLuKWZcN5b4',
-        categoria: 'Conciertos',
-        visible: true,
-        fechaSubida: '2024-12-20T00:00:00',
-    },
-    {
-        id: 'vid-002',
-        titulo: 'Cantate Domino - Monteverdi · DaCapo',
-        descripcion: 'Festival Coral Internacional · Septiembre 2024',
-        youtubeId: '_wFTAj7Ydv4',
-        categoria: 'Festivales',
-        visible: true,
-        fechaSubida: '2024-09-15T00:00:00',
-    },
-    {
-        id: 'vid-003',
-        titulo: 'Concierto de Navidad 2023 · Completo',
-        descripcion: 'Catedral Metropolitana · Diciembre 2023',
-        youtubeId: 'KDibgQfVj7E',
-        categoria: 'Navideño',
-        visible: true,
-        fechaSubida: '2023-12-10T00:00:00',
-    },
-];
-
-export const fotosGaleriaDefault: FotoGaleria[] = [
-    { id: 'foto-001', titulo: 'Concierto de Navidad 2023', src: 'https://picsum.photos/seed/concert1/800/600', categoria: 'Conciertos', visible: true, fechaSubida: '2023-12-10T00:00:00' },
-    { id: 'foto-002', titulo: 'Ensayo General', src: 'https://picsum.photos/seed/choir2/800/600', categoria: 'Ensayos', visible: true, fechaSubida: '2024-01-15T00:00:00' },
-    { id: 'foto-003', titulo: 'Festival Coral 2024', src: 'https://picsum.photos/seed/music3/800/600', categoria: 'Festivales', visible: true, fechaSubida: '2024-09-16T00:00:00' },
-    { id: 'foto-004', titulo: 'Teatro Municipal', src: 'https://picsum.photos/seed/stage4/800/600', categoria: 'Conciertos', visible: true, fechaSubida: '2024-12-20T00:00:00' },
-    { id: 'foto-005', titulo: 'Presentación al Aire Libre', src: 'https://picsum.photos/seed/vocal5/800/600', categoria: 'Giras', visible: true, fechaSubida: '2024-06-02T00:00:00' },
-    { id: 'foto-006', titulo: 'Gira Regional 2024', src: 'https://picsum.photos/seed/group6/800/600', categoria: 'Giras', visible: true, fechaSubida: '2024-08-25T00:00:00' },
-];
 
 // ============================================================
 // TIPO: Mensaje de Contacto
