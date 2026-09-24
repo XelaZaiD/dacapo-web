@@ -18,10 +18,10 @@ import {
     Plus, Pencil, Trash2, X, Check, Shield, ArrowLeft,
     Mail, Mic, Upload, Play, Pause, Disc, Loader2, AlertCircle,
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
-    ArrowUp, ArrowDown
+    ArrowUp, ArrowDown, Video, Image as ImageIcon
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Integrante, Evento, PistaAudio, Partitura, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA } from '../data/mockData';
+import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
 import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase } from '../services/supabase';
 import AvisoTemporal from '../components/ui/AvisoTemporal';
 
@@ -35,6 +35,7 @@ const MODULOS = [
     { id: 'partituras', icono: <BookOpen className="w-5 h-5" />, etiqueta: 'Partituras' },
     { id: 'eventos', icono: <Calendar className="w-5 h-5" />, etiqueta: 'Eventos' },
     { id: 'audio', icono: <Music className="w-5 h-5" />, etiqueta: 'Audio' },
+    { id: 'media', icono: <Video className="w-5 h-5" />, etiqueta: 'Media & Galería' },
     { id: 'audiciones', icono: <Mic className="w-5 h-5" />, etiqueta: 'Buzón Audiciones' },
     { id: 'mensajes', icono: <Mail className="w-5 h-5" />, etiqueta: 'Buzón Mensajes' },
 ];
@@ -1122,6 +1123,370 @@ const ModuloAudio = () => {
 };
 
 // ============================================================
+// MÓDULO: Media & Galería (Presentaciones)
+// ============================================================
+type SubModuloMedia = 'videos' | 'fotos';
+
+type FormVideoMedia = {
+    titulo: string;
+    descripcion: string;
+    urlYoutube: string;
+    categoria: string;
+    visible: boolean;
+};
+
+type FormFotoGaleria = {
+    titulo: string;
+    src: string;
+    categoria: string;
+    visible: boolean;
+};
+
+const ModuloMedia = () => {
+    const { videosMedia, agregarVideoMedia, editarVideoMedia, eliminarVideoMedia, fotosGaleria, agregarFotoGaleria, editarFotoGaleria, eliminarFotoGaleria } = useApp();
+
+    const [subModulo, setSubModulo] = useState<SubModuloMedia>('videos');
+
+    // --- Estado de Videos ---
+    const [paginaVideos, setPaginaVideos] = useState(1);
+    const [mostrarFormVideo, setMostrarFormVideo] = useState(false);
+    const [editandoVideo, setEditandoVideo] = useState<VideoMedia | null>(null);
+    const [formVideo, setFormVideo] = useState<FormVideoMedia>({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], visible: true });
+
+    // --- Estado de Fotos ---
+    const [paginaFotos, setPaginaFotos] = useState(1);
+    const [mostrarFormFoto, setMostrarFormFoto] = useState(false);
+    const [editandoFoto, setEditandoFoto] = useState<FotoGaleria | null>(null);
+    const [formFoto, setFormFoto] = useState<FormFotoGaleria>({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], visible: true });
+
+    // --- Utilidad para extraer el ID de un video de YouTube ---
+    const extraerYoutubeId = (url: string): string => {
+        const limpia = url.trim();
+        if (!limpia) return '';
+        const patrones = [
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([\w-]{11})/,
+            /^([\w-]{11})$/,
+        ];
+        for (const patron of patrones) {
+            const match = limpia.match(patron);
+            if (match) return match[1];
+        }
+        return limpia;
+    };
+
+    // --- Paginación ---
+    const totalPaginasVideos = Math.max(1, Math.ceil(videosMedia.length / REGISTROS_POR_PAGINA));
+    const paginaVideosClamp = Math.min(paginaVideos, totalPaginasVideos);
+    const videosPaginados = videosMedia.slice(
+        (paginaVideosClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaVideosClamp * REGISTROS_POR_PAGINA
+    );
+
+    const totalPaginasFotos = Math.max(1, Math.ceil(fotosGaleria.length / REGISTROS_POR_PAGINA));
+    const paginaFotosClamp = Math.min(paginaFotos, totalPaginasFotos);
+    const fotosPaginadas = fotosGaleria.slice(
+        (paginaFotosClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaFotosClamp * REGISTROS_POR_PAGINA
+    );
+
+    const guardarVideo = () => {
+        const youtubeId = extraerYoutubeId(formVideo.urlYoutube);
+        if (!formVideo.titulo.trim() || !youtubeId) return;
+        const datos = {
+            titulo: formVideo.titulo.trim(),
+            descripcion: formVideo.descripcion.trim(),
+            youtubeId,
+            categoria: formVideo.categoria,
+            visible: formVideo.visible,
+        };
+        if (editandoVideo) {
+            editarVideoMedia(editandoVideo.id, datos);
+        } else {
+            agregarVideoMedia(datos);
+        }
+        setMostrarFormVideo(false);
+        setEditandoVideo(null);
+        setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], visible: true });
+    };
+
+    const abrirEditarVideo = (v: VideoMedia) => {
+        setEditandoVideo(v);
+        setFormVideo({ titulo: v.titulo, descripcion: v.descripcion, urlYoutube: v.youtubeId, categoria: v.categoria, visible: v.visible });
+        setMostrarFormVideo(true);
+    };
+
+    const guardarFoto = () => {
+        if (!formFoto.titulo.trim() || !formFoto.src.trim()) return;
+        const datos = {
+            titulo: formFoto.titulo.trim(),
+            src: formFoto.src.trim(),
+            categoria: formFoto.categoria,
+            visible: formFoto.visible,
+        };
+        if (editandoFoto) {
+            editarFotoGaleria(editandoFoto.id, datos);
+        } else {
+            agregarFotoGaleria(datos);
+        }
+        setMostrarFormFoto(false);
+        setEditandoFoto(null);
+        setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], visible: true });
+    };
+
+    const abrirEditarFoto = (f: FotoGaleria) => {
+        setEditandoFoto(f);
+        setFormFoto({ titulo: f.titulo, src: f.src, categoria: f.categoria, visible: f.visible });
+        setMostrarFormFoto(true);
+    };
+
+    const TabBotones = [
+        { id: 'videos' as const, etiqueta: 'Videos', cuenta: videosMedia.length },
+        { id: 'fotos' as const, etiqueta: 'Galería de Fotos', cuenta: fotosGaleria.length },
+    ];
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Media & Galería</h2>
+                    <p className="t-muted text-sm">Administra los videos de YouTube y las fotos de la sección Presentaciones.</p>
+                </div>
+            </div>
+
+            {/* Pestañas: Videos / Fotos */}
+            <div className="flex flex-wrap gap-2">
+                {TabBotones.map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setSubModulo(tab.id)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+                            subModulo === tab.id
+                                ? 'bg-vinotinto text-white border-vinotinto shadow-glow-vinotinto'
+                                : 'bg-sutil hover:bg-sutil-hover text-secundario border-transparent'
+                        }`}
+                    >
+                        {tab.id === 'videos' ? <Video className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                        {tab.etiqueta}
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${subModulo === tab.id ? 'bg-white/20' : 'bg-sutil-hover'}`}>
+                            {tab.cuenta}
+                        </span>
+                    </button>
+                ))}
+            </div>
+
+            {/* ---- PESTAÑA: VIDEOS ---- */}
+            {subModulo === 'videos' && (
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-secundario">Videos de YouTube</h3>
+                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], visible: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
+                            <Plus className="w-4 h-4" /> Añadir Video
+                        </button>
+                    </div>
+
+                    {videosMedia.length === 0 ? (
+                        <div className="card-glass rounded-xl p-12 text-center t-muted">
+                            <Video className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                            <p>Aún no hay videos registrados.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {videosPaginados.map(v => (
+                                <div key={v.id} className={`card-glass rounded-xl p-4 flex items-center gap-4 transition-all ${v.visible ? '' : 'opacity-60'}`}>
+                                    {/* Miniatura */}
+                                    <img
+                                        src={`https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`}
+                                        alt={v.titulo}
+                                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        className="w-24 h-14 rounded-lg object-cover bg-fondo-medio flex-shrink-0 border border-black/10 dark:border-white/5"
+                                    />
+                                    {/* Datos */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="font-medium text-secundario text-sm truncate">{v.titulo}</p>
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sutil t-muted">{v.categoria}</span>
+                                            {!v.visible && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+                                                    Oculta
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs t-muted truncate mt-0.5">{v.descripcion || `youtube.com/watch?v=${v.youtubeId}`}</p>
+                                    </div>
+                                    {/* Acciones */}
+                                    <div className="flex gap-1.5">
+                                        <button
+                                            onClick={() => editarVideoMedia(v.id, { visible: !v.visible })}
+                                            title={v.visible ? 'Ocultar de la web' : 'Mostrar en la web'}
+                                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                        >
+                                            {v.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                        </button>
+                                        <button onClick={() => abrirEditarVideo(v)} title="Editar"
+                                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+                                            <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => eliminarVideoMedia(v.id)}
+                                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            <PaginadorRegistros
+                                pagina={paginaVideosClamp}
+                                totalPaginas={totalPaginasVideos}
+                                alCambiar={setPaginaVideos}
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ---- PESTAÑA: FOTOS ---- */}
+            {subModulo === 'fotos' && (
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-secundario">Galería de Fotos</h3>
+                        <button onClick={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], visible: true }); setMostrarFormFoto(true); }} className="btn-primario text-sm py-2 px-4">
+                            <Plus className="w-4 h-4" /> Añadir Foto
+                        </button>
+                    </div>
+
+                    {fotosGaleria.length === 0 ? (
+                        <div className="card-glass rounded-xl p-12 text-center t-muted">
+                            <ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                            <p>Aún no hay fotos en la galería.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {fotosPaginadas.map(f => (
+                                <div key={f.id} className={`card-glass rounded-xl overflow-hidden transition-all ${f.visible ? '' : 'opacity-60'}`}>
+                                    <div className="aspect-video relative">
+                                        <img src={f.src} alt={f.titulo} className="w-full h-full object-cover" />
+                                        {!f.visible && (
+                                            <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/80 text-white font-semibold">
+                                                Oculta
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="p-3">
+                                        <p className="font-medium text-secundario text-sm truncate">{f.titulo}</p>
+                                        <p className="text-[11px] t-muted mt-0.5">{f.categoria}</p>
+                                        <div className="flex gap-1.5 mt-2">
+                                            <button
+                                                onClick={() => editarFotoGaleria(f.id, { visible: !f.visible })}
+                                                title={f.visible ? 'Ocultar de la web' : 'Mostrar en la web'}
+                                                className="flex-1 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                            >
+                                                {f.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                            </button>
+                                            <button onClick={() => abrirEditarFoto(f)} title="Editar"
+                                                className="flex-1 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => eliminarFotoGaleria(f.id)}
+                                                className="flex-1 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="col-span-full">
+                                <PaginadorRegistros
+                                    pagina={paginaFotosClamp}
+                                    totalPaginas={totalPaginasFotos}
+                                    alCambiar={setPaginaFotos}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ---- FORMULARIO: Video ---- */}
+            {createPortal(<AnimatePresence>
+                {mostrarFormVideo && (
+                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormVideo(false)}>
+                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
+                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-display font-bold text-lg text-secundario">{editandoVideo ? 'Editar' : 'Añadir'} Video</h3>
+                                <button onClick={() => setMostrarFormVideo(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
+                            </div>
+                            <div className="space-y-3">
+                                <div><label className="label-campo">Título *</label><input className="input-campo" value={formVideo.titulo} onChange={e => setFormVideo(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del video" /></div>
+                                <div><label className="label-campo">URL o ID de YouTube *</label><input className="input-campo" value={formVideo.urlYoutube} onChange={e => setFormVideo(p => ({ ...p, urlYoutube: e.target.value }))} placeholder="https://www.youtube.com/watch?v=..." /></div>
+                                {extraerYoutubeId(formVideo.urlYoutube) && (
+                                    <div className="rounded-lg overflow-hidden border borde-subtle">
+                                        <img
+                                            src={`https://img.youtube.com/vi/${extraerYoutubeId(formVideo.urlYoutube)}/mqdefault.jpg`}
+                                            alt="Vista previa"
+                                            className="w-full h-28 object-cover"
+                                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                    </div>
+                                )}
+                                <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formVideo.descripcion} onChange={e => setFormVideo(p => ({ ...p, descripcion: e.target.value }))} placeholder="Lugar, fecha, evento..." /></div>
+                                <div><label className="label-campo">Categoría</label>
+                                    <select className="input-campo" value={formVideo.categoria} onChange={e => setFormVideo(p => ({ ...p, categoria: e.target.value }))}>
+                                        {CATEGORIAS_VIDEO.map(c => <option key={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="videoVisible" checked={formVideo.visible} onChange={e => setFormVideo(p => ({ ...p, visible: e.target.checked }))} className="cursor-pointer" />
+                                    <label htmlFor="videoVisible" className="text-sm t-muted-high">Visible en la web</label>
+                                </div>
+                            </div>
+                            <button onClick={guardarVideo} className="btn-primario w-full justify-center">
+                                <Check className="w-4 h-4" /> {editandoVideo ? 'Guardar Cambios' : 'Añadir Video'}
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>, document.body)}
+
+            {/* ---- FORMULARIO: Foto ---- */}
+            {createPortal(<AnimatePresence>
+                {mostrarFormFoto && (
+                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormFoto(false)}>
+                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
+                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-display font-bold text-lg text-secundario">{editandoFoto ? 'Editar' : 'Añadir'} Foto</h3>
+                                <button onClick={() => setMostrarFormFoto(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
+                            </div>
+                            <div className="space-y-3">
+                                <div><label className="label-campo">Título *</label><input className="input-campo" value={formFoto.titulo} onChange={e => setFormFoto(p => ({ ...p, titulo: e.target.value }))} placeholder="Descripción breve de la foto" /></div>
+                                <div><label className="label-campo">URL de la imagen *</label><input className="input-campo" value={formFoto.src} onChange={e => setFormFoto(p => ({ ...p, src: e.target.value }))} placeholder="https://..." /></div>
+                                {formFoto.src && (
+                                    <div className="rounded-lg overflow-hidden border borde-subtle">
+                                        <img src={formFoto.src} alt="Vista previa" className="w-full h-28 object-cover" />
+                                    </div>
+                                )}
+                                <div><label className="label-campo">Categoría</label>
+                                    <select className="input-campo" value={formFoto.categoria} onChange={e => setFormFoto(p => ({ ...p, categoria: e.target.value }))}>
+                                        {CATEGORIAS_FOTO.map(c => <option key={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="fotoVisible" checked={formFoto.visible} onChange={e => setFormFoto(p => ({ ...p, visible: e.target.checked }))} className="cursor-pointer" />
+                                    <label htmlFor="fotoVisible" className="text-sm t-muted-high">Visible en la web</label>
+                                </div>
+                            </div>
+                            <button onClick={guardarFoto} className="btn-primario w-full justify-center">
+                                <Check className="w-4 h-4" /> {editandoFoto ? 'Guardar Cambios' : 'Añadir Foto'}
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>, document.body)}
+        </div>
+    );
+};
+
+// ============================================================
 // MÓDULO: Partituras (Biblioteca de Partituras - Módulo 3)
 // ============================================================
 type FormPartitura = {
@@ -2003,6 +2368,7 @@ const AdminPanel = () => {
         'integrantes': <ModuloIntegrantes />,
         'partituras': <ModuloPartituras />,
         'audio': <ModuloAudio />,
+        'media': <ModuloMedia />,
         'eventos': <ModuloEventos />,
         'audiciones': <ModuloBuzonAudiciones />,
         'mensajes': <ModuloBuzonMensajes />,

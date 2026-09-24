@@ -7,53 +7,16 @@
  */
 
 import { useState, useRef } from 'react';
-import { motion, useInView } from 'framer-motion';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { Play, ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import CarruselMovil from '../ui/CarruselMovil';
-
-// ============================================================
-// DATOS: Videos de YouTube de ejemplo
-// ============================================================
-// Para cambiar los videos: reemplaza el "id" con el ID del video de YouTube
-// El ID está en la URL después de "v=": youtube.com/watch?v=ESTE_ES_EL_ID
-const VIDEOS_YOUTUBE = [
-    {
-        id: 'vid-001',
-        titulo: 'Ave Verum Corpus - DaCapo Grupo Vocal',
-        descripcion: 'Presentación en el Teatro Municipal · Diciembre 2024',
-        youtubeId: 'HLuKWZcN5b4', // ID del video de YouTube (reemplazar con el real)
-    },
-    {
-        id: 'vid-002',
-        titulo: 'Cantate Domino - Monteverdi · DaCapo',
-        descripcion: 'Festival Coral Internacional · Septiembre 2024',
-        youtubeId: '_wFTAj7Ydv4',
-    },
-    {
-        id: 'vid-003',
-        titulo: 'Concierto de Navidad 2023 · Completo',
-        descripcion: 'Catedral Metropolitana · Diciembre 2023',
-        youtubeId: 'KDibgQfVj7E',
-    },
-];
-
-// ============================================================
-// DATOS: Fotos de ejemplo (usando DiceBear como placeholder)
-// ============================================================
-// En el proyecto real, estas serán URLs de fotos subidas a Supabase Storage
-const FOTOS_GALERIA = [
-    { id: 1, src: 'https://picsum.photos/seed/concert1/800/600', alt: 'Concierto de Navidad 2023' },
-    { id: 2, src: 'https://picsum.photos/seed/choir2/800/600', alt: 'Ensayo General' },
-    { id: 3, src: 'https://picsum.photos/seed/music3/800/600', alt: 'Festival Coral 2024' },
-    { id: 4, src: 'https://picsum.photos/seed/stage4/800/600', alt: 'Teatro Municipal' },
-    { id: 5, src: 'https://picsum.photos/seed/vocal5/800/600', alt: 'Presentación al Aire Libre' },
-    { id: 6, src: 'https://picsum.photos/seed/group6/800/600', alt: 'Gira Regional 2024' },
-];
+import { useApp } from '../../context/AppContext';
+import { VideoMedia } from '../../data/mockData';
 
 // ============================================================
 // COMPONENTE: TarjetaVideo
 // ============================================================
-const TarjetaVideo = ({ video }: { video: typeof VIDEOS_YOUTUBE[0] }) => {
+const TarjetaVideo = ({ video }: { video: VideoMedia }) => {
     const [reproduciendo, setReproduciendo] = useState(false);
 
     return (
@@ -117,18 +80,27 @@ const TarjetaVideo = ({ video }: { video: typeof VIDEOS_YOUTUBE[0] }) => {
 // COMPONENTE PRINCIPAL: SeccionPresentaciones
 // ============================================================
 const SeccionPresentaciones = () => {
+    const { videosMedia, fotosGaleria } = useApp();
     const ref = useRef(null);
     const estaEnPantalla = useInView(ref, { once: true, margin: '-100px' });
     const [indiceCarrusel, setIndiceCarrusel] = useState(0);
 
-    // Navegar al foto anterior en el carrusel
+    const videosVisibles = videosMedia.filter(v => v.visible);
+    const fotosVisibles = fotosGaleria.filter(f => f.visible);
+
+    const hayVideos = videosVisibles.length > 0;
+    const hayFotos = fotosVisibles.length > 0;
+
+    const indiceSeguro = Math.min(indiceCarrusel, Math.max(0, fotosVisibles.length - 1));
+
+    // Navegar a la foto anterior en el carrusel
     const anteriorFoto = () => {
-        setIndiceCarrusel(prev => (prev === 0 ? FOTOS_GALERIA.length - 1 : prev - 1));
+        setIndiceCarrusel(prev => (prev === 0 ? fotosVisibles.length - 1 : prev - 1));
     };
 
     // Navegar a la foto siguiente en el carrusel
     const siguienteFoto = () => {
-        setIndiceCarrusel(prev => (prev === FOTOS_GALERIA.length - 1 ? 0 : prev + 1));
+        setIndiceCarrusel(prev => (prev === fotosVisibles.length - 1 ? 0 : prev + 1));
     };
 
     return (
@@ -154,100 +126,105 @@ const SeccionPresentaciones = () => {
                 </motion.div>
 
                 {/* ---- VIDEOS DE YOUTUBE ---- */}
-                <motion.div
-                    className="mb-20"
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
-                    transition={{ duration: 0.7, delay: 0.2 }}
-                >
-                    <h3 className="text-xl font-semibold t-muted-high mb-6 flex items-center gap-2">
-                        <Video className="w-5 h-5 text-red-500" />
-                        Videos
-                    </h3>
-                    <CarruselMovil
-                        slides={VIDEOS_YOUTUBE.map(video => (
-                            <TarjetaVideo key={video.id} video={video} />
-                        ))}
-                        claseSlide="w-[82%] md:w-auto"
-                        gridDesktop="md:grid md:grid-cols-3 md:gap-6"
-                        ariaLabel="Carrusel de videos"
-                    />
-                </motion.div>
+                {hayVideos && (
+                    <motion.div
+                        className="mb-20"
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
+                        transition={{ duration: 0.7, delay: 0.2 }}
+                    >
+                        <h3 className="text-xl font-semibold t-muted-high mb-6 flex items-center gap-2">
+                            <Video className="w-5 h-5 text-red-500" />
+                            Videos
+                        </h3>
+                        <CarruselMovil
+                            slides={videosVisibles.map(video => (
+                                <TarjetaVideo key={video.id} video={video} />
+                            ))}
+                            claseSlide="w-[82%] md:w-auto"
+                            gridDesktop="md:grid md:grid-cols-3 md:gap-6"
+                            ariaLabel="Carrusel de videos"
+                        />
+                    </motion.div>
+                )}
 
                 {/* ---- CARRUSEL DE FOTOS ---- */}
-                <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
-                    transition={{ duration: 0.7, delay: 0.4 }}
-                >
-                    <h3 className="text-xl font-semibold t-muted-high mb-6">Galería de Fotos</h3>
+                {hayFotos && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
+                        transition={{ duration: 0.7, delay: 0.4 }}
+                    >
+                        <h3 className="text-xl font-semibold t-muted-high mb-6">Galería de Fotos</h3>
 
-                    {/* Carrusel principal */}
-                    <div className="relative">
-                        {/* Foto principal */}
-                        <div className="aspect-video rounded-2xl overflow-hidden relative">
-                            <AnimatePresence mode="wait">
-                                <motion.img
-                                    key={indiceCarrusel}
-                                    src={FOTOS_GALERIA[indiceCarrusel].src}
-                                    alt={FOTOS_GALERIA[indiceCarrusel].alt}
-                                    className="w-full h-full object-cover"
-                                    initial={{ opacity: 0, x: 50 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -50 }}
-                                    transition={{ duration: 0.4 }}
-                                />
-                            </AnimatePresence>
+                        {/* Carrusel principal */}
+                        <div className="relative">
+                            {/* Foto principal */}
+                            <div className="aspect-video rounded-2xl overflow-hidden relative">
+                                <AnimatePresence mode="wait">
+                                    <motion.img
+                                        key={indiceSeguro}
+                                        src={fotosVisibles[indiceSeguro].src}
+                                        alt={fotosVisibles[indiceSeguro].titulo}
+                                        className="w-full h-full object-cover"
+                                        initial={{ opacity: 0, x: 50 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -50 }}
+                                        transition={{ duration: 0.4 }}
+                                    />
+                                </AnimatePresence>
 
-                            {/* Descripción de la foto */}
-                            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70">
-                                <p className="text-white font-medium">{FOTOS_GALERIA[indiceCarrusel].alt}</p>
-                                <p className="t-muted text-sm">{indiceCarrusel + 1} / {FOTOS_GALERIA.length}</p>
+                                {/* Descripción de la foto */}
+                                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70">
+                                    <p className="text-white font-medium">{fotosVisibles[indiceSeguro].titulo}</p>
+                                    <p className="t-muted text-sm">{indiceSeguro + 1} / {fotosVisibles.length}</p>
+                                </div>
                             </div>
+
+                            {/* Botones de navegación */}
+                            <button
+                                onClick={anteriorFoto}
+                                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
+                             bg-black/50 backdrop-blur-sm border borde-medium
+                             flex items-center justify-center text-white
+                             hover:bg-vinotinto transition-all duration-300"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={siguienteFoto}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
+                             bg-black/50 backdrop-blur-sm border borde-medium
+                             flex items-center justify-center text-white
+                             hover:bg-vinotinto transition-all duration-300"
+                            >
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
                         </div>
 
-                        {/* Botones de navegación */}
-                        <button
-                            onClick={anteriorFoto}
-                            className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
-                         bg-black/50 backdrop-blur-sm border borde-medium
-                         flex items-center justify-center text-white
-                         hover:bg-vinotinto transition-all duration-300"
-                        >
-                            <ChevronLeft className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={siguienteFoto}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
-                         bg-black/50 backdrop-blur-sm border borde-medium
-                         flex items-center justify-center text-white
-                         hover:bg-vinotinto transition-all duration-300"
-                        >
-                            <ChevronRight className="w-5 h-5" />
-                        </button>
-                    </div>
+                        {/* Miniaturas del carrusel */}
+                        <div className="flex gap-3 mt-4 overflow-x-auto sin-scrollbar py-2">
+                            {fotosVisibles.map((foto, indice) => (
+                                <button
+                                    key={foto.id}
+                                    onClick={() => setIndiceCarrusel(indice)}
+                                    className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 ${indice === indiceSeguro ? 'border-vinotinto' : 'border-transparent opacity-60 hover:opacity-80'
+                                        }`}
+                                >
+                                    <img src={foto.src} alt={foto.titulo} className="w-full h-full object-cover" />
+                                </button>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
 
-                    {/* Miniaturas del carrusel */}
-                    <div className="flex gap-3 mt-4 overflow-x-auto sin-scrollbar py-2">
-                        {FOTOS_GALERIA.map((foto, indice) => (
-                            <button
-                                key={foto.id}
-                                onClick={() => setIndiceCarrusel(indice)}
-                                className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 ${indice === indiceCarrusel ? 'border-vinotinto' : 'border-transparent opacity-60 hover:opacity-80'
-                                    }`}
-                            >
-                                <img src={foto.src} alt={foto.alt} className="w-full h-full object-cover" />
-                            </button>
-                        ))}
-                    </div>
-                </motion.div>
+                {!hayVideos && !hayFotos && (
+                    <p className="t-muted text-center py-10">Aún no hay contenido de presentaciones.</p>
+                )}
 
             </div>
         </section>
     );
 };
-
-// Necesitamos importar AnimatePresence para el carrusel
-import { AnimatePresence } from 'framer-motion';
 
 export default SeccionPresentaciones;

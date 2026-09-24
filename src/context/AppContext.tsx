@@ -48,12 +48,16 @@ import {
     EntradaChatbot,
     VistasBiblioteca,
     VistasIntegrantes,
+    VideoMedia,
+    FotoGaleria,
     vistasBibliotecaDefault,
     vistasIntegrantesDefault,
     eventosDefault,
     configuracionSeccionesInicial,
     infoGrupoDefault,
     respuestasChatbotDefault,
+    videosMediaDefault,
+    fotosGaleriaDefault,
 } from '../data/mockData';
 import {
     supabase,
@@ -112,6 +116,8 @@ type AppContextType = {
     reintentarPartituras: () => void;
     solicitudesAudicion: SolicitudAudicion[];
     mensajesContacto: MensajeContacto[];
+    videosMedia: VideoMedia[];
+    fotosGaleria: FotoGaleria[];
     configuracionSecciones: ConfiguracionSecciones;
     respuestasChatbot: EntradaChatbot[];
 
@@ -157,6 +163,14 @@ type AppContextType = {
     agregarPista: (pista: Omit<PistaAudio, 'id'>) => void;
     editarPista: (id: string, datos: Partial<PistaAudio>) => void;
     eliminarPista: (id: string) => void;
+
+    // --- Funciones para Videos y Fotos (Presentaciones & Media) ---
+    agregarVideoMedia: (video: Omit<VideoMedia, 'id' | 'fechaSubida'>) => void;
+    editarVideoMedia: (id: string, datos: Partial<VideoMedia>) => void;
+    eliminarVideoMedia: (id: string) => void;
+    agregarFotoGaleria: (foto: Omit<FotoGaleria, 'id' | 'fechaSubida'>) => void;
+    editarFotoGaleria: (id: string, datos: Partial<FotoGaleria>) => void;
+    eliminarFotoGaleria: (id: string) => void;
 
     // --- Funciones para Info del Grupo ---
     actualizarInfoGrupo: (datos: Partial<InfoGrupo>) => void;
@@ -216,6 +230,8 @@ const CLAVES_LS = {
     PISTAS: 'dacapo_pistas_audio',
     SOLICITUDES: 'dacapo_solicitudes_audicion',
     MENSAJES: 'dacapo_mensajes_contacto',
+    VIDEOS_MEDIA: 'dacapo_videos_media',
+    FOTOS_GALERIA: 'dacapo_fotos_galeria',
     CONFIG_SECCIONES: 'dacapo_config_secciones',
     USUARIO: 'dacapo_usuario',
     MODO_OSCURO: 'dacapo_modo_oscuro',
@@ -325,6 +341,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         leerDesdeLocalStorage(CLAVES_LS.MENSAJES, [])
     );
 
+    const [videosMedia, setVideosMedia] = useState<VideoMedia[]>(() =>
+        leerDesdeLocalStorage(CLAVES_LS.VIDEOS_MEDIA, videosMediaDefault)
+    );
+
+    const [fotosGaleria, setFotosGaleria] = useState<FotoGaleria[]>(() =>
+        leerDesdeLocalStorage(CLAVES_LS.FOTOS_GALERIA, fotosGaleriaDefault)
+    );
+
     const [configuracionSecciones, setConfiguracionSecciones] = useState<ConfiguracionSecciones>(() =>
         leerDesdeLocalStorage(CLAVES_LS.CONFIG_SECCIONES, configuracionSeccionesInicial)
     );
@@ -384,6 +408,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.PISTAS, pistasAudio); }, [pistasAudio]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.SOLICITUDES, solicitudesAudicion); }, [solicitudesAudicion]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.MENSAJES, mensajesContacto); }, [mensajesContacto]);
+    useEffect(() => { guardarEnLocalStorage(CLAVES_LS.VIDEOS_MEDIA, videosMedia); }, [videosMedia]);
+    useEffect(() => { guardarEnLocalStorage(CLAVES_LS.FOTOS_GALERIA, fotosGaleria); }, [fotosGaleria]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.CONFIG_SECCIONES, configuracionSecciones); }, [configuracionSecciones]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.USUARIO, usuarioActual); }, [usuarioActual]);
 
@@ -752,6 +778,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // ============================================================
+    // FUNCIONES CRUD: Videos y Fotos (Presentaciones & Media)
+    // ============================================================
+
+    const agregarVideoMedia = (datos: Omit<VideoMedia, 'id' | 'fechaSubida'>) => {
+        const nuevoVideo: VideoMedia = {
+            ...datos,
+            id: `vid-${Date.now()}`,
+            fechaSubida: new Date().toISOString(),
+        };
+        setVideosMedia(prev => [...prev, nuevoVideo]);
+    };
+
+    const editarVideoMedia = (id: string, datos: Partial<VideoMedia>) => {
+        setVideosMedia(prev => prev.map(v => v.id === id ? { ...v, ...datos } : v));
+    };
+
+    const eliminarVideoMedia = (id: string) => {
+        setVideosMedia(prev => prev.filter(v => v.id !== id));
+    };
+
+    const agregarFotoGaleria = (datos: Omit<FotoGaleria, 'id' | 'fechaSubida'>) => {
+        const nuevaFoto: FotoGaleria = {
+            ...datos,
+            id: `foto-${Date.now()}`,
+            fechaSubida: new Date().toISOString(),
+        };
+        setFotosGaleria(prev => [...prev, nuevaFoto]);
+    };
+
+    const editarFotoGaleria = (id: string, datos: Partial<FotoGaleria>) => {
+        setFotosGaleria(prev => prev.map(f => f.id === id ? { ...f, ...datos } : f));
+    };
+
+    const eliminarFotoGaleria = (id: string) => {
+        setFotosGaleria(prev => prev.filter(f => f.id !== id));
+    };
+
+    // ============================================================
     // OTRAS FUNCIONES
     // ============================================================
 
@@ -846,6 +910,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         reintentarPartituras,
         solicitudesAudicion,
         mensajesContacto,
+        videosMedia,
+        fotosGaleria,
         configuracionSecciones,
         respuestasChatbot: respuestasChatbotDefault,
         usuarioActual,
@@ -870,6 +936,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         agregarPista,
         editarPista,
         eliminarPista,
+        agregarVideoMedia,
+        editarVideoMedia,
+        eliminarVideoMedia,
+        agregarFotoGaleria,
+        editarFotoGaleria,
+        eliminarFotoGaleria,
         actualizarInfoGrupo,
         toggleSeccion,
         enviarSolicitudAudicion,
