@@ -19,11 +19,11 @@ import {
     Mail, Mic, Upload, Play, Pause, Disc, Loader2, AlertCircle,
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
     ArrowUp, ArrowDown, Video, Image as ImageIcon,
-    Lock, AtSign, ExternalLink, Music2
+    Lock, AtSign, ExternalLink, Music2, Star
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
-import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase, subirLogoGrupoSupabase } from '../services/supabase';
+import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase, subirLogoGrupoSupabase, subirImagenEventoSupabase } from '../services/supabase';
 import AvisoTemporal from '../components/ui/AvisoTemporal';
 
 // ============================================================
@@ -856,27 +856,125 @@ const ModuloIntegrantes = () => {
 };
 
 // ============================================================
-// MÓDULO: Gestor de Eventos (CRUD simplificado)
+// MÓDULO: Gestor de Eventos (CRUD completo conectado a Supabase)
 // ============================================================
+const CATEGORIAS_EVENTO = ['Concierto', 'Festival', 'Presentación', 'Taller', 'Grabación'];
+
 const ModuloEventos = () => {
-    const { eventos, agregarEvento, editarEvento, eliminarEvento } = useApp();
+    const { eventos, agregarEvento, editarEvento, eliminarEvento, estadoEventos, reintentarEventos } = useApp();
     const [mostrarForm, setMostrarForm] = useState(false);
-    const [formEvento, setFormEvento] = useState({ titulo: '', descripcion: '', fecha: '', lugar: '', direccion: '', tipoEntrada: 'Libre' as Evento['tipoEntrada'], urlEntradas: '', urlMapa: '', activo: true });
+    const [editando, setEditando] = useState<Evento | null>(null);
+    const [formEvento, setFormEvento] = useState({
+        titulo: '', descripcion: '', fecha: '', lugar: '', direccion: '',
+        tipoEntrada: 'Libre' as Evento['tipoEntrada'], urlEntradas: '', urlMapa: '', imagen: '',
+        categoria: 'Concierto', destacado: false, agotado: false, activo: true,
+        duracionMin: 120, organizador: 'DaCapo Grupo Vocal', precio: '', repertorio: '', orden: 0,
+    });
+    const [subiendoImagen, setSubiendoImagen] = useState(false);
+    const [aviso, setAviso] = useState<{ mensaje: string; tipo: 'ok' | 'error' } | null>(null);
+    const [confirmaEliminar, setConfirmaEliminar] = useState<string | null>(null);
     const [paginaEventos, setPaginaEventos] = useState(1);
 
-    const totalPaginasEventos = Math.max(1, Math.ceil(eventos.length / REGISTROS_POR_PAGINA));
-    const paginaEventosClamp = Math.min(paginaEventos, totalPaginasEventos);
-    const eventosPaginados = eventos.slice(
-        (paginaEventosClamp - 1) * REGISTROS_POR_PAGINA,
-        paginaEventosClamp * REGISTROS_POR_PAGINA
-    );
+    const formVacio = () => ({
+        titulo: '', descripcion: '', fecha: '', lugar: '', direccion: '',
+        tipoEntrada: 'Libre' as Evento['tipoEntrada'], urlEntradas: '', urlMapa: '', imagen: '',
+        categoria: 'Concierto', destacado: false, agotado: false, activo: true,
+        duracionMin: 120, organizador: 'DaCapo Grupo Vocal', precio: '', repertorio: '', orden: 0,
+    });
+
+    const abrirCrear = () => {
+        setEditando(null);
+        setFormEvento(formVacio());
+        setMostrarForm(true);
+    };
+
+    const abrirEditar = (e: Evento) => {
+        setEditando(e);
+        setFormEvento({
+            titulo: e.titulo,
+            descripcion: e.descripcion || '',
+            fecha: e.fecha,
+            lugar: e.lugar || '',
+            direccion: e.direccion || '',
+            tipoEntrada: e.tipoEntrada,
+            urlEntradas: e.urlEntradas || '',
+            urlMapa: e.urlMapa || '',
+            imagen: e.imagen || '',
+            categoria: e.categoria || 'Concierto',
+            destacado: e.destacado || false,
+            agotado: e.agotado || false,
+            activo: e.activo,
+            duracionMin: e.duracionMin ?? 120,
+            organizador: e.organizador || 'DaCapo Grupo Vocal',
+            precio: e.precio || '',
+            repertorio: e.repertorio || '',
+            orden: e.orden ?? 0,
+        });
+        setMostrarForm(true);
+    };
+
+    const aDatos = (): Omit<Evento, 'id'> => ({
+        titulo: formEvento.titulo,
+        descripcion: formEvento.descripcion,
+        fecha: formEvento.fecha,
+        lugar: formEvento.lugar,
+        direccion: formEvento.direccion,
+        tipoEntrada: formEvento.tipoEntrada,
+        urlEntradas: formEvento.urlEntradas || undefined,
+        urlMapa: formEvento.urlMapa || undefined,
+        imagen: formEvento.imagen || undefined,
+        categoria: formEvento.categoria,
+        destacado: formEvento.destacado,
+        agotado: formEvento.agotado,
+        activo: formEvento.activo,
+        duracionMin: formEvento.duracionMin || 120,
+        organizador: formEvento.organizador,
+        precio: formEvento.precio,
+        repertorio: formEvento.repertorio,
+        orden: formEvento.orden,
+    });
 
     const guardar = () => {
         if (!formEvento.titulo || !formEvento.fecha) return;
-        agregarEvento({ ...formEvento, urlEntradas: formEvento.urlEntradas || undefined, urlMapa: formEvento.urlMapa || undefined });
+        if (editando) {
+            editarEvento(editando.id, aDatos());
+        } else {
+            agregarEvento({ ...aDatos(), orden: eventos.length });
+        }
         setMostrarForm(false);
-        setFormEvento({ titulo: '', descripcion: '', fecha: '', lugar: '', direccion: '', tipoEntrada: 'Libre', urlEntradas: '', urlMapa: '', activo: true });
     };
+
+    const subirImagen = async (archivo: File | null) => {
+        if (!archivo) return;
+        setSubiendoImagen(true);
+        const url = await subirImagenEventoSupabase(archivo);
+        setSubiendoImagen(false);
+        if (url) {
+            setFormEvento(p => ({ ...p, imagen: url }));
+            setAviso({ mensaje: 'Imagen subida correctamente.', tipo: 'ok' });
+        } else {
+            setAviso({ mensaje: 'No se pudo subir la imagen. Revisa el bucket "eventos" en Supabase.', tipo: 'error' });
+        }
+    };
+
+    const confirmarEliminar = (e: Evento) => {
+        if (confirmaEliminar === e.id) {
+            eliminarEvento(e.id);
+            setConfirmaEliminar(null);
+        } else {
+            setConfirmaEliminar(e.id);
+        }
+    };
+
+    const eventosOrdenados = [...eventos]
+        .sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999) || new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    const totalPaginasEventos = Math.max(1, Math.ceil(eventosOrdenados.length / REGISTROS_POR_PAGINA));
+    const paginaEventosClamp = Math.min(paginaEventos, totalPaginasEventos);
+    const eventosPaginados = eventosOrdenados.slice(
+        (paginaEventosClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaEventosClamp * REGISTROS_POR_PAGINA
+    );
 
     return (
         <div className="space-y-6">
@@ -885,68 +983,150 @@ const ModuloEventos = () => {
                     <h2 className="text-2xl font-display font-bold text-secundario mb-1">Eventos</h2>
                     <p className="t-muted text-sm">{eventos.length} eventos</p>
                 </div>
-                <button onClick={() => setMostrarForm(true)} className="btn-primario text-sm py-2 px-4">
+                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
                     <Plus className="w-4 h-4" /> Nuevo Evento
                 </button>
             </div>
 
-            <div className="space-y-3">
-                {eventosPaginados.map(e => (
-                    <div key={e.id} className="card-glass rounded-xl p-4 flex items-start gap-4">
-                        <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                                <p className="font-medium text-secundario text-sm">{e.titulo}</p>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${e.activo ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : 'bg-sutil-hover t-muted-low'}`}>
-                                    {e.activo ? 'Activo' : 'Inactivo'}
-                                </span>
+            {estadoEventos === 'error' && eventos.length === 0 ? (
+                <div className="card-glass rounded-xl p-8 text-center">
+                    <AlertCircle className="w-8 h-8 mx-auto mb-3 t-muted" />
+                    <p className="t-muted text-sm">No se pudieron cargar los eventos (¿creaste la tabla en Supabase?).</p>
+                    <button onClick={reintentarEventos} className="btn-ghost text-sm mt-3 px-4 py-2">Reintentar</button>
+                </div>
+            ) : eventos.length === 0 ? (
+                <div className="card-glass rounded-xl p-8 text-center">
+                    <Calendar className="w-8 h-8 mx-auto mb-3 t-muted" />
+                    <p className="t-muted text-sm">Aún no hay eventos. Presiona "Nuevo Evento" para registrar el primero.</p>
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {eventosPaginados.map(e => (
+                        <div key={e.id} className="card-glass rounded-xl p-4 flex items-center gap-3">
+                            {e.imagen ? (
+                                <img src={e.imagen} alt={e.titulo}
+                                    onError={ev => { (ev.target as HTMLImageElement).style.display = 'none'; }}
+                                    className="w-12 h-12 rounded-lg object-cover bg-fondo-medio flex-shrink-0" />
+                            ) : (
+                                <div className="w-12 h-12 rounded-lg bg-sutil flex items-center justify-center flex-shrink-0">
+                                    <Calendar className="w-5 h-5 t-muted-low" />
+                                </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-medium text-secundario text-sm truncate">{e.titulo}</p>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${e.activo ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : 'bg-sutil-hover t-muted-low'}`}>
+                                        {e.activo ? 'Visible' : 'Oculto'}
+                                    </span>
+                                    {e.destacado && <span className="text-xs px-2 py-0.5 rounded-full bg-khaki/20 text-amber-700 dark:text-khaki">Destacado</span>}
+                                    {e.agotado && <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400">Agotado</span>}
+                                </div>
+                                <p className="text-xs t-muted truncate">
+                                    {new Date(e.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {e.lugar} · {e.tipoEntrada}
+                                </p>
                             </div>
-                            <p className="text-xs t-muted">{new Date(e.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {e.lugar}</p>
+                            <div className="flex gap-1.5 flex-shrink-0">
+                                <button onClick={() => editarEvento(e.id, { destacado: !e.destacado })}
+                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${e.destacado ? 'bg-khaki/25 text-amber-700 dark:text-khaki' : 'bg-sutil hover:bg-sutil-hover t-muted'}`}
+                                    title={e.destacado ? 'Quitar destacado' : 'Marcar como destacado'}>
+                                    <Star className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => editarEvento(e.id, { activo: !e.activo })} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title={e.activo ? 'Ocultar de la web' : 'Mostrar en la web'}>
+                                    {e.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                                <button onClick={() => abrirEditar(e)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title="Editar">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => confirmarEliminar(e)}
+                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${confirmaEliminar === e.id ? 'bg-red-600 text-white' : 'bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400'}`}
+                                    title={confirmaEliminar === e.id ? '¿Seguro? Haz clic de nuevo' : 'Eliminar'}>
+                                    {confirmaEliminar === e.id ? <Check className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => editarEvento(e.id, { activo: !e.activo })} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
-                                {e.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                            <button onClick={() => eliminarEvento(e.id)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
-                                <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                        </div>
-                    </div>
-                ))}
-                <PaginadorRegistros
-                    pagina={paginaEventosClamp}
-                    totalPaginas={totalPaginasEventos}
-                    alCambiar={setPaginaEventos}
-                />
-            </div>
+                    ))}
+                    <PaginadorRegistros
+                        pagina={paginaEventosClamp}
+                        totalPaginas={totalPaginasEventos}
+                        alCambiar={setPaginaEventos}
+                    />
+                </div>
+            )}
 
             {createPortal(<AnimatePresence>
                 {mostrarForm && (
                     <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarForm(false)}>
                         <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90vh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
+                        <motion.div className="relative card-modal w-full max-w-xl p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">Nuevo Evento</h3>
+                                <h3 className="font-display font-bold text-lg text-secundario">{editando ? 'Editar' : 'Nuevo'} Evento</h3>
                                 <button onClick={() => setMostrarForm(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
                             </div>
-                            <div className="space-y-3">
-                                <div><label className="label-campo">Título *</label><input className="input-campo" value={formEvento.titulo} onChange={e => setFormEvento(p => ({ ...p, titulo: e.target.value }))} /></div>
-                                <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formEvento.descripcion} onChange={e => setFormEvento(p => ({ ...p, descripcion: e.target.value }))} /></div>
-                                <div><label className="label-campo">Fecha y Hora *</label><input type="datetime-local" className="input-campo" value={formEvento.fecha} onChange={e => setFormEvento(p => ({ ...p, fecha: e.target.value }))} /></div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Lugar</label><input className="input-campo" value={formEvento.lugar} onChange={e => setFormEvento(p => ({ ...p, lugar: e.target.value }))} /></div>
-                                    <div><label className="label-campo">Tipo de Entrada</label>
-                                        <select className="input-campo" value={formEvento.tipoEntrada} onChange={e => setFormEvento(p => ({ ...p, tipoEntrada: e.target.value as Evento['tipoEntrada'] }))}>
-                                            {['Libre', 'Con entrada', 'Donación voluntaria'].map(t => <option key={t}>{t}</option>)}
-                                        </select>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="col-span-2"><label className="label-campo">Título *</label><input className="input-campo" value={formEvento.titulo} onChange={e => setFormEvento(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del concierto" /></div>
+                                <div className="col-span-2"><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formEvento.descripcion} onChange={e => setFormEvento(p => ({ ...p, descripcion: e.target.value }))} /></div>
+                                <div className="col-span-2"><label className="label-campo">Fecha y Hora *</label><input type="datetime-local" className="input-campo" value={formEvento.fecha} onChange={e => setFormEvento(p => ({ ...p, fecha: e.target.value }))} /></div>
+                                <div><label className="label-campo">Lugar</label><input className="input-campo" value={formEvento.lugar} onChange={e => setFormEvento(p => ({ ...p, lugar: e.target.value }))} placeholder="Teatro / Iglesia / Sala" /></div>
+                                <div><label className="label-campo">Dirección</label><input className="input-campo" value={formEvento.direccion} onChange={e => setFormEvento(p => ({ ...p, direccion: e.target.value }))} /></div>
+                                <div><label className="label-campo">Categoría</label>
+                                    <select className="input-campo" value={formEvento.categoria} onChange={e => setFormEvento(p => ({ ...p, categoria: e.target.value }))}>
+                                        {CATEGORIAS_EVENTO.map(c => <option key={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div><label className="label-campo">Organizador</label><input className="input-campo" value={formEvento.organizador} onChange={e => setFormEvento(p => ({ ...p, organizador: e.target.value }))} /></div>
+                                <div><label className="label-campo">Duración (minutos)</label><input type="number" min={15} step={15} className="input-campo" value={formEvento.duracionMin} onChange={e => setFormEvento(p => ({ ...p, duracionMin: Number(e.target.value) || 120 }))} /></div>
+                                <div><label className="label-campo">Precio / Bono</label><input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder='Ej: Bs. 10' /></div>
+                                <div><label className="label-campo">Tipo de Entrada</label>
+                                    <select className="input-campo" value={formEvento.tipoEntrada} onChange={e => setFormEvento(p => ({ ...p, tipoEntrada: e.target.value as Evento['tipoEntrada'] }))}>
+                                        {['Libre', 'Con entrada', 'Donación voluntaria'].map(t => <option key={t}>{t}</option>)}
+                                    </select>
+                                </div>
+                                <div><label className="label-campo">URL Entradas</label><input className="input-campo" value={formEvento.urlEntradas} onChange={e => setFormEvento(p => ({ ...p, urlEntradas: e.target.value }))} placeholder="https://..." /></div>
+                                <div><label className="label-campo">URL Mapa</label><input className="input-campo" value={formEvento.urlMapa} onChange={e => setFormEvento(p => ({ ...p, urlMapa: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
+                                <div className="col-span-2"><label className="label-campo">Imagen promocional</label>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => (document.getElementById('input-imagen-evento') as HTMLInputElement)?.click()}
+                                            className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
+                                            {subiendoImagen ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir imagen
+                                        </button>
+                                        <input className="input-campo flex-1" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
+                                        <input
+                                            id="input-imagen-evento"
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={e => { subirImagen(e.target.files?.[0] ?? null); e.target.value = ''; }}
+                                        />
                                     </div>
                                 </div>
-                                <div><label className="label-campo">Dirección</label><input className="input-campo" value={formEvento.direccion} onChange={e => setFormEvento(p => ({ ...p, direccion: e.target.value }))} /></div>
+                                <div className="col-span-2"><label className="label-campo">Repertorio (una obra por línea)</label><textarea rows={5} className="input-campo resize-none font-mono text-xs" value={formEvento.repertorio} onChange={e => setFormEvento(p => ({ ...p, repertorio: e.target.value }))} placeholder={"Parte I:\nAlleluia\nBogoroditse Djevo\n..."} /></div>
+                                <div className="col-span-2"><label className="label-campo">Orden</label><input type="number" className="input-campo" value={formEvento.orden} onChange={e => setFormEvento(p => ({ ...p, orden: Number(e.target.value) || 0 }))} /></div>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={formEvento.destacado} onChange={e => setFormEvento(p => ({ ...p, destacado: e.target.checked }))} className="cursor-pointer" />
+                                    <span className="text-sm t-muted-high">Destacado en la web</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={formEvento.agotado} onChange={e => setFormEvento(p => ({ ...p, agotado: e.target.checked }))} className="cursor-pointer" />
+                                    <span className="text-sm t-muted-high">Entradas agotadas</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer col-span-2">
+                                    <input type="checkbox" checked={formEvento.activo} onChange={e => setFormEvento(p => ({ ...p, activo: e.target.checked }))} className="cursor-pointer" />
+                                    <span className="text-sm t-muted-high">Visible en la web</span>
+                                </label>
                             </div>
-                            <button onClick={guardar} className="btn-primario w-full justify-center"><Check className="w-4 h-4" /> Guardar Evento</button>
+                            <button onClick={guardar} className="btn-primario w-full justify-center">
+                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Guardar Evento'}
+                            </button>
                         </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>, document.body)}
+
+            <AvisoTemporal
+                visibilidad={!!aviso}
+                mensaje={aviso?.mensaje ?? ''}
+                duracionMs={4000}
+            />
         </div>
     );
 };

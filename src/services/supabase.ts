@@ -27,7 +27,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { PistaAudio, Partitura, Integrante, VideoMedia, FotoGaleria, SolicitudAudicion, MensajeContacto } from '../data/mockData';
+import type { PistaAudio, Partitura, Integrante, VideoMedia, FotoGaleria, SolicitudAudicion, MensajeContacto, Evento } from '../data/mockData';
 
 // ============================================================
 // PASO 1: PEGA TUS CREDENCIALES DE SUPABASE AQUÍ
@@ -1040,6 +1040,159 @@ export const subirLogoGrupoSupabase = async (archivo: File): Promise<string | nu
 
     const { data: urlData } = supabase.storage
         .from('integrantes')
+        .getPublicUrl(rutaArchivo);
+
+    return urlData.publicUrl;
+};
+
+// ============================================================
+// FUNCIONES PARA EVENTOS Y CONCIERTOS (Módulo 4 - Supabase)
+// ============================================================
+
+/**
+ * Convierte una fila de la base de datos en el objeto Evento que usa la app
+ */
+const mapearEvento = (fila: any): Evento => ({
+    id: fila.id,
+    titulo: fila.titulo,
+    descripcion: fila.descripcion || '',
+    fecha: fila.fecha || new Date().toISOString(),
+    lugar: fila.lugar || '',
+    direccion: fila.direccion || '',
+    tipoEntrada: (fila.tipo_entrada as Evento['tipoEntrada']) || 'Libre',
+    urlEntradas: fila.url_entradas || undefined,
+    urlMapa: fila.url_mapa || undefined,
+    imagen: fila.imagen || undefined,
+    activo: fila.activo !== false,
+    categoria: fila.categoria || 'Concierto',
+    destacado: fila.destacado || false,
+    agotado: fila.agotado || false,
+    duracionMin: fila.duracion_min ?? 120,
+    organizador: fila.organizador || '',
+    precio: fila.precio || '',
+    repertorio: fila.repertorio || '',
+    orden: fila.orden ?? 0,
+});
+
+/**
+ * Convierte un objeto Evento en la fila (snake_case) que espera la tabla
+ */
+const eventoAFila = (evento: Partial<Evento>): Record<string, any> => {
+    const fila: Record<string, any> = {};
+    if (evento.titulo !== undefined) fila.titulo = evento.titulo;
+    if (evento.descripcion !== undefined) fila.descripcion = evento.descripcion;
+    if (evento.fecha !== undefined) fila.fecha = evento.fecha;
+    if (evento.lugar !== undefined) fila.lugar = evento.lugar;
+    if (evento.direccion !== undefined) fila.direccion = evento.direccion;
+    if (evento.tipoEntrada !== undefined) fila.tipo_entrada = evento.tipoEntrada;
+    if (evento.urlEntradas !== undefined) fila.url_entradas = evento.urlEntradas || null;
+    if (evento.urlMapa !== undefined) fila.url_mapa = evento.urlMapa || null;
+    if (evento.imagen !== undefined) fila.imagen = evento.imagen || null;
+    if (evento.activo !== undefined) fila.activo = evento.activo;
+    if (evento.categoria !== undefined) fila.categoria = evento.categoria;
+    if (evento.destacado !== undefined) fila.destacado = evento.destacado;
+    if (evento.agotado !== undefined) fila.agotado = evento.agotado;
+    if (evento.duracionMin !== undefined) fila.duracion_min = evento.duracionMin;
+    if (evento.organizador !== undefined) fila.organizador = evento.organizador || null;
+    if (evento.precio !== undefined) fila.precio = evento.precio || null;
+    if (evento.repertorio !== undefined) fila.repertorio = evento.repertorio || null;
+    if (evento.orden !== undefined) fila.orden = evento.orden;
+    return fila;
+};
+
+/**
+ * Obtener todos los eventos desde Supabase (tabla 'eventos')
+ */
+export const obtenerEventosDB = async (): Promise<Evento[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('eventos') as any)
+        .select('*')
+        .order('orden', { ascending: true })
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error al obtener eventos:', error);
+        return null;
+    }
+    return (data || []).map(mapearEvento);
+};
+
+/**
+ * Agregar un nuevo evento a Supabase (tabla 'eventos')
+ */
+export const agregarEventoDB = async (evento: Omit<Evento, 'id'>): Promise<Evento | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('eventos') as any)
+        .insert([eventoAFila(evento)])
+        .select()
+        .single();
+
+    if (error || !data) {
+        console.error('Error al agregar evento:', error);
+        return null;
+    }
+    return mapearEvento(data);
+};
+
+/**
+ * Editar un evento existente en Supabase
+ */
+export const editarEventoDB = async (id: string, datos: Partial<Evento>): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('eventos') as any)
+        .update(eventoAFila(datos))
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al actualizar evento:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Eliminar un evento DEFINITIVAMENTE de Supabase
+ */
+export const eliminarEventoDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('eventos') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar evento:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Subir una imagen de evento al Storage de Supabase (bucket 'eventos', carpeta 'imagenes')
+ */
+export const subirImagenEventoSupabase = async (archivo: File): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = (archivo.name.split('.').pop() || 'jpg').toLowerCase();
+    const nombreLimpio = archivo.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(new RegExp(`\\.${extension}$`, 'i'), '');
+    const rutaArchivo = `imagenes/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('eventos')
+        .upload(rutaArchivo, archivo, {
+            contentType: archivo.type || 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error al subir imagen de evento:', error);
+        return null;
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('eventos')
         .getPublicUrl(rutaArchivo);
 
     return urlData.publicUrl;

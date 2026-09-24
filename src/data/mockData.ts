@@ -141,8 +141,16 @@ export type Evento = {
     tipoEntrada: 'Libre' | 'Con entrada' | 'Donación voluntaria';
     urlEntradas?: string;    // Link para comprar entradas (opcional)
     urlMapa?: string;        // Link de Google Maps (opcional)
-    imagen?: string;
+    imagen?: string;         // Imagen promocional del evento
     activo: boolean;         // Si es false, no aparece en la web
+    categoria: string;       // Concierto, Festival, etc.
+    destacado: boolean;      // Si es true, se muestra como tarjeta grande en la web
+    agotado: boolean;        // Si es true, aparece el sello "Agotado"
+    duracionMin: number;     // Duración en minutos (para Google Calendar)
+    organizador: string;
+    precio: string;          // Texto libre (ej: "$10" o "Bono contribución")
+    repertorio: string;      // Programa: una obra por línea
+    orden: number;           // Orden de aparición en el panel
 };
 
 // ============================================================
@@ -312,41 +320,9 @@ export const infoGrupoDefault: InfoGrupo = {
 // ============================================================
 // DATOS DE EJEMPLO: Eventos y Conciertos
 // ============================================================
-export const eventosDefault: Evento[] = [
-    {
-        id: 'evt-001',
-        titulo: 'Noche de Boleros y Música Latinoamericana',
-        descripcion: 'Una velada íntima donde DaCapo Grupo Vocal interpretará las joyas más preciadas del bolero latinoamericano. Un viaje musical por México, Cuba, Venezuela y Colombia.',
-        fecha: '2025-09-15T19:30:00',
-        lugar: 'Teatro Municipal',
-        direccion: 'Calle Principal 123, Centro Histórico',
-        tipoEntrada: 'Con entrada',
-        urlEntradas: 'https://tickets.ejemplo.com/dacapo-boleros',
-        urlMapa: 'https://maps.google.com',
-        activo: true,
-    },
-    {
-        id: 'evt-002',
-        titulo: 'DaCapo en el Parque: Concierto al Aire Libre',
-        descripcion: 'Concierto gratuito al aire libre en el Parque Central. ¡Trae una manta y disfruta de la música coral bajo las estrellas!',
-        fecha: '2025-10-05T17:00:00',
-        lugar: 'Parque Central',
-        direccion: 'Parque Central, zona verde principal',
-        tipoEntrada: 'Libre',
-        urlMapa: 'https://maps.google.com',
-        activo: true,
-    },
-    {
-        id: 'evt-003',
-        titulo: 'Concierto de Navidad: "Luz en la Oscuridad"',
-        descripcion: 'El tradicional concierto navideño de DaCapo, con un programa que mezcla lo sacro con lo popular. Colaboración especial con la Orquesta de Cámara local.',
-        fecha: '2025-12-20T20:00:00',
-        lugar: 'Catedral Metropolitana',
-        direccion: 'Plaza Mayor, frente a la alcaldía',
-        tipoEntrada: 'Donación voluntaria',
-        activo: true,
-    },
-];
+// La fuente de verdad son los datos de Supabase (tabla `eventos`).
+// Se deja el array vacío para que la web JAMÁS muestre eventos de ejemplo.
+export const eventosDefault: Evento[] = [];
 
 // ============================================================
 // ESTADO INICIAL DE SECCIONES (sin datos en Supabase)

@@ -90,6 +90,10 @@ import {
     agregarMensajeContactoDB,
     marcarMensajeLeidoDB,
     eliminarMensajeContactoDB,
+    obtenerEventosDB,
+    agregarEventoDB,
+    editarEventoDB,
+    eliminarEventoDB,
 } from '../services/supabase';
 
 // ============================================================
@@ -126,8 +130,10 @@ type AppContextType = {
     estadoPartituras: EstadoCarga;
     estadoPistas: EstadoCarga;
     estadoIntegrantes: EstadoCarga;
+    estadoEventos: EstadoCarga;
     reintentarIntegrantes: () => void;
     reintentarPartituras: () => void;
+    reintentarEventos: () => void;
     solicitudesAudicion: SolicitudAudicion[];
     mensajesContacto: MensajeContacto[];
     videosMedia: VideoMedia[];
@@ -338,9 +344,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         leerDesdeLocalStorage(CLAVES_LS.PARTITURAS, [])
     );
 
-    const [eventos, setEventos] = useState<Evento[]>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.EVENTOS, eventosDefault)
-    );
+    const [eventos, setEventos] = useState<Evento[]>(() => {
+        const guardados = leerDesdeLocalStorage<Evento[] | null>(CLAVES_LS.EVENTOS, null);
+        return guardados ?? eventosDefault;
+    });
 
     const [pistasAudio, setPistasAudio] = useState<PistaAudio[]>(() =>
         leerDesdeLocalStorage(CLAVES_LS.PISTAS, [])
@@ -350,6 +357,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [estadoPartituras, setEstadoPartituras] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
     const [estadoPistas, setEstadoPistas] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
     const [estadoIntegrantes, setEstadoIntegrantes] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
+    const [estadoEventos, setEstadoEventos] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
 
     const [solicitudesAudicion, setSolicitudesAudicion] = useState<SolicitudAudicion[]>(() =>
         leerDesdeLocalStorage(CLAVES_LS.SOLICITUDES, [])
@@ -520,7 +528,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
     }, []);
 
-    // Carga las solicitudes de audición desde Supabase (buzón del admin).
+    // Carga los eventos desde Supabase.
+    // Si la consulta falla, conservamos lo guardado en el navegador (caché local).
+    const cargarEventos = useCallback(() => {
+        if (!supabase) {
+            setEstadoEventos('error');
+            return;
+        }
+        setEstadoEventos('cargando');
+        obtenerEventosDB()
+            .then(lista => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía),
+                // así se limpian los eventos de ejemplo antiguos del navegador.
+                setEventos(lista ?? []);
+                setEstadoEventos('listo');
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar los eventos (se mantienen los guardados):', err);
+                setEstadoEventos('error');
+            });
+    }, []);
+
+// Carga las solicitudes de audición desde Supabase (buzón del admin).
     const cargarSolicitudesAudicion = useCallback(() => {
         if (!supabase) return;
         obtenerSolicitudesAudicionDB()
@@ -549,6 +578,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         cargarPartituras();
         cargarPistas();
         cargarIntegrantes();
+        cargarEventos();
         cargarVideos();
         cargarFotosGaleria();
         cargarSolicitudesAudicion();
@@ -610,7 +640,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     console.warn('ℹ️ Usando frases del banner local (Supabase no disponible o error):', err);
                 });
         }
-    }, [cargarPartituras, cargarPistas, cargarIntegrantes, cargarVideos, cargarFotosGaleria, cargarSolicitudesAudicion, cargarMensajesContacto]);
+    }, [cargarPartituras, cargarPistas, cargarIntegrantes, cargarEventos, cargarVideos, cargarFotosGaleria, cargarSolicitudesAudicion, cargarMensajesContacto]);
 
     // Reintentar manualmente la carga de integrantes (botón de los estados de error)
     const reintentarIntegrantes = () => {
@@ -620,6 +650,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Reintentar manualmente la carga de partituras (botón de los estados de error)
     const reintentarPartituras = () => {
         cargarPartituras();
+    };
+
+    // Reintentar manualmente la carga de eventos (botón de los estados de error)
+    const reintentarEventos = () => {
+        cargarEventos();
     };
 
     // ============================================================
@@ -820,16 +855,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // ============================================================
 
     const agregarEvento = (datos: Omit<Evento, 'id'>) => {
-        const nuevoEvento: Evento = { ...datos, id: `evt-${Date.now()}` };
+        const idTemp = `evt-${Date.now()}`;
+        const nuevoEvento: Evento = { ...datos, id: idTemp };
         setEventos(prev => [...prev, nuevoEvento]);
+
+        if (supabase) {
+            agregarEventoDB(datos).then(eventoDB => {
+                if (eventoDB) {
+                    setEventos(prev => prev.map(e => e.id === idTemp ? eventoDB : e));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar el evento en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const editarEvento = (id: string, datos: Partial<Evento>) => {
         setEventos(prev => prev.map(e => e.id === id ? { ...e, ...datos } : e));
+
+        if (supabase) {
+            editarEventoDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el evento en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const eliminarEvento = (id: string) => {
         setEventos(prev => prev.filter(e => e.id !== id));
+
+        if (supabase) {
+            eliminarEventoDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar el evento en Supabase:', err);
+            });
+        }
     };
 
     // ============================================================
@@ -1116,8 +1174,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         estadoPartituras,
         estadoPistas,
         estadoIntegrantes,
+        estadoEventos,
         reintentarIntegrantes,
         reintentarPartituras,
+        reintentarEventos,
         solicitudesAudicion,
         mensajesContacto,
         videosMedia,
