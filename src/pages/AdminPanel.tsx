@@ -14,7 +14,7 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard, Users, BookOpen, Calendar, Music,
-    Settings, LogOut, ChevronRight, Eye, EyeOff,
+    Settings, LogOut, ChevronLeft, ChevronRight, Eye, EyeOff,
     Plus, Pencil, Trash2, X, Check, Shield, ArrowLeft,
     Mail, Mic, Upload, Play, Pause, Disc, Loader2, AlertCircle,
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
@@ -38,6 +38,54 @@ const MODULOS = [
     { id: 'audiciones', icono: <Mic className="w-5 h-5" />, etiqueta: 'Buzón Audiciones' },
     { id: 'mensajes', icono: <Mail className="w-5 h-5" />, etiqueta: 'Buzón Mensajes' },
 ];
+
+// ============================================================
+// UTILIDAD: Paginación de registros (10 por página)
+// ============================================================
+const REGISTROS_POR_PAGINA = 10;
+
+const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
+    pagina: number;
+    totalPaginas: number;
+    alCambiar: (pagina: number) => void;
+}) => {
+    if (totalPaginas <= 1) return null;
+    const paginas = Array.from({ length: totalPaginas }, (_, i) => i + 1);
+
+    return (
+        <div className="flex items-center justify-center gap-1 flex-wrap py-4">
+            <button
+                onClick={() => alCambiar(Math.max(1, pagina - 1))}
+                disabled={pagina <= 1}
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover text-secundario disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                title="Página anterior"
+            >
+                <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            {paginas.map(p => (
+                <button
+                    key={p}
+                    onClick={() => alCambiar(p)}
+                    className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
+                        p === pagina
+                            ? 'bg-vinotinto text-white shadow-glow-vinotinto'
+                            : 'bg-sutil hover:bg-sutil-hover text-secundario'
+                    }`}
+                >
+                    {p}
+                </button>
+            ))}
+            <button
+                onClick={() => alCambiar(Math.min(totalPaginas, pagina + 1))}
+                disabled={pagina >= totalPaginas}
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover text-secundario disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                title="Página siguiente"
+            >
+                <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+        </div>
+    );
+};
 
 // ============================================================
 // MÓDULO: Dashboard (resumen estadístico)
@@ -268,6 +316,7 @@ const ModuloIntegrantes = () => {
     });
     const [subiendoFoto, setSubiendoFoto] = useState(false);
     const [aviso, setAviso] = useState<{ mensaje: string; tipo: 'ok' | 'error' } | null>(null);
+    const [paginaIntegrantes, setPaginaIntegrantes] = useState(1);
 
     const COLORES_CUERDA: Record<string, string> = {
         'Soprano': 'text-rose-600 dark:text-rose-300', 'Contralto': 'text-amber-600 dark:text-amber-300', 'Tenor': 'text-blue-600 dark:text-blue-300', 'Bajo': 'text-purple-600 dark:text-purple-300'
@@ -347,6 +396,13 @@ const ModuloIntegrantes = () => {
     const integrantesOrdenados = [...integrantes]
         .sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999) || a.nombre.localeCompare(b.nombre));
 
+    const totalPaginasIntegrantes = Math.max(1, Math.ceil(integrantesOrdenados.length / REGISTROS_POR_PAGINA));
+    const paginaIntegrantesClamp = Math.min(paginaIntegrantes, totalPaginasIntegrantes);
+    const integrantesPaginados = integrantesOrdenados.slice(
+        (paginaIntegrantesClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaIntegrantesClamp * REGISTROS_POR_PAGINA
+    );
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -417,7 +473,7 @@ const ModuloIntegrantes = () => {
                 </div>
             ) : (
                 <div className="space-y-2">
-                    {integrantesOrdenados.map((i, indice) => (
+                    {integrantesPaginados.map((i, indice) => (
                         <div key={i.id} className="card-glass rounded-xl p-4 flex items-center gap-3">
                             <img src={i.foto} alt={i.nombre}
                                 onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -429,7 +485,7 @@ const ModuloIntegrantes = () => {
                                         title="Subir">
                                         <ArrowUp className="w-3 h-3" />
                                     </button>
-                                    <button onClick={() => mover(i.id, 1)} disabled={indice === integrantesOrdenados.length - 1}
+                                    <button onClick={() => mover(i.id, 1)} disabled={indice === integrantesPaginados.length - 1}
                                         className="w-6 h-6 flex items-center justify-center rounded bg-sutil hover:bg-sutil-hover t-muted disabled:opacity-30 transition-all"
                                         title="Bajar">
                                         <ArrowDown className="w-3 h-3" />
@@ -454,6 +510,11 @@ const ModuloIntegrantes = () => {
                             </div>
                         </div>
                     ))}
+                    <PaginadorRegistros
+                        pagina={paginaIntegrantesClamp}
+                        totalPaginas={totalPaginasIntegrantes}
+                        alCambiar={setPaginaIntegrantes}
+                    />
                 </div>
             )}
 
@@ -523,6 +584,14 @@ const ModuloEventos = () => {
     const { eventos, agregarEvento, editarEvento, eliminarEvento } = useApp();
     const [mostrarForm, setMostrarForm] = useState(false);
     const [formEvento, setFormEvento] = useState({ titulo: '', descripcion: '', fecha: '', lugar: '', direccion: '', tipoEntrada: 'Libre' as Evento['tipoEntrada'], urlEntradas: '', urlMapa: '', activo: true });
+    const [paginaEventos, setPaginaEventos] = useState(1);
+
+    const totalPaginasEventos = Math.max(1, Math.ceil(eventos.length / REGISTROS_POR_PAGINA));
+    const paginaEventosClamp = Math.min(paginaEventos, totalPaginasEventos);
+    const eventosPaginados = eventos.slice(
+        (paginaEventosClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaEventosClamp * REGISTROS_POR_PAGINA
+    );
 
     const guardar = () => {
         if (!formEvento.titulo || !formEvento.fecha) return;
@@ -544,7 +613,7 @@ const ModuloEventos = () => {
             </div>
 
             <div className="space-y-3">
-                {eventos.map(e => (
+                {eventosPaginados.map(e => (
                     <div key={e.id} className="card-glass rounded-xl p-4 flex items-start gap-4">
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -565,6 +634,11 @@ const ModuloEventos = () => {
                         </div>
                     </div>
                 ))}
+                <PaginadorRegistros
+                    pagina={paginaEventosClamp}
+                    totalPaginas={totalPaginasEventos}
+                    alCambiar={setPaginaEventos}
+                />
             </div>
 
             {createPortal(<AnimatePresence>
@@ -619,6 +693,14 @@ const ModuloAudio = () => {
     const [errorSubida, setErrorSubida] = useState<string | null>(null);
     const [pistaEnPreescucha, setPistaEnPreescucha] = useState<string | null>(null);
     const [audioPreescucha] = useState<HTMLAudioElement>(() => new Audio());
+    const [paginaAudio, setPaginaAudio] = useState(1);
+
+    const totalPaginasAudio = Math.max(1, Math.ceil(pistasAudio.length / REGISTROS_POR_PAGINA));
+    const paginaAudioClamp = Math.min(paginaAudio, totalPaginasAudio);
+    const pistasAudioPaginadas = pistasAudio.slice(
+        (paginaAudioClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaAudioClamp * REGISTROS_POR_PAGINA
+    );
 
     const togglePreescucha = (url: string, id: string) => {
         if (pistaEnPreescucha === id) {
@@ -798,7 +880,7 @@ const ModuloAudio = () => {
                         <p className="text-xs mt-1">Haz clic en "Añadir Pista" para subir tu primer archivo .mp3</p>
                     </div>
                 ) : (
-                    pistasAudio.map(p => {
+                    pistasAudioPaginadas.map(p => {
                         const estaSonando = pistaEnPreescucha === p.id;
                         const esSupabase = p.urlAudio.includes('supabase.co');
 
@@ -854,10 +936,10 @@ const ModuloAudio = () => {
                                     >
                                         <Pencil className="w-3.5 h-3.5" />
                                     </button>
-                                    <button
+<button
                                         onClick={() => handleEliminar(p.id, p.titulo)}
                                         title="Eliminar"
-className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -866,6 +948,11 @@ className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hov
                         );
                     })
                 )}
+                <PaginadorRegistros
+                    pagina={paginaAudioClamp}
+                    totalPaginas={totalPaginasAudio}
+                    alCambiar={setPaginaAudio}
+                />
             </div>
 
             {/* Formulario modal */}
@@ -1089,6 +1176,14 @@ const ModuloPartituras = () => {
     const [archivoPortada, setArchivoPortada] = useState<File | null>(null);
     const [subiendo, setSubiendo] = useState(false);
     const [errorSubida, setErrorSubida] = useState<string | null>(null);
+    const [paginaPartituras, setPaginaPartituras] = useState(1);
+
+    const totalPaginasPartituras = Math.max(1, Math.ceil(partituras.length / REGISTROS_POR_PAGINA));
+    const paginaPartiturasClamp = Math.min(paginaPartituras, totalPaginasPartituras);
+    const partiturasPaginadas = partituras.slice(
+        (paginaPartiturasClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaPartiturasClamp * REGISTROS_POR_PAGINA
+    );
 
     const abrirCrear = () => {
         setEditando(null);
@@ -1314,7 +1409,7 @@ const ModuloPartituras = () => {
                         <p className="text-xs mt-1">Haz clic en "Añadir Partitura" para subir tu primer PDF</p>
                     </div>
                 ) : (
-                    partituras.map(p => {
+                    partiturasPaginadas.map(p => {
                         const esSupabase = p.urlPdf?.includes('supabase.co') || false;
                         return (
                             <div key={p.id} className={`card-glass rounded-xl p-4 flex items-center gap-4 transition-all ${
@@ -1406,6 +1501,11 @@ const ModuloPartituras = () => {
                         );
                     })
                 )}
+                <PaginadorRegistros
+                    pagina={paginaPartiturasClamp}
+                    totalPaginas={totalPaginasPartituras}
+                    alCambiar={setPaginaPartituras}
+                />
             </div>
 
             {/* Formulario modal */}
@@ -1738,12 +1838,21 @@ const ModuloPartituras = () => {
 // ============================================================
 const ModuloBuzonAudiciones = () => {
     const { solicitudesAudicion, marcarSolicitudRevisada } = useApp();
+    const [paginaAudiciones, setPaginaAudiciones] = useState(1);
     const COLORES_ESTADO: Record<string, string> = {
         'Pendiente': 'text-amber-700 dark:text-amber-400 bg-amber-400/10',
         'Revisada': 'text-blue-700 dark:text-blue-400 bg-blue-400/10',
         'Aceptada': 'text-emerald-700 dark:text-emerald-400 bg-emerald-400/10',
         'Rechazada': 'text-red-600 dark:text-red-400 bg-red-400/10',
     };
+
+    const solicitudesInvertidas = [...solicitudesAudicion].reverse();
+    const totalPaginasAudiciones = Math.max(1, Math.ceil(solicitudesAudicion.length / REGISTROS_POR_PAGINA));
+    const paginaAudicionesClamp = Math.min(paginaAudiciones, totalPaginasAudiciones);
+    const solicitudesPaginadas = solicitudesInvertidas.slice(
+        (paginaAudicionesClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaAudicionesClamp * REGISTROS_POR_PAGINA
+    );
 
     return (
         <div className="space-y-6">
@@ -1759,7 +1868,7 @@ const ModuloBuzonAudiciones = () => {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {[...solicitudesAudicion].reverse().map(s => (
+                    {solicitudesPaginadas.map(s => (
                         <div key={s.id} className="card-glass rounded-xl p-5 space-y-3">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
@@ -1787,6 +1896,11 @@ const ModuloBuzonAudiciones = () => {
                             </div>
                         </div>
                     ))}
+                    <PaginadorRegistros
+                        pagina={paginaAudicionesClamp}
+                        totalPaginas={totalPaginasAudiciones}
+                        alCambiar={setPaginaAudiciones}
+                    />
                 </div>
             )}
         </div>
@@ -1798,6 +1912,15 @@ const ModuloBuzonAudiciones = () => {
 // ============================================================
 const ModuloBuzonMensajes = () => {
     const { mensajesContacto, marcarMensajeLeido } = useApp();
+    const [paginaMensajes, setPaginaMensajes] = useState(1);
+
+    const mensajesInvertidos = [...mensajesContacto].reverse();
+    const totalPaginasMensajes = Math.max(1, Math.ceil(mensajesContacto.length / REGISTROS_POR_PAGINA));
+    const paginaMensajesClamp = Math.min(paginaMensajes, totalPaginasMensajes);
+    const mensajesPaginados = mensajesInvertidos.slice(
+        (paginaMensajesClamp - 1) * REGISTROS_POR_PAGINA,
+        paginaMensajesClamp * REGISTROS_POR_PAGINA
+    );
 
     return (
         <div className="space-y-6">
@@ -1813,7 +1936,7 @@ const ModuloBuzonMensajes = () => {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {[...mensajesContacto].reverse().map(m => (
+                    {mensajesPaginados.map(m => (
                         <div key={m.id} className={`card-glass rounded-xl p-5 border transition-all ${m.leido ? 'borde-subtle' : 'border-vinotinto/30'}`}>
                             <div className="flex items-start justify-between gap-3 mb-3">
                                 <div>
@@ -1834,6 +1957,11 @@ const ModuloBuzonMensajes = () => {
                             )}
                         </div>
                     ))}
+                    <PaginadorRegistros
+                        pagina={paginaMensajesClamp}
+                        totalPaginas={totalPaginasMensajes}
+                        alCambiar={setPaginaMensajes}
+                    />
                 </div>
             )}
         </div>
