@@ -8,7 +8,7 @@
  * ============================================================
  */
 
-import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useRef, useState, useEffect, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
-import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase, subirLogoGrupoSupabase, subirImagenEventoSupabase } from '../services/supabase';
+import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase, subirLogoGrupoSupabase, subirImagenEventoSupabase, obtenerUrlAudicionSupabase } from '../services/supabase';
 import AvisoTemporal from '../components/ui/AvisoTemporal';
 
 // ============================================================
@@ -3481,6 +3481,58 @@ const ModuloPartituras = () => {
 };
 
 // ============================================================
+// Audio/video de prueba de una solicitud de audición.
+// Si el campo guarda una ruta del bucket privado 'audiciones',
+// la resolvemos a una URL firmada para reproducirla/descargarla.
+// ============================================================
+const AudioPruebaSolicitud = ({ valor }: { valor: string }) => {
+    const esRutaBucket = valor.startsWith('audiciones/');
+    const [urlResuelta, setUrlResuelta] = useState<string>(esRutaBucket ? '' : valor);
+
+    useEffect(() => {
+        if (!esRutaBucket || !supabase) return;
+        let activo = true;
+        obtenerUrlAudicionSupabase(valor).then(url => {
+            if (activo && url) setUrlResuelta(url);
+        });
+        return () => { activo = false; };
+    }, [valor, esRutaBucket]);
+
+    if (esRutaBucket && !urlResuelta) {
+        return (
+            <p className="text-xs t-muted-low flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" /> Resolviendo archivo...
+            </p>
+        );
+    }
+
+    const esMultimediaDirecta = urlResuelta.startsWith('blob:') || urlResuelta.startsWith('data:') ||
+        /\.(mp[34]|m4a|wav|ogg|webm|mov)(#|\?|$)/i.test(urlResuelta);
+    const esVideo = /\.(mp4|webm|mov)(#|\?|$)/i.test(urlResuelta);
+
+    if (!esMultimediaDirecta) {
+        return (
+            <a href={urlResuelta} target="_blank" rel="noopener noreferrer" className="text-xs text-khaki hover:underline flex items-center gap-1">
+                <Play className="w-3 h-3" /> Ver audio de prueba
+            </a>
+        );
+    }
+
+    return (
+        <div className="space-y-2">
+            {esVideo ? (
+                <video src={urlResuelta} controls className="w-full rounded-lg max-h-44 bg-black" />
+            ) : (
+                <audio src={urlResuelta} controls className="w-full" />
+            )}
+            <a href={urlResuelta} target="_blank" rel="noopener noreferrer" className="text-xs text-khaki hover:underline flex items-center gap-1">
+                <Play className="w-3 h-3" /> Abrir archivo de prueba
+            </a>
+        </div>
+    );
+};
+
+// ============================================================
 // MÓDULO: Buzón de Audiciones (conectado a Supabase)
 // ============================================================
 const ModuloBuzonAudiciones = () => {
@@ -3577,9 +3629,7 @@ const ModuloBuzonAudiciones = () => {
                                 </div>
                                 <p className="text-xs t-muted bg-sutil rounded-lg p-3">{s.experiencia}</p>
                                 {s.urlAudioPrueba && (
-                                    <a href={s.urlAudioPrueba} target="_blank" rel="noopener noreferrer" className="text-xs text-khaki hover:underline flex items-center gap-1">
-                                        <Play className="w-3 h-3" /> Ver audio de prueba
-                                    </a>
+                                    <AudioPruebaSolicitud valor={s.urlAudioPrueba} />
                                 )}
                                 <div className="flex gap-2 flex-wrap items-center">
                                     {(['Pendiente', 'Revisada', 'Aceptada', 'Rechazada'] as const).map(estado => (

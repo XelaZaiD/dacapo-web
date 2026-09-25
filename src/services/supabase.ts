@@ -1248,6 +1248,68 @@ export const agregarSolicitudAudicionDB = async (datos: Omit<SolicitudAudicion, 
     return mapearSolicitud(data);
 };
 
+// Extrae la extensión partiendo del tipo MIME del blob (webm, ogg, mp4, mp3...)
+const extensionDesdeMime = (mime: string): string => {
+    const mapa: Record<string, string> = {
+        'audio/webm': 'webm',
+        'video/webm': 'webm',
+        'audio/ogg': 'ogg',
+        'video/ogg': 'ogg',
+        'audio/mp4': 'm4a',
+        'video/mp4': 'mp4',
+        'audio/mpeg': 'mp3',
+        'audio/wav': 'wav',
+        'audio/x-wav': 'wav',
+        'audio/mp3': 'mp3',
+    };
+    return mapa[mime.split(';')[0]] || 'webm';
+};
+
+/**
+ * Subir un archivo de audición (grabado o adjuntado) al bucket PRIVADO
+ * 'audiciones'. Devuelve la RUTA dentro del bucket (no hay URL pública).
+ * El admin la resuelve con obtenerUrlAudicionSupabase (signed URL).
+ */
+export const subirAudicionSupabase = async (archivo: Blob, nombreBase: string): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = extensionDesdeMime(archivo.type) ;
+    const nombreLimpio = (nombreBase || 'prueba')
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .slice(0, 40);
+    const ruta = `audiciones/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('audiciones')
+        .upload(ruta, archivo, {
+            contentType: archivo.type || 'application/octet-stream',
+            upsert: false,
+        });
+
+    if (error) {
+        console.error('Error al subir archivo de audición:', error);
+        return null;
+    }
+    return ruta;
+};
+
+/**
+ * Resuelve una ruta del bucket privado 'audiciones' a una URL firmada
+ * temporal (el bucket no es público). Devuelve '' si falla.
+ */
+export const obtenerUrlAudicionSupabase = async (ruta: string): Promise<string> => {
+    if (!supabase) return '';
+    const { data, error } = await supabase.storage
+        .from('audiciones')
+        .createSignedUrl(ruta, 3600);
+
+    if (error || !data) {
+        console.error('Error al firmar URL de audición:', error);
+        return '';
+    }
+    return data.signedUrl;
+}
+
 export const actualizarEstadoSolicitudDB = async (id: string, estado: SolicitudAudicion['estado']): Promise<boolean> => {
     if (!supabase) return false;
     const { error } = await (supabase.from('solicitudes_audicion') as any)
