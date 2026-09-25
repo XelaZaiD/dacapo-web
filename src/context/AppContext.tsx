@@ -252,7 +252,7 @@ const CLAVES_LS = {
     PISTAS: 'dacapo_pistas_audio',
     SOLICITUDES: 'dacapo_solicitudes_audicion',
     MENSAJES: 'dacapo_mensajes_contacto',
-    VIDEOS_MEDIA: 'dacapo_videos_media',
+    VIDEOS_MEDIA: 'dacapo_videos_media_v2',
     FOTOS_GALERIA: 'dacapo_fotos_galeria',
     CONFIG_SECCIONES: 'dacapo_config_secciones',
     USUARIO: 'dacapo_usuario',
