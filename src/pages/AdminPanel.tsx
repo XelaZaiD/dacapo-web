@@ -1709,8 +1709,11 @@ const ModuloAudio = () => {
     const [audioPreescucha] = useState<HTMLAudioElement>(() => new Audio());
     const [paginaAudio, setPaginaAudio] = useState(1);
     const [filtroBusquedaAudio, setFiltroBusquedaAudio] = useState('');
+    const [filtroOrigenAudio, setFiltroOrigenAudio] = useState('Todos');
 
-    const pistasFiltradas = pistasAudio.filter(p => !filtroBusquedaAudio.trim() || normalizarTexto(`${p.titulo} ${p.compositor}`).includes(normalizarTexto(filtroBusquedaAudio.trim())));
+    const pistasFiltradas = pistasAudio
+        .filter(p => filtroOrigenAudio === 'Todos' || (filtroOrigenAudio === 'Supabase' ? p.urlAudio.includes('supabase.co') : !p.urlAudio.includes('supabase.co')))
+        .filter(p => !filtroBusquedaAudio.trim() || normalizarTexto(`${p.titulo} ${p.compositor}`).includes(normalizarTexto(filtroBusquedaAudio.trim())));
     const totalPaginasAudio = Math.max(1, Math.ceil(pistasFiltradas.length / REGISTROS_POR_PAGINA));
     const paginaAudioClamp = Math.min(paginaAudio, totalPaginasAudio);
     const pistasAudioPaginadas = pistasFiltradas.slice(
@@ -1891,10 +1894,27 @@ const ModuloAudio = () => {
             <div className="space-y-2">
                 {pistasAudio.length > 0 && (
                     <BarraFiltrosAdmin
+                        variant="selects"
                         termino={filtroBusquedaAudio}
                         alCambiarTermino={t => { setFiltroBusquedaAudio(t); setPaginaAudio(1); }}
                         placeholder="Buscar por título o compositor..."
-                        grupos={[]}
+                        grupos={[
+                            {
+                                etiqueta: 'Origen',
+                                chips: [
+                                    { clave: 'Todos', etiqueta: 'Todos', contador: pistasAudio.length },
+                                    { clave: 'Supabase', etiqueta: 'Supabase', contador: pistasAudio.filter(p => p.urlAudio.includes('supabase.co')).length },
+                                    { clave: 'Externo', etiqueta: 'Externo', contador: pistasAudio.filter(p => !p.urlAudio.includes('supabase.co')).length },
+                                ],
+                                filtroActivo: filtroOrigenAudio,
+                                alCambiar: (clave) => { setFiltroOrigenAudio(clave); setPaginaAudio(1); },
+                            },
+                        ]}
+                        alLimpiar={() => {
+                            setFiltroBusquedaAudio('');
+                            setFiltroOrigenAudio('Todos');
+                            setPaginaAudio(1);
+                        }}
                     />
                 )}
                 {pistasAudio.length === 0 ? (
@@ -2373,6 +2393,7 @@ const ModuloMedia = () => {
                     ) : (
                         <div className="space-y-3">
                             <BarraFiltrosAdmin
+                                variant="selects"
                                 termino={filtroBusquedaVideo}
                                 alCambiarTermino={t => { setFiltroBusquedaVideo(t); setPaginaVideos(1); }}
                                 placeholder="Buscar por título o descripción..."
@@ -2514,6 +2535,7 @@ const ModuloMedia = () => {
                     ) : (
                         <div className="space-y-3">
                             <BarraFiltrosAdmin
+                                variant="selects"
                                 termino={filtroBusquedaFoto}
                                 alCambiarTermino={t => { setFiltroBusquedaFoto(t); setPaginaFotos(1); }}
                                 placeholder="Buscar por título..."
