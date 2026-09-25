@@ -1272,7 +1272,7 @@ const ModuloIntegrantes = () => {
                                         </button>
                                         <img src={i.foto} alt={i.nombre}
                                             onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                            className="w-10 h-10 rounded-full object-cover bg-fondo-medio flex-shrink-0" />
+                                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover bg-fondo-medio flex-shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             <p className="font-medium text-secundario text-sm">{i.nombre}</p>
                                             <div className="flex items-center gap-2 flex-wrap">
@@ -1281,7 +1281,7 @@ const ModuloIntegrantes = () => {
                                                 {i.anioIngreso !== undefined && <span className="text-[11px] t-muted-low">· Desde {i.anioIngreso}</span>}
                                             </div>
                                         </div>
-                                        <div className="flex gap-2 flex-shrink-0">
+                                        <div className="flex gap-1.5 flex-wrap justify-end flex-shrink-0">
                                             <button onClick={() => abrirEditar(i)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
                                                 <Pencil className="w-3.5 h-3.5" />
                                             </button>
@@ -3390,7 +3390,7 @@ const ModuloPartituras = () => {
                     partiturasPaginadas.map(p => {
                         const esSupabase = p.urlPdf?.includes('supabase.co') || false;
                         return (
-                            <div key={p.id} className={`card-glass rounded-xl p-4 flex items-center gap-4 transition-all ${
+                            <div key={p.id} className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all ${
                                 p.activo ? 'hover:border-vinotinto/30 dark:hover:border-khaki/30' : 'opacity-60'
                             }`}>
                                 {/* Portada miniatura */}
@@ -3398,10 +3398,10 @@ const ModuloPartituras = () => {
                                     <img
                                         src={p.urlPortada}
                                         alt={p.titulo}
-                                        className="w-12 h-14 rounded-lg object-cover bg-fondo-medio flex-shrink-0 border border-black/10 dark:border-white/5"
+                                        className="w-10 h-12 sm:w-12 sm:h-14 rounded-lg object-cover bg-fondo-medio flex-shrink-0 border border-black/10 dark:border-white/5"
                                     />
                                 ) : (
-                                    <div className="w-12 h-14 rounded-lg bg-gradient-to-br from-vinotinto/30 to-khaki/30 flex items-center justify-center flex-shrink-0 border border-black/10 dark:border-white/10">
+                                    <div className="w-10 h-12 sm:w-12 sm:h-14 rounded-lg bg-gradient-to-br from-vinotinto/30 to-khaki/30 flex items-center justify-center flex-shrink-0 border border-black/10 dark:border-white/10">
                                         <FileText className="w-5 h-5 opacity-60 text-secundario" />
                                     </div>
                                 )}
@@ -3441,7 +3441,7 @@ const ModuloPartituras = () => {
                                 </div>
 
                                 {/* Acciones */}
-                                <div className="flex gap-1.5">
+                                <div className="flex gap-1 sm:gap-1.5 flex-wrap justify-end flex-shrink-0">
                                     <button
                                         onClick={() => editarPartitura(p.id, { descargable: !p.descargable })}
                                         title={p.descargable ? 'Descargable: ON' : 'Descargable: OFF'}
