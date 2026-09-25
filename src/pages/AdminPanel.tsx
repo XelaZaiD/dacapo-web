@@ -20,7 +20,7 @@ import {
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
     ArrowUp, ArrowDown, Video, Image as ImageIcon,
     Lock, AtSign, ExternalLink, Music2, Star,
-    Search, GripVertical, Ticket, Globe, MapPin, Phone
+    Search, GripVertical, Ticket, Globe, MapPin, Phone, MessageCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
@@ -3972,6 +3972,24 @@ const ModuloBuzonAudiciones = () => {
                                             {estado}
                                         </button>
                                     ))}
+                                    {s.telefono.replace(/[^0-9]/g, '') && (
+                                        <a
+                                            href={`https://wa.me/${s.telefono.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hola ${s.nombre}, te escribimos por tu solicitud de audición en DaCapo.`)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs px-3 py-1.5 rounded-lg border border-green-600/30 text-green-700 dark:text-green-400 hover:bg-green-500/10 transition-all"
+                                            title="Responder por WhatsApp"
+                                        >
+                                            <MessageCircle className="w-3 h-3 inline mr-1" /> WhatsApp
+                                        </a>
+                                    )}
+                                    <a
+                                        href={`mailto:${s.email}?subject=${encodeURIComponent('Tu solicitud de audición - DaCapo')}&body=${encodeURIComponent(`Hola ${s.nombre},\n\n`)}`}
+                                        className="text-xs px-3 py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all"
+                                        title="Responder por correo"
+                                    >
+                                        <Mail className="w-3 h-3 inline mr-1" /> Correo
+                                    </a>
                                     <button
                                         onClick={() => confirmarBorrar(s.id)}
                                         className={`ml-auto text-xs px-3 py-1.5 rounded-lg border transition-all ${
@@ -4102,6 +4120,13 @@ const ModuloBuzonMensajes = () => {
                                 {m.asunto && <p className="text-xs text-khaki mb-2">Asunto: {m.asunto}</p>}
                                 <p className="text-sm t-muted-high bg-sutil rounded-lg p-3">{m.mensaje}</p>
                                 <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                    <a
+                                        href={`mailto:${m.email}?subject=${encodeURIComponent(`RE: ${m.asunto || 'Mensaje desde la web'}`)}&body=${encodeURIComponent(`Hola ${m.nombre},\n\n`)}`}
+                                        className="text-xs px-3 py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all"
+                                        title="Responder por correo"
+                                    >
+                                        <Mail className="w-3 h-3 inline mr-1" /> Responder
+                                    </a>
                                     {m.leido ? (
                                         <button onClick={() => marcarMensajeLeido(m.id, false)} className="text-xs t-muted hover:text-secundario transition-colors flex items-center gap-1">
                                             <EyeOff className="w-3 h-3" /> Marcar como no leído
