@@ -23,8 +23,8 @@ import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown, Play, Calendar, Music2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import ViniloGiratorio from './ViniloGiratorio';
 import AuroraFondo from './AuroraFondo';
+import ViniloViajero from './ViniloViajero';
 import MarqueeMusical from './MarqueeMusical';
 
 // ============================================================
@@ -139,6 +139,9 @@ const HeroSection = () => {
             {/* ---- FONDO: Aurora animada (dinámica por tema) ---- */}
             <AuroraFondo />
 
+            {/* ---- VINILO VIAJERO DE FONDO (salvapantallas DVD) ---- */}
+            <ViniloViajero />
+
             {/* ---- FONDO: Pentagrama animado ---- */}
             <PentagramaAnimado />
 
@@ -170,17 +173,7 @@ const HeroSection = () => {
             ))}
 
             {/* ---- CONTENIDO PRINCIPAL ---- */}
-            <div className="contenedor relative z-10 text-center py-32">
-
-                {/* ---- VINILO GIRATORIO (pieza central) ---- */}
-                <motion.div
-                    initial={{ opacity: 0, y: 40, scale: 0.75 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.9, delay: 0.15, ease: 'easeOut' }}
-                    className="mb-10 sm:mb-12"
-                >
-                    <ViniloGiratorio />
-                </motion.div>
+            <div className="contenedor relative z-10 text-center py-28">
 
                 {/* Badge superior */}
                 <motion.div
