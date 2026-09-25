@@ -15,10 +15,11 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { Calendar, MapPin, Clock, Ticket, ExternalLink, Music, Star, ChevronDown, ChevronUp, HeartHandshake } from 'lucide-react';
+import { Calendar, MapPin, Clock, Ticket, ExternalLink, Music, Star, ChevronDown, ChevronUp, HeartHandshake, AlertCircle, RefreshCw } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Evento } from '../../data/mockData';
 import CarruselMovil from '../ui/CarruselMovil';
+import AvisoTemporal from '../ui/AvisoTemporal';
 
 // Función que formatea una fecha ISO a texto legible en español
 const formatearFecha = (fechaISO: string): string => {
@@ -34,6 +35,19 @@ const formatearFecha = (fechaISO: string): string => {
 const formatearHora = (fechaISO: string): string => {
     const fecha = new Date(fechaISO);
     return fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+};
+
+// Cuenta regresiva hasta la fecha del evento (frase corta)
+const contarDiasHasta = (fechaISO: string): string => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fecha = new Date(fechaISO);
+    fecha.setHours(0, 0, 0, 0);
+    const dias = Math.round((fecha.getTime() - hoy.getTime()) / 86_400_000);
+    if (dias > 1) return `Faltan ${dias} días`;
+    if (dias === 1) return 'Falta 1 día';
+    if (dias === 0) return '¡Es hoy!';
+    return 'Ya se realizó';
 };
 
 // Genera un link para añadir el evento a Google Calendar usando la duración real
@@ -136,7 +150,7 @@ const TarjetaEvento = ({ evento, indice }: { evento: Evento; indice: number }) =
 
     return (
         <motion.div
-            className={`card-glass rounded-2xl overflow-hidden border ${esFuturo ? 'border-borde-subtle hover:border-vinotinto/40' : 'border-borde-subtle opacity-90'} transition-all duration-300`}
+            className={`card-glass group rounded-2xl overflow-hidden border transition-all duration-300 ${esFuturo ? 'border-borde-subtle hover:border-vinotinto/40' : 'border-borde-subtle opacity-90'} hover:shadow-xl hover:shadow-vinotinto/10`}
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
@@ -264,9 +278,9 @@ const TarjetaDestacada = ({ evento, indice }: { evento: Evento; indice: number }
                 </span>
             </div>
 
-            {evento.agotado && !evento.imagen && (
+            {evento.agotado && evento.tipoEntrada !== 'Donación voluntaria' && (
                 <div className="absolute top-16 left-4 z-10">
-                    <span className="badge border bg-red-500/80 text-white border-red-400">
+                    <span className="badge border bg-red-500/80 text-white border-red-400 backdrop-blur-sm">
                         <Ticket className="w-3 h-3" /> Entradas Agotadas
                     </span>
                 </div>
@@ -291,12 +305,94 @@ const TarjetaDestacada = ({ evento, indice }: { evento: Evento; indice: number }
 };
 
 // ============================================================
+// COMPONENTE: TarjetaEstrella (concierto destacado ancho completo)
+// ============================================================
+const TarjetaEstrella = ({ evento }: { evento: Evento }) => {
+    const colorTipo = COLORES_TIPO[evento.tipoEntrada] || COLORES_TIPO['Libre'];
+    const fecha = new Date(evento.fecha);
+    const queda = contarDiasHasta(evento.fecha);
+
+    return (
+        <motion.div
+            className="relative rounded-3xl overflow-hidden min-h-[24rem] md:min-h-[32rem] flex items-end group md:col-span-2"
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+        >
+            {evento.imagen ? (
+                <img src={evento.imagen} alt={evento.titulo} loading="lazy"
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+            ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-vinotinto via-vinotinto/90 to-secundario/70" />
+            )}
+            <div className={`absolute inset-0 ${evento.imagen ? 'bg-gradient-to-t from-black/95 via-black/45 to-black/15' : ''}`} />
+
+            {/* Fecha en bloque gigante tipo calendario */}
+            <div className="absolute top-5 left-5 z-10 text-center rounded-2xl overflow-hidden border border-white/25 bg-black/40 backdrop-blur-md">
+                <div className="px-5 py-3">
+                    <p className="text-4xl md:text-5xl font-display font-bold text-khaki leading-none">
+                        {fecha.getDate()}
+                    </p>
+                    <p className="text-[11px] uppercase tracking-widest text-white/85 mt-1">
+                        {fecha.toLocaleDateString('es-ES', { month: 'short' })} · {fecha.getFullYear()}
+                    </p>
+                </div>
+            </div>
+
+            {/* Badges superiores */}
+            <div className="absolute top-5 right-5 z-10 flex flex-col items-end gap-2">
+                <span className="badge border border-khaki/50 text-khaki bg-black/50 backdrop-blur-sm">
+                    <Star className="w-3 h-3" /> Destacado
+                </span>
+                <span className={`badge border backdrop-blur-sm ${evento.imagen ? 'text-white border-white/40 bg-black/40' : colorTipo}`}>
+                    <Ticket className="w-3 h-3" /> {evento.tipoEntrada}
+                </span>
+                {evento.agotado && evento.tipoEntrada !== 'Donación voluntaria' && (
+                    <span className="badge border bg-red-500/85 text-white border-red-400 backdrop-blur-sm">
+                        <Ticket className="w-3 h-3" /> Entradas Agotadas
+                    </span>
+                )}
+            </div>
+
+            {/* Contenido inferior */}
+            <div className="relative z-10 p-6 md:p-10 w-full">
+                <p className="text-khaki/90 text-xs font-semibold uppercase tracking-widest mb-1.5">
+                    {formatearFecha(evento.fecha)} · {formatearHora(evento.fecha)}
+                </p>
+                <h3 className="text-3xl md:text-4xl font-display font-bold text-white mb-3 drop-shadow leading-tight">
+                    {evento.titulo}
+                </h3>
+                <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-white/85 text-sm mb-5">
+                    <span className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-khaki flex-shrink-0" />
+                        {evento.lugar}
+                        {evento.direccion && <span className="text-white/60">· {evento.direccion}</span>}
+                    </span>
+                    {evento.precio && !evento.agotado && (
+                        <span className="flex items-center gap-2">
+                            <HeartHandshake className="w-4 h-4 text-khaki flex-shrink-0" />
+                            {evento.precio}
+                        </span>
+                    )}
+                    <span className="inline-flex items-center gap-2 text-khaki font-semibold">
+                        <Clock className="w-4 h-4" /> {queda}
+                    </span>
+                </p>
+                <BotonesEvento evento={evento} variante="grande" />
+                {evento.repertorio && <RepertorioDesplegable repertorio={evento.repertorio} abierto={evento.destacado} />}
+            </div>
+        </motion.div>
+    );
+};
+
+// ============================================================
 // COMPONENTE PRINCIPAL: SeccionEventos
 // ============================================================
 type Pestana = 'proximos' | 'todos' | 'pasados';
 
 const SeccionEventos = () => {
-    const { eventos, configuracionSecciones } = useApp();
+    const { eventos, configuracionSecciones, estadoEventos, reintentarEventos } = useApp();
     const [pestana, setPestana] = useState<Pestana>('proximos');
     const ref = useRef(null);
     const estaEnPantalla = useInView(ref, { once: true, margin: '-100px' });
@@ -304,6 +400,9 @@ const SeccionEventos = () => {
     if (!configuracionSecciones.mostrarEventos) return null;
 
     const ahora = Date.now();
+
+    // Estamos mostrando lo guardado en el dispositivo porque el servicio falló
+    const usandoCacheEventos = estadoEventos === 'error' && eventos.length > 0;
 
     // Eventos activos ordenados por fecha ascendente
     const eventosActivos = useMemo(
@@ -355,68 +454,31 @@ const SeccionEventos = () => {
                 </motion.div>
 
                 {/* Pestañas */}
-                {eventosActivos.length > 0 && (
-                    <div className="flex justify-center mb-12">
-                        <div className="inline-flex rounded-full bg-sutil p-1 gap-1">
-                            {PESTANAS.map(p => (
-                                <button
-                                    key={p.id}
-                                    onClick={() => setPestana(p.id)}
-                                    className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
-                                        pestana === p.id
-                                            ? 'bg-vinotinto text-white shadow-glow-vinotinto'
-                                            : 't-muted hover:text-secundario'
-                                    }`}
-                                >
-                                    {p.etiqueta}
-                                    <span className={`ml-1.5 text-xs ${pestana === p.id ? 'text-white/70' : 't-muted-low'}`}>
-                                        {p.contador}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {eventosActivos.length > 0 ? (
-                    <div className="max-w-5xl mx-auto space-y-10">
-                        {/* Eventos destacados: tarjetas grandes */}
-                        {destacadosVisibles.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {destacadosVisibles.map((evento, i) => (
-                                    <TarjetaDestacada key={evento.id} evento={evento} indice={i} />
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Lista: los no destacados (o todos si no hay destacados en la pestaña) */}
-                        {(() => {
-                            const enLista = pestana === 'todos'
-                                ? eventosActivos.filter(e => !e.destacado)
-                                : listaVisible.filter(e => !e.destacado);
-                            if (enLista.length === 0) return null;
-                            return (
-                                <div className="space-y-5">
-                                    <CarruselMovil
-                                        slides={enLista.map((evento, indice) => (
-                                            <TarjetaEvento key={evento.id} evento={evento} indice={indice} />
-                                        ))}
-                                        claseSlide="w-[85%] sm:w-full"
-                                        apiladoSm
-                                        ariaLabel="Lista de eventos"
-                                    />
+                {estadoEventos === 'cargando' && eventos.length === 0 ? (
+                    <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="card-glass rounded-2xl overflow-hidden border borde-subtle">
+                                <div className={`h-40 md:h-44 ${i === 0 ? 'md:col-span-2 md:h-72' : ''} bg-sutil-hover animate-pulse`} />
+                                <div className="p-6 space-y-3">
+                                    <div className="h-3 w-1/3 bg-sutil-hover rounded animate-pulse" />
+                                    <div className="h-6 w-3/4 bg-sutil-hover rounded animate-pulse" />
+                                    <div className="h-3 w-1/2 bg-sutil-hover rounded animate-pulse" />
                                 </div>
-                            );
-                        })()}
-
-                        {/* Pestaña "pasados" vacía pero con próximos */}
-                        {pestana === 'pasados' && pasados.length === 0 && (
-                            <div className="text-center py-12 t-muted">
-                                Aún no hay conciertos pasados registrados.
                             </div>
-                        )}
+                        ))}
                     </div>
-                ) : (
+                ) : estadoEventos === 'error' && eventos.length === 0 ? (
+                    <div className="card-glass rounded-xl p-10 text-center max-w-lg mx-auto">
+                        <AlertCircle className="w-10 h-10 mx-auto mb-3 t-muted" />
+                        <h3 className="font-display font-bold text-lg text-secundario mb-1">Ups, algo salió mal</h3>
+                        <p className="text-sm t-muted mb-5">
+                            No se pudieron actualizar los eventos. Inténtalo de nuevo en un momento.
+                        </p>
+                        <button onClick={reintentarEventos} className="btn-primario justify-center text-sm">
+                            <RefreshCw className="w-4 h-4" /> Reintentar
+                        </button>
+                    </div>
+                ) : eventosActivos.length === 0 ? (
                     // Mensaje cuando no hay eventos
                     <div className="text-center py-20">
                         <div className="w-20 h-20 rounded-full bg-sutil flex items-center justify-center mx-auto mb-4">
@@ -427,7 +489,74 @@ const SeccionEventos = () => {
                             Sigue nuestras redes sociales para ser el primero en enterarte.
                         </p>
                     </div>
+                ) : (
+                    <>
+                        <div className="flex justify-center mb-12">
+                            <div className="inline-flex rounded-full bg-sutil p-1 gap-1">
+                                {PESTANAS.map(p => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => setPestana(p.id)}
+                                        className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${pestana === p.id
+                                            ? 'bg-vinotinto text-white shadow-glow-vinotinto'
+                                            : 't-muted hover:text-secundario'
+                                            }`}
+                                    >
+                                        {p.etiqueta}
+                                        <span className={`ml-1.5 text-xs ${pestana === p.id ? 'text-white/70' : 't-muted-low'}`}>
+                                            {p.contador}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="max-w-5xl mx-auto space-y-10">
+                            {/* Eventos destacados: el primero como "concierto estrella" full-width */}
+                            {destacadosVisibles.length > 0 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <TarjetaEstrella key={destacadosVisibles[0].id} evento={destacadosVisibles[0]} />
+                                    {destacadosVisibles.slice(1).map((evento, i) => (
+                                        <TarjetaDestacada key={evento.id} evento={evento} indice={i} />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Lista: los no destacados (o todos si no hay destacados en la pestaña) */}
+                            {(() => {
+                                const enLista = pestana === 'todos'
+                                    ? eventosActivos.filter(e => !e.destacado)
+                                    : listaVisible.filter(e => !e.destacado);
+                                if (enLista.length === 0) return null;
+                                return (
+                                    <div className="space-y-5">
+                                        <CarruselMovil
+                                            slides={enLista.map((evento, indice) => (
+                                                <TarjetaEvento key={evento.id} evento={evento} indice={indice} />
+                                            ))}
+                                            claseSlide="w-[85%] sm:w-full"
+                                            apiladoSm
+                                            ariaLabel="Lista de eventos"
+                                        />
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Pestaña "pasados" vacía pero con próximos */}
+                            {pestana === 'pasados' && pasados.length === 0 && (
+                                <div className="text-center py-12 t-muted">
+                                    Aún no hay conciertos pasados registrados.
+                                </div>
+                            )}
+                        </div>
+                    </>
                 )}
+
+            {/* Aviso cuando el servicio falló pero mostramos lo guardado */}
+            <AvisoTemporal
+                visibilidad={usandoCacheEventos}
+                mensaje="No se pudieron actualizar los eventos. Estás viendo los guardados en tu dispositivo."
+            />
             </div>
         </section>
     );
