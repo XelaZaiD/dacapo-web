@@ -106,14 +106,62 @@ type GrupoFiltros = {
     alCambiar: (clave: string) => void;
 };
 
-const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, grupos, alLimpiar }: {
+const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, grupos, alLimpiar, variant = 'chips' }: {
     termino: string;
     alCambiarTermino: (texto: string) => void;
     placeholder?: string;
     grupos: GrupoFiltros[];
     alLimpiar?: () => void;
+    variant?: 'chips' | 'selects';
 }) => {
     const hayFiltrosActivos = termino !== '' || grupos.some(g => g.filtroActivo !== g.chips[0]?.clave);
+
+    if (variant === 'selects') {
+        return (
+            <div className="card-glass rounded-xl p-3 flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 basis-[200px] min-w-[160px]">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 t-muted-low pointer-events-none" />
+                    <input
+                        value={termino}
+                        onChange={e => alCambiarTermino(e.target.value)}
+                        placeholder={placeholder || 'Buscar...'}
+                        className="input-campo pl-9 pr-9 w-full h-9 text-sm"
+                    />
+                    {termino && (
+                        <button
+                            onClick={() => alCambiarTermino('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
+                            title="Limpiar búsqueda"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+                {grupos.map(g => (
+                    <label key={g.etiqueta} className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[10px] uppercase tracking-wide t-muted-low font-semibold hidden sm:inline">{g.etiqueta}:</span>
+                        <select
+                            value={g.filtroActivo}
+                            onChange={e => g.alCambiar(e.target.value)}
+                            className="h-9 text-xs rounded-lg border borde-subtle bg-sutil text-secundario px-2.5 pr-7 cursor-pointer hover:border-vinotinto/40 focus:outline-none focus:border-vinotinto/60 transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2212%22%20height=%2212%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%236b7280%22%20stroke-width=%222.5%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%226%209%2012%2015%2018%209%22/%3E%3C/svg%3E')] bg-no-repeat bg-[right_0.5rem_center]"
+                        >
+                            {g.chips.map(c => (
+                                <option key={c.clave} value={c.clave}>
+                                    {c.etiqueta} ({c.contador})
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                ))}
+                {hayFiltrosActivos && alLimpiar && (
+                    <button onClick={alLimpiar} className="h-9 text-xs px-3 rounded-lg border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-1 flex-shrink-0 ml-auto" title="Quitar todos los filtros">
+                        <X className="w-3 h-3" /> Limpiar
+                    </button>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="card-glass rounded-xl p-3 space-y-3">
             <div className="relative">
@@ -997,6 +1045,7 @@ const ModuloIntegrantes = () => {
             ) : (
                 <div className="space-y-3">
                     <BarraFiltrosAdmin
+                        variant="selects"
                         termino={filtroBusqueda}
                         alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaIntegrantes(1); }}
                         placeholder="Buscar por nombre o cargo..."
@@ -1186,10 +1235,9 @@ const ModuloEventos = () => {
     // --- Filtros ---
     const [filtroBusqueda, setFiltroBusqueda] = useState('');
     const [filtroTipo, setFiltroTipo] = useState('Todos');
-    const [filtroVisibilidad, setFiltroVisibilidad] = useState('Todos');
+    const [filtroEstadoEvento, setFiltroEstadoEvento] = useState('Todos');
     const [filtroMomento, setFiltroMomento] = useState('Todos');
     const [filtroCategoria, setFiltroCategoria] = useState('Todos');
-    const [filtroDestacado, setFiltroDestacado] = useState('Todos');
 
     const cambiarFiltro = (set: (v: string) => void) => (clave: string) => {
         set(clave);
@@ -1316,13 +1364,13 @@ const ModuloEventos = () => {
     const eventosFiltrados = eventosOrdenados.filter(e => {
         if (q && ![e.titulo, e.lugar, e.organizador, e.direccion].some(x => normalizarTexto(x || '').includes(q))) return false;
         if (filtroTipo !== 'Todos' && e.tipoEntrada !== filtroTipo) return false;
-        if (filtroVisibilidad === 'Visible' && !e.activo) return false;
-        if (filtroVisibilidad === 'Oculto' && e.activo) return false;
+        if (filtroEstadoEvento === 'Visibles' && !e.activo) return false;
+        if (filtroEstadoEvento === 'Ocultos' && e.activo) return false;
+        if (filtroEstadoEvento === 'Destacados' && !e.destacado) return false;
+        if (filtroEstadoEvento === 'No destacados' && e.destacado) return false;
         if (filtroMomento === 'Futuros' && new Date(e.fecha).getTime() <= Date.now()) return false;
         if (filtroMomento === 'Pasados' && new Date(e.fecha).getTime() > Date.now()) return false;
         if (filtroCategoria !== 'Todos' && e.categoria !== filtroCategoria) return false;
-        if (filtroDestacado === 'Destacados' && !e.destacado) return false;
-        if (filtroDestacado === 'No destacados' && e.destacado) return false;
         return true;
     });
 
@@ -1346,8 +1394,10 @@ const ModuloEventos = () => {
         { clave: 'Futuros', etiqueta: 'Futuros', contador: eventos.filter(e => momentoTipo(e) === 'Futuro').length },
         { clave: 'Pasados', etiqueta: 'Pasados', contador: eventos.filter(e => momentoTipo(e) === 'Pasado').length },
     ];
-    const chipDestacado = [
+    const chipsEstadoEvento = [
         { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Visibles', etiqueta: 'Visibles', contador: eventos.filter(e => e.activo).length },
+        { clave: 'Ocultos', etiqueta: 'Ocultos', contador: eventos.filter(e => !e.activo).length },
         { clave: 'Destacados', etiqueta: 'Destacados', contador: eventos.filter(e => e.destacado).length },
         { clave: 'No destacados', etiqueta: 'No destacados', contador: eventos.filter(e => !e.destacado).length },
     ];
@@ -1382,6 +1432,7 @@ const ModuloEventos = () => {
             ) : (
                 <div className="space-y-3">
                     <BarraFiltrosAdmin
+                        variant="selects"
                         termino={filtroBusqueda}
                         alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaEventos(1); }}
                         placeholder="Buscar por título, lugar u organizador..."
@@ -1400,19 +1451,9 @@ const ModuloEventos = () => {
                             },
                             {
                                 etiqueta: 'Estado',
-                                chips: [
-                                    { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
-                                    { clave: 'Visible', etiqueta: 'Visibles', contador: eventos.filter(e => e.activo).length },
-                                    { clave: 'Oculto', etiqueta: 'Ocultos', contador: eventos.filter(e => !e.activo).length },
-                                ],
-                                filtroActivo: filtroVisibilidad,
-                                alCambiar: cambiarFiltro(setFiltroVisibilidad),
-                            },
-                            {
-                                etiqueta: 'Relevancia',
-                                chips: chipDestacado,
-                                filtroActivo: filtroDestacado,
-                                alCambiar: cambiarFiltro(setFiltroDestacado),
+                                chips: chipsEstadoEvento,
+                                filtroActivo: filtroEstadoEvento,
+                                alCambiar: cambiarFiltro(setFiltroEstadoEvento),
                             },
                             ...(categoriasPresentes.length > 0 ? [{
                                 etiqueta: 'Categoría',
@@ -1432,8 +1473,7 @@ const ModuloEventos = () => {
                             setFiltroBusqueda('');
                             setFiltroTipo('Todos');
                             setFiltroMomento('Todos');
-                            setFiltroVisibilidad('Todos');
-                            setFiltroDestacado('Todos');
+                            setFiltroEstadoEvento('Todos');
                             setFiltroCategoria('Todos');
                             setPaginaEventos(1);
                         }}
