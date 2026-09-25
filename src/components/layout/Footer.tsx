@@ -10,7 +10,7 @@ import { Heart } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useApp } from '../../context/AppContext';
 import { EnlaceRedSocial, IconoInstagram, IconoFacebook, IconoYoutube, IconoTiktok } from '../ui/IconosRedes';
-import LogoDaCapo from '../ui/LogoDaCapo';
+import LogoGrupo from '../ui/LogoGrupo';
 
 const Footer = () => {
     const { infoGrupo, configuracionSecciones } = useApp();
@@ -28,8 +28,8 @@ const Footer = () => {
                     {/* Logo e info */}
                     <div>
                         <div className="mb-4">
-                            {/* Logo oficial (incluye nombre y subtítulo del grupo) */}
-                            <LogoDaCapo
+                            {/* Logo oficial (o respaldo SVG si no hay logo cargado) */}
+                            <LogoGrupo
                                 className="h-24 w-24 sm:h-28 sm:w-28"
                                 colorClase="text-white"
                             />

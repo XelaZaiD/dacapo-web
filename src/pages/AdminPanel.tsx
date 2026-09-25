@@ -20,7 +20,7 @@ import {
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
     ArrowUp, ArrowDown, Video, Image as ImageIcon,
     Lock, AtSign, ExternalLink, Music2, Star,
-    Search, GripVertical, Ticket
+    Search, GripVertical, Ticket, Globe, MapPin, Phone
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
@@ -279,6 +279,173 @@ const ToggleCampo = ({ activo, alCambiar, icono, etiqueta, descripcion, colorAct
     </button>
 );
 
+// Editor de etiquetas tipo "tag": escribe + Enter y queda fija como una
+// etiqueta con X para quitarla y lápiz para editarla (estilo input de tags).
+const EditorTagsEtiquetas = ({ etiquetas, alAgregar, alQuitar, alEditar, placeholder = 'Escribe y presiona Enter…' }: {
+    etiquetas: string[];
+    alAgregar: (valor: string) => void;
+    alQuitar: (indice: number) => void;
+    alEditar: (indice: number, valor: string) => void;
+    placeholder?: string;
+}) => {
+    const [borrador, setBorrador] = useState('');
+    const [editando, setEditando] = useState<{ indice: number; valor: string } | null>(null);
+
+    const agregar = () => {
+        const valor = borrador.trim();
+        if (!valor) return;
+        alAgregar(valor);
+        setBorrador('');
+    };
+
+    return (
+        <div className="w-full">
+            <div className="flex items-center gap-2 mb-2">
+                <input
+                    className="input-campo flex-1 min-w-0"
+                    value={borrador}
+                    onChange={e => setBorrador(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }}
+                    placeholder={placeholder}
+                />
+                <button onClick={agregar} className="btn-ghost text-sm px-3 py-2 shrink-0">
+                    <Plus className="w-4 h-4" /> Añadir
+                </button>
+            </div>
+
+            {etiquetas.length === 0 ? (
+                <p className="text-xs t-muted-low italic">Aún no hay etiquetas. Agrega la primera arriba.</p>
+            ) : (
+                <div className="w-full max-h-36 overflow-y-auto p-3 rounded-xl bg-sutil border borde-subtle flex flex-wrap gap-2">
+                    {etiquetas.map((etiqueta, indice) => (
+                        editando?.indice === indice ? (
+                            <input
+                                key={indice}
+                                autoFocus
+                                value={editando.valor}
+                                onChange={e => setEditando({ indice, valor: e.target.value })}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') { e.preventDefault(); alEditar(indice, editando.valor.trim()); setEditando(null); }
+                                    if (e.key === 'Escape') setEditando(null);
+                                }}
+                                className="input-campo !py-1.5 !px-2.5 !text-xs w-40"
+                            />
+                        ) : (
+                            <span key={indice}
+                                className="group/tag inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full bg-fondo-card border borde-medium text-xs font-medium text-secundario transition-shadow hover:shadow-glow-vinotinto">
+                                {etiqueta}
+                                <button
+                                    onClick={() => setEditando({ indice, valor: etiqueta })}
+                                    className="w-5 h-5 flex items-center justify-center rounded-full opacity-100 md:opacity-0 md:group-hover/tag:opacity-100 t-muted-low hover:text-vinotinto hover:bg-vinotinto/10 transition-all"
+                                    title="Editar etiqueta"
+                                >
+                                    <Pencil className="w-2.5 h-2.5" />
+                                </button>
+                                <button
+                                    onClick={() => alQuitar(indice)}
+                                    className="w-5 h-5 flex items-center justify-center rounded-full opacity-100 md:opacity-0 md:group-hover/tag:opacity-100 t-muted-low hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                    title="Quitar etiqueta"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </span>
+                        )
+                    ))}
+                </div>
+            )}
+            <p className="text-[11px] t-muted-low mt-1.5">
+                Escribe una frase y presiona Enter para fijarla · Pasa el cursor sobre una etiqueta para editarla (lápiz) o quitarla (X). En el celular ambas siempre están visibles.
+            </p>
+        </div>
+    );
+};
+
+const extraerDominio = (url: string): string => {
+    try {
+        if (!/^https?:\/\//i.test(url)) return url.replace(/^mailto:/i, '').replace(/^tel:/i, '');
+        return new URL(url).hostname.replace(/^www\./i, '');
+    } catch {
+        return url;
+    }
+};
+
+// Campo de enlace con previsualización bonita: tarjeta con icono + dominio
+// legible + botón "abrir", lápiz para editar y X para limpiar.
+const CampoEnlaceBonito = ({ etiqueta, valor, alGuardar, alLimpiar, icono, placeholder, abrirUrl }: {
+    etiqueta: string;
+    valor: string;
+    alGuardar: (valor: string) => void;
+    alLimpiar?: () => void;
+    icono?: ReactNode;
+    placeholder?: string;
+    abrirUrl?: string;
+}) => {
+    const [editando, setEditando] = useState(false);
+    const [borrador, setBorrador] = useState(valor);
+
+    const iniciar = () => { setBorrador(valor); setEditando(true); };
+    const guardar = () => { alGuardar(borrador.trim()); setEditando(false); };
+
+    const destino = abrirUrl ?? valor;
+
+    if (editando) {
+        return (
+            <div className="w-full">
+                <p className="text-[11px] uppercase tracking-wider t-muted-low mb-1">
+                    {icono} {etiqueta}
+                </p>
+                <div className="flex items-center gap-2">
+                    <input
+                        autoFocus
+                        className="input-campo flex-1 min-w-0"
+                        value={borrador}
+                        onChange={e => setBorrador(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardar(); } if (e.key === 'Escape') setEditando(false); }}
+                        onBlur={guardar}
+                        placeholder={placeholder}
+                    />
+                    <button onClick={guardar} title="Guardar" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
+                        <Check className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="group flex items-center gap-3 rounded-xl p-2.5 border borde-subtle bg-sutil hover:border-vinotinto/40 hover:bg-vinotinto/5 transition-all duration-300">
+            <div className="w-10 h-10 rounded-xl bg-vinotinto/15 border border-vinotinto/25 flex items-center justify-center text-vinotinto-claro flex-shrink-0 group-hover:scale-105 transition-transform duration-300">
+                {icono}
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="text-[11px] uppercase tracking-wider t-muted-low">{etiqueta}</p>
+                {destino.trim().startsWith('http') ? (
+                    <a href={destino} target="_blank" rel="noopener noreferrer" title={valor}
+                        className="inline-flex items-center gap-1.5 text-sm t-muted-high hover:text-khaki max-w-full transition-colors">
+                        <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{extraerDominio(valor)}</span>
+                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    </a>
+                ) : (
+                    <p className="text-sm t-muted-high truncate">
+                        {valor.trim() ? valor : <span className="italic t-muted-low">Sin definir</span>}
+                    </p>
+                )}
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0">
+                {valor.trim() && alLimpiar && (
+                    <button onClick={alLimpiar} title="Quitar" className="w-7 h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-red-500 hover:bg-red-500/10 transition-all">
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                )}
+                <button onClick={iniciar} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-vinotinto hover:bg-vinotinto/10 transition-all">
+                    <Pencil className="w-3.5 h-3.5" />
+                </button>
+            </div>
+        </div>
+    );
+};
+
 // Mueve un registro a un índice GLOBAL objetivo, renumera "orden" y persiste.
 // Devuelve el índice final (para auto-navegar a la página correcta).
 const moverRegistroGlobal = <T extends { id: string; orden?: number }>(
@@ -471,9 +638,8 @@ const ContadorSincronizado = ({ etiqueta, icono, valor, tooltip, modulo, alNaveg
 );
 
 const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void }) => {
-    const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo, actualizarInfoGrupo } = useApp();
+    const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo, actualizarInfoGrupo, actualizarAsistente } = useApp();
     const [subiendoLogo, setSubiendoLogo] = useState(false);
-    const [nuevaFrase, setNuevaFrase] = useState('');
 
     const solicitudesPendientes = solicitudesAudicion.filter(s => s.estado === 'Pendiente').length;
     const mensajesNoLeidos = mensajesContacto.filter(m => !m.leido).length;
@@ -490,23 +656,6 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
         const url = await subirLogoGrupoSupabase(archivo);
         setSubiendoLogo(false);
         if (url) aplicar({ logoUrl: url });
-    };
-
-    const agregarFrase = () => {
-        const frase = nuevaFrase.trim();
-        if (!frase) return;
-        aplicar({ frasesBanner: [...(infoGrupo.frasesBanner || []), frase] });
-        setNuevaFrase('');
-    };
-
-    const actualizarFrase = (indice: number, valor: string) => {
-        const frases = [...(infoGrupo.frasesBanner || [])];
-        frases[indice] = valor;
-        aplicar({ frasesBanner: frases });
-    };
-
-    const quitarFrase = (indice: number) => {
-        aplicar({ frasesBanner: (infoGrupo.frasesBanner || []).filter((_, i) => i !== indice) });
     };
 
     const stats = [
@@ -599,6 +748,9 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                         {infoGrupo.logoUrl && (
                             <button onClick={() => aplicar({ logoUrl: '' })} className="text-[11px] text-red-600 dark:text-red-400 hover:underline">Quitar</button>
                         )}
+                        <p className="text-[10px] t-muted-low text-center max-w-[120px] leading-tight">
+                            Se muestra en la Navbar y el Footer del sitio. Sin logo, se usa el SVG oficial por defecto.
+                        </p>
                     </div>
 
                     <div className="flex-1 space-y-4 min-w-0">
@@ -631,10 +783,30 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                 {/* Contacto */}
                 <div className="grid sm:grid-cols-2 gap-4 border-t borde-subtle pt-4">
                     <CampoEditable etiqueta="Email de contacto" valor={infoGrupo.emailContacto} alGuardar={v => aplicar({ emailContacto: v })} placeholder="correo@dacapo.com" />
-                    <CampoEditable etiqueta="Teléfono" valor={infoGrupo.telefono || ''} alGuardar={v => aplicar({ telefono: v })} placeholder="+58 412 000 0000" />
+                    <CampoEditable
+                        etiqueta="Teléfono"
+                        valor={infoGrupo.telefono || ''}
+                        alGuardar={v => {
+                            aplicar({ telefono: v });
+                            // Una sola fuente de verdad: el teléfono también alimenta el botón de WhatsApp
+                            actualizarAsistente({ numeroWhatsapp: v.replace(/[^0-9]/g, '') });
+                        }}
+                        placeholder="+58 412 000 0000"
+                    />
                     <CampoEditable etiqueta="Ubicación" valor={infoGrupo.ubicacion || ''} alGuardar={v => aplicar({ ubicacion: v })} placeholder="Ciudad, país" />
-                    <CampoEditable etiqueta="Mapa (enlace)" valor={infoGrupo.mapaUrl || ''} alGuardar={v => aplicar({ mapaUrl: v })} placeholder="https://maps.google.com/..." />
+                    <CampoEnlaceBonito
+                        etiqueta="Mapa (Google Maps)"
+                        icono={<MapPin className="w-4 h-4" />}
+                        valor={infoGrupo.mapaUrl || ''}
+                        alGuardar={v => aplicar({ mapaUrl: v })}
+                        alLimpiar={() => aplicar({ mapaUrl: '' })}
+                        placeholder="https://maps.google.com/..."
+                    />
                 </div>
+                <p className="text-[11px] t-muted-low mt-2 flex items-center gap-1.5">
+                    <Phone className="w-3 h-3 text-khaki/70" />
+                    El teléfono es la única fuente: se sincroniza automáticamente con el botón de WhatsApp de la web (lo verás en Secciones como solo-lectura).
+                </p>
 
                 {/* Contadores sincronizados */}
                 <div className="border-t borde-subtle pt-5">
@@ -672,14 +844,15 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                 {/* Redes sociales */}
                 <div className="border-t borde-subtle pt-5">
                     <p className="text-xs t-muted mb-3">Redes sociales (aparecen en toda la página web)</p>
-                    <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="grid sm:grid-cols-2 gap-3">
                         {redes.map(r => (
-                            <CampoEditable
+                            <CampoEnlaceBonito
                                 key={r.clave}
                                 etiqueta={r.etiqueta}
                                 icono={r.icono}
                                 valor={infoGrupo.redesSociales?.[r.clave] || ''}
                                 alGuardar={v => aplicar({ redesSociales: { ...infoGrupo.redesSociales, [r.clave]: v } })}
+                                alLimpiar={() => aplicar({ redesSociales: { ...infoGrupo.redesSociales, [r.clave]: '' } })}
                                 placeholder={`https://${r.etiqueta.toLowerCase()}.com/...`}
                             />
                         ))}
@@ -690,30 +863,13 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                 <div className="border-t borde-subtle pt-5">
                     <p className="text-xs t-muted mb-1">Cinta musical del inicio (Hero)</p>
                     <p className="text-[11px] t-muted-low mb-3">Estas frases se deslizan en la parte inferior del inicio.</p>
-                    <div className="space-y-2">
-                        {(infoGrupo.frasesBanner || []).map((frase, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                                <div className="flex-1 min-w-0">
-                                    <CampoEditable etiqueta={`Frase ${i + 1}`} valor={frase} alGuardar={v => actualizarFrase(i, v)} placeholder="Palabra o frase" />
-                                </div>
-                                <button onClick={() => quitarFrase(i)} title="Quitar frase" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10 transition-all">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-2 mt-3">
-                        <input
-                            className="input-campo flex-1"
-                            value={nuevaFrase}
-                            onChange={e => setNuevaFrase(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') agregarFrase(); }}
-                            placeholder="Añadir nueva frase al banner..."
-                        />
-                        <button onClick={agregarFrase} className="btn-ghost text-sm px-3 py-2 shrink-0">
-                            <Plus className="w-4 h-4" /> Añadir
-                        </button>
-                    </div>
+                    <EditorTagsEtiquetas
+                        etiquetas={infoGrupo.frasesBanner || []}
+                        alAgregar={frase => aplicar({ frasesBanner: [...(infoGrupo.frasesBanner || []), frase] })}
+                        alQuitar={indice => aplicar({ frasesBanner: (infoGrupo.frasesBanner || []).filter((_, i) => i !== indice) })}
+                        alEditar={(indice, valor) => aplicar({ frasesBanner: (infoGrupo.frasesBanner || []).map((f, i) => (i === indice ? valor : f)) })}
+                        placeholder="Escribe una frase o palabra y presiona Enter…"
+                    />
                 </div>
             </div>
 
@@ -736,8 +892,8 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
 // ============================================================
 // MÓDULO: Gestor de Secciones (toggles + asistente)
 // ============================================================
-const ModuloSecciones = () => {
-    const { configuracionSecciones, toggleSeccion, actualizarAsistente } = useApp();
+const ModuloSecciones = ({ onNavigate }: { onNavigate: (modulo: string) => void }) => {
+    const { configuracionSecciones, toggleSeccion, actualizarAsistente, infoGrupo } = useApp();
 
     type ClaveSeccion = keyof typeof configuracionSecciones;
 
@@ -817,27 +973,29 @@ const ModuloSecciones = () => {
                 </div>
                 {configuracionSecciones.tipoAsistente === 'whatsapp' && (
                     <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
-                        <label className="block">
+                        <div className="flex items-center justify-between gap-3">
                             <span className="text-xs text-green-700 dark:text-green-400 font-medium">Número de WhatsApp</span>
-                            <div className="flex gap-2 mt-1">
-                                <span className="flex items-center text-xs t-muted bg-sutil px-3 rounded-lg border borde-subtle">+</span>
-                                <input
-                                    type="text"
-                                    value={configuracionSecciones.numeroWhatsapp}
-                                    onChange={e => actualizarAsistente({ numeroWhatsapp: e.target.value.replace(/[^0-9]/g, '') })}
-                                    className="flex-1 bg-sutil border borde-subtle rounded-lg px-3 py-2 text-sm text-secundario placeholder-black/40 dark:placeholder-white/30 focus:outline-none focus:border-green-500/50 transition-colors font-mono"
-                                    placeholder="584241721311"
-                                />
-                            </div>
-                            <p className="text-[10px] t-muted-low mt-1">Ej: 584241721311 (código país + número)</p>
-                        </label>
-                        <div className="p-2 rounded bg-green-500/5">
-                            <p className="text-xs text-green-700/80 dark:text-green-400/80">
-                                {configuracionSecciones.numeroWhatsapp
-                                    ? `wa.me/${configuracionSecciones.numeroWhatsapp}`
-                                    : 'Ingresa un número para generar el enlace'}
+                            <button onClick={() => onNavigate('dashboard')}
+                                className="text-[11px] inline-flex items-center gap-1 text-khaki hover:underline transition-colors">
+                                <Pencil className="w-3 h-3" /> Editar en el Dashboard
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-lg bg-green-500/5 border border-green-500/15 px-3 py-2.5">
+                            <Phone className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                            <p className="text-sm font-mono text-secundario min-w-0 truncate">
+                                {infoGrupo.telefono || <span className="italic t-muted text-xs">Sin definir</span>}
                             </p>
                         </div>
+                        <div className="p-2 rounded bg-green-500/5">
+                            <p className="text-xs text-green-700/80 dark:text-green-400/80 break-all">
+                                {infoGrupo.telefono
+                                    ? `wa.me/${infoGrupo.telefono.replace(/[^0-9]/g, '')}`
+                                    : 'Define el teléfono en el Dashboard para generar el enlace'}
+                            </p>
+                        </div>
+                        <p className="text-[10px] t-muted-low">
+                            Este número se administra desde el Dashboard (Información del Grupo) y alimenta el botón de WhatsApp del sitio. Solo-lectura aquí.
+                        </p>
                     </div>
                 )}
             </div>
@@ -3838,7 +3996,7 @@ const AdminPanel = () => {
 
     const COMPONENTES_MODULOS: Record<string, JSX.Element> = {
         'dashboard': <ModuloDashboard onNavigate={navegarA} />,
-        'secciones': <ModuloSecciones />,
+        'secciones': <ModuloSecciones onNavigate={navegarA} />,
         'integrantes': <ModuloIntegrantes />,
         'partituras': <ModuloPartituras />,
         'audio': <ModuloAudio />,
