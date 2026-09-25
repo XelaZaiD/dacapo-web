@@ -38,6 +38,7 @@ const itemsNavegacion = [
     { etiqueta: 'Presentaciones', href: '#presentaciones' },
     { etiqueta: 'Eventos', href: '#eventos' },
     { etiqueta: 'Partituras', href: '#biblioteca' },
+    { etiqueta: 'Únete al Coro', href: '#audiciones' },
     { etiqueta: 'Contacto', href: '#contacto' },
 ];
 
@@ -77,6 +78,7 @@ const Navbar = () => {
     const itemsFiltrados = itemsNavegacion.filter(item => {
         if (item.href === '#eventos' && !configuracionSecciones.mostrarEventos) return false;
         if (item.href === '#biblioteca' && !configuracionSecciones.mostrarBiblioteca) return false;
+        if (item.href === '#audiciones' && !configuracionSecciones.mostrarAudiciones) return false;
         return true;
     });
 
