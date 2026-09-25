@@ -29,15 +29,15 @@ import LogoDaCapo from '../ui/LogoDaCapo';
 const ViniloViajero = () => {
     const contenedorRef = useRef<HTMLDivElement>(null);
     const discoRef = useRef<HTMLDivElement>(null);
-    const ondaRef = useRef<HTMLDivElement>(null);
+    const estrellaRef = useRef<HTMLDivElement>(null);
     const timerDestello = useRef<number>();
 
     const [destello, setDestello] = useState(false);
 
     useEffect(() => {
         const disco = discoRef.current;
-        const onda = ondaRef.current;
-        if (!disco || !onda) return;
+        const estrella = estrellaRef.current;
+        if (!disco || !estrella) return;
 
         const movimientoReducido = window.matchMedia('(prefers-reduced-motion: reduce)');
         const tactil = window.matchMedia('(pointer: coarse)');
@@ -52,7 +52,7 @@ const ViniloViajero = () => {
 
         const iniciar = () => {
             const movil = esMovil();
-            const tam = movil ? Math.min(ancho * 0.30, 160) : 260;
+            const tam = movil ? Math.min(ancho * 0.39, 208) : 340;
             disco.style.width = `${tam}px`;
             disco.style.height = `${tam}px`;
 
@@ -69,12 +69,12 @@ const ViniloViajero = () => {
 
             const destellar = (px: number, py: number) => {
                 setDestello(true);
-                onda.style.left = `${px}px`;
-                onda.style.top = `${py}px`;
-                onda.classList.remove('vinilo-onda-activa');
-                // Fuerza el reflow para reiniciar la animación CSS de la onda
-                void onda.offsetWidth;
-                onda.classList.add('vinilo-onda-activa');
+                estrella.style.left = `${px}px`;
+                estrella.style.top = `${py}px`;
+                estrella.classList.remove('vinilo-estrella-activa');
+                // Fuerza el reflow para reiniciar la animación CSS de la estrella
+                void estrella.offsetWidth;
+                estrella.classList.add('vinilo-estrella-activa');
                 window.clearTimeout(timerDestello.current);
                 timerDestello.current = window.setTimeout(() => setDestello(false), 420);
             };
@@ -140,8 +140,8 @@ const ViniloViajero = () => {
                 </div>
             </div>
 
-            {/* Onda de luz en el punto de rebote */}
-            <div ref={ondaRef} className="vinilo-onda absolute w-16 h-16 -translate-x-1/2 -translate-y-1/2" />
+            {/* Estrella de luz en el punto de rebote */}
+            <div ref={estrellaRef} className="vinilo-estrella absolute w-20 h-20" />
         </div>
     );
 };
