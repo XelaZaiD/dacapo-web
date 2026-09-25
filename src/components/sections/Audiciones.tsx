@@ -198,6 +198,17 @@ const SelectorAudioVideo = ({
         setGrabando(false);
     };
 
+    // Cambiar entre audio y video descarta la grabación aún no conservada
+    const cambiarModo = (nuevoModo: 'audio' | 'video') => {
+        setModo(nuevoModo);
+        setGrabacionPropuesta(prev => {
+            if (prev.url) URL.revokeObjectURL(prev.url);
+            return ADJUNTO_VACIO;
+        });
+        setErrorGrabacion('');
+        setHaGrabado(false);
+    };
+
     const manejarArchivo = (archivo: File | undefined) => {
         setErrorArchivo('');
         if (!archivo) return;
@@ -324,7 +335,11 @@ const SelectorAudioVideo = ({
                                     <div className="flex gap-2 flex-wrap">
                                         <button
                                             type="button"
-                                            onClick={() => onCambio(archivoPropuesto)}
+                                            onClick={() => {
+                                                onCambio(archivoPropuesto);
+                                                // Limpiamos la vista de arriba: solo queda "Tu aporte actual"
+                                                setArchivoPropuesto(ADJUNTO_VACIO);
+                                            }}
                                             className="btn-primario flex-1 justify-center text-sm"
                                         >
                                             <CheckCircle className="w-4 h-4" /> Usar este archivo
@@ -367,7 +382,7 @@ const SelectorAudioVideo = ({
                                 <div className="flex flex-wrap items-center gap-2 mb-4">
                                     <button
                                         type="button"
-                                        onClick={() => setModo('audio')}
+                                        onClick={() => cambiarModo('audio')}
                                         className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all ${modo === 'audio'
                                                 ? 'bg-khaki/15 text-khaki border-khaki/40'
                                                 : 'borde-subtle t-muted hover:text-secundario'
@@ -377,7 +392,7 @@ const SelectorAudioVideo = ({
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setModo('video')}
+                                        onClick={() => cambiarModo('video')}
                                         className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all ${modo === 'video'
                                                 ? 'bg-khaki/15 text-khaki border-khaki/40'
                                                 : 'borde-subtle t-muted hover:text-secundario'
@@ -451,7 +466,12 @@ const SelectorAudioVideo = ({
                                     <div className="flex gap-2 flex-wrap">
                                         <button
                                             type="button"
-                                            onClick={() => onCambio(grabacionPropuesta)}
+                                            onClick={() => {
+                                                onCambio(grabacionPropuesta);
+                                                // La vista de arriba se limpia: solo queda la tarjeta "Tu aporte actual"
+                                                setGrabacionPropuesta(ADJUNTO_VACIO);
+                                                setHaGrabado(false);
+                                            }}
                                             className="btn-primario flex-1 justify-center text-sm"
                                         >
                                             <CheckCircle className="w-4 h-4" /> Conservar grabación
@@ -778,6 +798,10 @@ const SeccionAudiciones = () => {
                                     valor={datosFormulario.urlAudioPrueba}
                                     esVideo={adjunto.esVideo}
                                     onCambio={adjuntoNuevo => {
+                                        // Si se reemplaza/quita un enlace temporal (blob), lo liberamos
+                                        if (adjunto.url.startsWith('blob:') && adjunto.url !== adjuntoNuevo.url) {
+                                            URL.revokeObjectURL(adjunto.url);
+                                        }
                                         setAdjunto(adjuntoNuevo);
                                         actualizarCampo('urlAudioPrueba', adjuntoNuevo.url);
                                     }}
