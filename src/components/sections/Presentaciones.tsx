@@ -25,34 +25,52 @@ const TarjetaVideo = ({ video }: TarjetaVideoProps) => {
 
     return (
         <div className="card-glass rounded-xl overflow-hidden group">
-            {/* Si el usuario hace clic en "Play", mostramos el iframe de YouTube */}
+            {/* Si el usuario hace clic en "Play", mostramos el reproductor (YouTube o archivo) */}
             {reproduciendo ? (
                 <div className="aspect-video">
-                    <iframe
-                        src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1`}
-                        title={video.titulo}
-                        className="w-full h-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
-                        allowFullScreen
-                    />
+                    {video.tipoOrigen === 'archivo' ? (
+                        <video
+                            src={video.urlVideo}
+                            controls
+                            autoPlay
+                            playsInline
+                            className="w-full h-full object-contain bg-black"
+                        />
+                    ) : (
+                        <iframe
+                            src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1`}
+                            title={video.titulo}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
+                            allowFullScreen
+                        />
+                    )}
                 </div>
             ) : (
                 // Miniatura del video con botón de Play
                 <div
-                    className="aspect-video relative cursor-pointer"
+                    className="aspect-video relative cursor-pointer bg-black"
                     onClick={() => setReproduciendo(true)}
                 >
-                    {/* Miniatura del video de YouTube */}
-                    <img
-                        src={`https://img.youtube.com/vi/${video.youtubeId}/maxresdefault.jpg`}
-                        alt={video.titulo}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                            // Si falla la miniatura HD, usar la estándar
-                            (e.target as HTMLImageElement).src =
-                                `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`;
-                        }}
-                    />
+                    {video.tipoOrigen === 'archivo' ? (
+                        <video
+                            src={video.urlVideo}
+                            preload="metadata"
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover opacity-60"
+                        />
+                    ) : (
+                        <img
+                            src={`https://img.youtube.com/vi/${video.youtubeId}/maxresdefault.jpg`}
+                            alt={video.titulo}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).src =
+                                    `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`;
+                            }}
+                        />
+                    )}
                     {/* Overlay oscuro */}
                     <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors" />
                     {/* Logo de YouTube */}

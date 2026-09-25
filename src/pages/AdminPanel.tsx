@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
-import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase, subirLogoGrupoSupabase, subirImagenEventoSupabase, obtenerUrlAudicionSupabase } from '../services/supabase';
+import { supabase, subirAudioSupabase, subirPortadaAudioSupabase, subirPdfPartituraSupabase, subirPortadaPartituraSupabase, subirFotoIntegranteSupabase, subirLogoGrupoSupabase, subirImagenEventoSupabase, subirVideoMediaSupabase, subirFotoGaleriaSupabase, obtenerUrlAudicionSupabase } from '../services/supabase';
 import AvisoTemporal from '../components/ui/AvisoTemporal';
 
 // ============================================================
@@ -2333,6 +2333,8 @@ type FormVideoMedia = {
     titulo: string;
     descripcion: string;
     urlYoutube: string;
+    tipoOrigen: 'youtube' | 'archivo';
+    videoArchivo: string;
     categoria: string;
     destacado: boolean;
     duracion: string;
@@ -2357,7 +2359,9 @@ const ModuloMedia = () => {
     const [paginaVideos, setPaginaVideos] = useState(1);
     const [mostrarFormVideo, setMostrarFormVideo] = useState(false);
     const [editandoVideo, setEditandoVideo] = useState<VideoMedia | null>(null);
-    const [formVideo, setFormVideo] = useState<FormVideoMedia>({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true });
+    const [formVideo, setFormVideo] = useState<FormVideoMedia>({ titulo: '', descripcion: '', urlYoutube: '', tipoOrigen: 'youtube', videoArchivo: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true });
+    const [subiendoVideo, setSubiendoVideo] = useState(false);
+    const [subiendoFoto, setSubiendoFoto] = useState(false);
     const [filtroBusquedaVideo, setFiltroBusquedaVideo] = useState('');
     const [filtroActivoVideo, setFiltroActivoVideo] = useState('Todos');
     const [filtroCategoriaVideo, setFiltroCategoriaVideo] = useState('Todas');
@@ -2438,33 +2442,96 @@ const ModuloMedia = () => {
     });
 
     const guardarVideo = () => {
-        const youtubeId = extraerYoutubeId(formVideo.urlYoutube);
-        if (!formVideo.titulo.trim() || !youtubeId) return;
-        const datos = {
-            titulo: formVideo.titulo.trim(),
-            descripcion: formVideo.descripcion.trim(),
-            tipoOrigen: 'youtube' as const,
-            youtubeId,
-            urlVideo: formVideo.urlYoutube.trim(),
-            categoria: formVideo.categoria,
-            destacado: formVideo.destacado,
-            duracion: formVideo.duracion.trim(),
-            orden: editandoVideo ? editandoVideo.orden : videosMedia.length,
-            activo: formVideo.activo,
-        };
-        if (editandoVideo) {
-            editarVideoMedia(editandoVideo.id, datos);
+        if (formVideo.tipoOrigen === 'youtube') {
+            const youtubeId = extraerYoutubeId(formVideo.urlYoutube);
+            if (!formVideo.titulo.trim() || !youtubeId) return;
+            const datos = {
+                titulo: formVideo.titulo.trim(),
+                descripcion: formVideo.descripcion.trim(),
+                tipoOrigen: 'youtube' as const,
+                youtubeId,
+                urlVideo: formVideo.urlYoutube.trim(),
+                categoria: formVideo.categoria,
+                destacado: formVideo.destacado,
+                duracion: formVideo.duracion.trim(),
+                orden: editandoVideo ? editandoVideo.orden : videosMedia.length,
+                activo: formVideo.activo,
+            };
+            if (editandoVideo) {
+                editarVideoMedia(editandoVideo.id, datos);
+            } else {
+                agregarVideoMedia(datos);
+            }
         } else {
-            agregarVideoMedia(datos);
+            if (!formVideo.titulo.trim() || !formVideo.videoArchivo.trim()) return;
+            const datos = {
+                titulo: formVideo.titulo.trim(),
+                descripcion: formVideo.descripcion.trim(),
+                tipoOrigen: 'archivo' as const,
+                youtubeId: '',
+                urlVideo: formVideo.videoArchivo.trim(),
+                categoria: formVideo.categoria,
+                destacado: formVideo.destacado,
+                duracion: formVideo.duracion.trim(),
+                orden: editandoVideo ? editandoVideo.orden : videosMedia.length,
+                activo: formVideo.activo,
+            };
+            if (editandoVideo) {
+                editarVideoMedia(editandoVideo.id, datos);
+            } else {
+                agregarVideoMedia(datos);
+            }
         }
         setMostrarFormVideo(false);
         setEditandoVideo(null);
-        setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true });
+        setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', tipoOrigen: 'youtube', videoArchivo: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true });
+    };
+
+    const subirVideoLocal = async (archivo: File) => {
+        if (!archivo) return;
+        setSubiendoVideo(true);
+        const url = await subirVideoMediaSupabase(archivo);
+        if (url) {
+            let duracionDetectada = '';
+            try {
+                const objectUrl = URL.createObjectURL(archivo);
+                duracionDetectada = await new Promise<string>((resolve) => {
+                    const vid = document.createElement('video');
+                    vid.preload = 'metadata';
+                    vid.src = objectUrl;
+                    vid.onloadedmetadata = () => {
+                        const seg = Math.round(vid.duration || 0);
+                        const m = Math.floor(seg / 60);
+                        const s = seg % 60;
+                        URL.revokeObjectURL(objectUrl);
+                        resolve(Number.isFinite(seg) && seg > 0 ? `${m}:${String(s).padStart(2, '0')}` : '');
+                    };
+                    vid.onerror = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        resolve('');
+                    };
+                });
+            } catch {
+                duracionDetectada = '';
+            }
+            setFormVideo(p => ({ ...p, tipoOrigen: 'archivo', videoArchivo: url, duracion: p.duracion || duracionDetectada }));
+        }
+        setSubiendoVideo(false);
     };
 
     const abrirEditarVideo = (v: VideoMedia) => {
         setEditandoVideo(v);
-        setFormVideo({ titulo: v.titulo, descripcion: v.descripcion, urlYoutube: v.youtubeId, categoria: v.categoria, destacado: v.destacado, duracion: v.duracion, activo: v.activo });
+        setFormVideo({
+            titulo: v.titulo,
+            descripcion: v.descripcion,
+            urlYoutube: v.tipoOrigen === 'youtube' ? v.youtubeId : '',
+            tipoOrigen: v.tipoOrigen,
+            videoArchivo: v.tipoOrigen === 'archivo' ? v.urlVideo : '',
+            categoria: v.categoria,
+            destacado: v.destacado,
+            duracion: v.duracion,
+            activo: v.activo,
+        });
         setMostrarFormVideo(true);
     };
 
@@ -2493,6 +2560,14 @@ const ModuloMedia = () => {
         setEditandoFoto(f);
         setFormFoto({ titulo: f.titulo, src: f.urlFoto, categoria: f.categoria, enlaceTexto: f.enlaceTexto || '', enlaceUrl: f.enlaceUrl || '', activo: f.activo });
         setMostrarFormFoto(true);
+    };
+
+    const subirImagen = async (archivo: File) => {
+        if (!archivo) return;
+        setSubiendoFoto(true);
+        const url = await subirFotoGaleriaSupabase(archivo);
+        setSubiendoFoto(false);
+        if (url) setFormFoto(p => ({ ...p, src: url }));
     };
 
     const TabBotones = [
@@ -2534,8 +2609,8 @@ const ModuloMedia = () => {
             {subModulo === 'videos' && (
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-secundario">Videos de YouTube</h3>
-                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
+                        <h3 className="text-sm font-semibold text-secundario">Videos</h3>
+                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', tipoOrigen: 'youtube', videoArchivo: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
                             <Plus className="w-4 h-4" /> Añadir Video
                         </button>
                     </div>
@@ -2614,12 +2689,18 @@ const ModuloMedia = () => {
                                                     <GripVertical className="w-4 h-4" />
                                                 </button>
                                                 {/* Miniatura */}
-                                                <img
-                                                    src={`https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`}
-                                                    alt={v.titulo}
-                                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                                    className="w-20 h-12 rounded-lg object-cover bg-fondo-medio flex-shrink-0 border border-black/10 dark:border-white/5"
-                                                />
+                                                {v.tipoOrigen === 'archivo' ? (
+                                                    <div className="w-12 h-8 sm:w-20 sm:h-12 rounded-lg bg-black flex items-center justify-center flex-shrink-0 border border-black/10 dark:border-white/5">
+                                                        <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/80" />
+                                                    </div>
+                                                ) : (
+                                                    <img
+                                                        src={`https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`}
+                                                        alt={v.titulo}
+                                                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                        className="w-12 h-8 sm:w-20 sm:h-12 rounded-lg object-cover bg-fondo-medio flex-shrink-0 border border-black/10 dark:border-white/5"
+                                                    />
+                                                )}
                                                 {/* Datos */}
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 flex-wrap">
@@ -2636,11 +2717,18 @@ const ModuloMedia = () => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <p className="text-xs t-muted truncate mt-0.5">{v.descripcion || `youtube.com/watch?v=${v.youtubeId}`}</p>
+                                                    <p className="text-xs t-muted truncate mt-0.5">{v.descripcion || (v.tipoOrigen === 'archivo' ? 'Archivo subido' : `youtube.com/watch?v=${v.youtubeId}`)}</p>
                                                     <p className="text-[11px] t-muted mt-0.5">Duración: {v.duracion || '—'}</p>
                                                 </div>
                                                 {/* Acciones */}
                                                 <div className="flex gap-1.5">
+                                                    <button
+                                                        onClick={() => editarVideoMedia(v.id, { destacado: !v.destacado })}
+                                                        title={v.destacado ? 'Quitar de destacados' : 'Marcar como destacado'}
+                                                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${v.destacado ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario'}`}
+                                                    >
+                                                        <Star className={`w-3.5 h-3.5 ${v.destacado ? 'fill-amber-400' : ''}`} />
+                                                    </button>
                                                     <button
                                                         onClick={() => editarVideoMedia(v.id, { activo: !v.activo })}
                                                         title={v.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
@@ -2804,16 +2892,69 @@ const ModuloMedia = () => {
                             </div>
                             <div className="space-y-3">
                                 <div><label className="label-campo">Título *</label><input className="input-campo" value={formVideo.titulo} onChange={e => setFormVideo(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del video" /></div>
-                                <div><label className="label-campo">URL o ID de YouTube *</label><input className="input-campo" value={formVideo.urlYoutube} onChange={e => setFormVideo(p => ({ ...p, urlYoutube: e.target.value }))} placeholder="https://www.youtube.com/watch?v=..." /></div>
-                                {extraerYoutubeId(formVideo.urlYoutube) && (
-                                    <div className="rounded-lg overflow-hidden border borde-subtle">
-                                        <img
-                                            src={`https://img.youtube.com/vi/${extraerYoutubeId(formVideo.urlYoutube)}/mqdefault.jpg`}
-                                            alt="Vista previa"
-                                            className="w-full h-28 object-cover"
-                                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        />
+                                <div>
+                                    <label className="label-campo">Origen del video</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'youtube' }))}
+                                            className={`h-9 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'youtube' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
+                                        >
+                                            YouTube
+                                        </button>
+                                        <button
+                                            onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'archivo' }))}
+                                            className={`h-9 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'archivo' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
+                                        >
+                                            Archivo propio
+                                        </button>
                                     </div>
+                                </div>
+                                {formVideo.tipoOrigen === 'youtube' ? (
+                                    <>
+                                        <div><label className="label-campo">URL o ID de YouTube *</label><input className="input-campo" value={formVideo.urlYoutube} onChange={e => setFormVideo(p => ({ ...p, urlYoutube: e.target.value }))} placeholder="https://www.youtube.com/watch?v=..." /></div>
+                                        {extraerYoutubeId(formVideo.urlYoutube) && (
+                                            <div className="rounded-lg overflow-hidden border borde-subtle">
+                                                <img
+                                                    src={`https://img.youtube.com/vi/${extraerYoutubeId(formVideo.urlYoutube)}/mqdefault.jpg`}
+                                                    alt="Vista previa"
+                                                    className="w-full h-28 object-cover"
+                                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                />
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label className="label-campo">Video (.mp4/.webm) *</label>
+                                            <div className="flex flex-col sm:flex-row gap-2">
+                                                <button
+                                                    onClick={() => (document.getElementById('input-video-archivo') as HTMLInputElement)?.click()}
+                                                    className="btn-ghost text-sm px-3 py-2 flex-shrink-0"
+                                                >
+                                                    {subiendoVideo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {formVideo.videoArchivo ? 'Reemplazar video' : 'Subir video'}
+                                                </button>
+                                                <input
+                                                    id="input-video-archivo"
+                                                    type="file"
+                                                    accept="video/*"
+                                                    className="hidden"
+                                                    onChange={e => { e.target.files?.[0] && subirVideoLocal(e.target.files[0]); e.target.value = ''; }}
+                                                />
+                                                <input className="input-campo flex-1 min-w-0" value={formVideo.videoArchivo} onChange={e => setFormVideo(p => ({ ...p, videoArchivo: e.target.value }))} placeholder="o pega la URL del archivo" />
+                                            </div>
+                                            {formVideo.videoArchivo && (
+                                                <video
+                                                    key={formVideo.videoArchivo}
+                                                    src={formVideo.videoArchivo}
+                                                    preload="metadata"
+                                                    controls
+                                                    className="mt-2 w-full h-32 object-cover rounded-lg border borde-subtle bg-black"
+                                                />
+                                            )}
+                                        </div>
+                                        <p className="text-[11px] t-muted-low -mt-1">La duración se detecta automáticamente al subir el archivo.</p>
+                                    </>
                                 )}
                                 <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formVideo.descripcion} onChange={e => setFormVideo(p => ({ ...p, descripcion: e.target.value }))} placeholder="Lugar, fecha, evento..." /></div>
                                 <div><label className="label-campo">Categoría</label>
@@ -2858,7 +2999,22 @@ const ModuloMedia = () => {
                             </div>
                             <div className="space-y-3">
                                 <div><label className="label-campo">Título *</label><input className="input-campo" value={formFoto.titulo} onChange={e => setFormFoto(p => ({ ...p, titulo: e.target.value }))} placeholder="Descripción breve de la foto" /></div>
-                                <div><label className="label-campo">URL de la imagen *</label><input className="input-campo" value={formFoto.src} onChange={e => setFormFoto(p => ({ ...p, src: e.target.value }))} placeholder="https://..." /></div>
+                                <div><label className="label-campo">URL de la imagen *</label>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button onClick={() => (document.getElementById('input-foto-archivo') as HTMLInputElement)?.click()}
+                                            className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
+                                            {subiendoFoto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir imagen
+                                        </button>
+                                        <input
+                                            id="input-foto-archivo"
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={e => { e.target.files?.[0] && subirImagen(e.target.files[0]); e.target.value = ''; }}
+                                        />
+                                        <input className="input-campo flex-1 min-w-0" value={formFoto.src} onChange={e => setFormFoto(p => ({ ...p, src: e.target.value }))} placeholder="https://..." />
+                                    </div>
+                                </div>
                                 {formFoto.src && (
                                     <div className="rounded-lg overflow-hidden border borde-subtle">
                                         <img src={formFoto.src} alt="Vista previa" className="w-full h-28 object-cover" />

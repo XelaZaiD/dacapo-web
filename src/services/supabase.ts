@@ -1198,6 +1198,38 @@ export const subirImagenEventoSupabase = async (archivo: File): Promise<string |
     return urlData.publicUrl;
 };
 
+/**
+ * Subir un archivo de video al Storage de Supabase (bucket 'videos')
+ */
+export const subirVideoMediaSupabase = async (archivo: File): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = (archivo.name.split('.').pop() || 'mp4').toLowerCase();
+    const nombreLimpio = archivo.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(new RegExp(`\\.${extension}$`, 'i'), '');
+    const rutaArchivo = `videos/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('videos')
+        .upload(rutaArchivo, archivo, {
+            contentType: archivo.type || 'video/mp4',
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error al subir video:', error);
+        return null;
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('videos')
+        .getPublicUrl(rutaArchivo);
+
+    return urlData.publicUrl;
+};
+
 // ============================================================
 // BUZÓN DE AUDICIONES Y MENSAJES (Módulos 5 y 6, Supabase)
 // ============================================================
