@@ -267,9 +267,7 @@ export type InfoGrupo = {
     mision: string;
     vision: string;
     anioFundacion: number;
-    totalConciertos: number;
     totalIntegrantes: number;
-    totalPartituras: number;
     emailContacto: string;
     redesSociales: {
         instagram?: string;
@@ -294,9 +292,7 @@ export const infoGrupoDefault: InfoGrupo = {
     mision: 'Difundir la música coral de alta calidad, formando puentes culturales y emocionando a cada audiencia con interpretaciones que trascienden el tiempo.',
     vision: 'Ser un referente de la música coral en nuestra región, reconocido por su excelencia interpretativa, su compromiso pedagógico y su capacidad de conectar emocionalmente con el público.',
     anioFundacion: 2019,
-    totalConciertos: 48,
     totalIntegrantes: 24,
-    totalPartituras: 120,
     emailContacto: 'dcgrupovocal@gmail.com',
     redesSociales: {
         instagram: 'https://www.instagram.com/dacapo_ve/',

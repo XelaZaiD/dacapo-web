@@ -120,10 +120,11 @@ const PentagramaAnimado = () => {
 // COMPONENTE PRINCIPAL: HeroSection
 // ============================================================
 const HeroSection = () => {
-    const { infoGrupo, configuracionSecciones, integrantes } = useApp();
+    const { infoGrupo, configuracionSecciones, integrantes, eventos, partituras } = useApp();
 
     // Calcula los años de trayectoria desde la fecha de fundación
     const aniosTrayectoria = new Date().getFullYear() - infoGrupo.anioFundacion;
+    const conciertosRealizados = eventos.filter(e => e.activo && new Date(e.fecha).getTime() <= Date.now()).length;
 
     // Función para hacer scroll suave a una sección
     const irASeccion = (id: string) => {
@@ -293,9 +294,9 @@ const HeroSection = () => {
                 >
                     {[
                         { valor: `${aniosTrayectoria}+`, etiqueta: 'Años' },
-                        { valor: `${infoGrupo.totalConciertos}+`, etiqueta: 'Conciertos' },
+                        { valor: `${conciertosRealizados}+`, etiqueta: 'Conciertos' },
                         { valor: `${integrantes.length}`, etiqueta: 'Coristas' },
-                        { valor: `${infoGrupo.totalPartituras}+`, etiqueta: 'Partituras' },
+                        { valor: `${partituras.length}+`, etiqueta: 'Partituras' },
                     ].map((stat, i) => (
                         <div key={i} className="text-center p-4 rounded-xl bg-sutil border borde-subtle">
                             <div className="text-3xl font-display font-bold texto-gradiente">{stat.valor}</div>
