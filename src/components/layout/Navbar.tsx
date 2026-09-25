@@ -25,7 +25,7 @@ import { Menu, X, Moon, Sun, LogIn, LogOut, Shield, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import ModalAuth from '../ui/ModalAuth';
-import LogoDaCapo from '../ui/LogoDaCapo';
+import LogoGrupo from '../ui/LogoGrupo';
 
 // ============================================================
 // DATOS: Items del menú de navegación
@@ -38,6 +38,7 @@ const itemsNavegacion = [
     { etiqueta: 'Presentaciones', href: '#presentaciones' },
     { etiqueta: 'Eventos', href: '#eventos' },
     { etiqueta: 'Partituras', href: '#biblioteca' },
+    { etiqueta: 'Únete al Coro', href: '#audiciones' },
     { etiqueta: 'Contacto', href: '#contacto' },
 ];
 
@@ -77,6 +78,7 @@ const Navbar = () => {
     const itemsFiltrados = itemsNavegacion.filter(item => {
         if (item.href === '#eventos' && !configuracionSecciones.mostrarEventos) return false;
         if (item.href === '#biblioteca' && !configuracionSecciones.mostrarBiblioteca) return false;
+        if (item.href === '#audiciones' && !configuracionSecciones.mostrarAudiciones) return false;
         return true;
     });
 
@@ -107,8 +109,8 @@ const Navbar = () => {
 
                         {/* ---- LOGO ---- */}
                         <Link to="/" className="flex items-center shrink-0" aria-label="DaCapo - Volver al inicio">
-                            {/* Logo oficial (incluye nombre y subtítulo del grupo) */}
-                            <LogoDaCapo
+                            {/* Logo oficial (o respaldo SVG si no hay logo cargado) */}
+                            <LogoGrupo
                                 className="h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16"
                                 colorClase="text-secundario"
                                 escalaHover={esHoverTactil ? 1.3 : 1.75}

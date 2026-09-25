@@ -23,8 +23,8 @@ import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown, Play, Calendar, Music2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import ViniloGiratorio from './ViniloGiratorio';
 import AuroraFondo from './AuroraFondo';
+import ViniloViajero from './ViniloViajero';
 import MarqueeMusical from './MarqueeMusical';
 
 // ============================================================
@@ -120,10 +120,11 @@ const PentagramaAnimado = () => {
 // COMPONENTE PRINCIPAL: HeroSection
 // ============================================================
 const HeroSection = () => {
-    const { infoGrupo, configuracionSecciones, integrantes } = useApp();
+    const { infoGrupo, configuracionSecciones, integrantes, eventos, partituras } = useApp();
 
     // Calcula los años de trayectoria desde la fecha de fundación
     const aniosTrayectoria = new Date().getFullYear() - infoGrupo.anioFundacion;
+    const conciertosRealizados = eventos.filter(e => e.activo && new Date(e.fecha).getTime() <= Date.now()).length;
 
     // Función para hacer scroll suave a una sección
     const irASeccion = (id: string) => {
@@ -137,6 +138,9 @@ const HeroSection = () => {
         >
             {/* ---- FONDO: Aurora animada (dinámica por tema) ---- */}
             <AuroraFondo />
+
+            {/* ---- VINILO VIAJERO DE FONDO (salvapantallas DVD) ---- */}
+            <ViniloViajero />
 
             {/* ---- FONDO: Pentagrama animado ---- */}
             <PentagramaAnimado />
@@ -169,17 +173,7 @@ const HeroSection = () => {
             ))}
 
             {/* ---- CONTENIDO PRINCIPAL ---- */}
-            <div className="contenedor relative z-10 text-center py-32">
-
-                {/* ---- VINILO GIRATORIO (pieza central) ---- */}
-                <motion.div
-                    initial={{ opacity: 0, y: 40, scale: 0.75 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.9, delay: 0.15, ease: 'easeOut' }}
-                    className="mb-10 sm:mb-12"
-                >
-                    <ViniloGiratorio />
-                </motion.div>
+            <div className="contenedor relative z-10 text-center py-28">
 
                 {/* Badge superior */}
                 <motion.div
@@ -293,9 +287,9 @@ const HeroSection = () => {
                 >
                     {[
                         { valor: `${aniosTrayectoria}+`, etiqueta: 'Años' },
-                        { valor: `${infoGrupo.totalConciertos}+`, etiqueta: 'Conciertos' },
+                        { valor: `${conciertosRealizados}+`, etiqueta: 'Conciertos' },
                         { valor: `${integrantes.length}`, etiqueta: 'Coristas' },
-                        { valor: `${infoGrupo.totalPartituras}+`, etiqueta: 'Partituras' },
+                        { valor: `${partituras.length}+`, etiqueta: 'Partituras' },
                     ].map((stat, i) => (
                         <div key={i} className="text-center p-4 rounded-xl bg-sutil border borde-subtle">
                             <div className="text-3xl font-display font-bold texto-gradiente">{stat.valor}</div>

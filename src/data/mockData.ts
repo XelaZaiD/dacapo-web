@@ -141,8 +141,16 @@ export type Evento = {
     tipoEntrada: 'Libre' | 'Con entrada' | 'Donación voluntaria';
     urlEntradas?: string;    // Link para comprar entradas (opcional)
     urlMapa?: string;        // Link de Google Maps (opcional)
-    imagen?: string;
+    imagen?: string;         // Imagen promocional del evento
     activo: boolean;         // Si es false, no aparece en la web
+    categoria: string;       // Concierto, Festival, etc.
+    destacado: boolean;      // Si es true, se muestra como tarjeta grande en la web
+    agotado: boolean;        // Si es true, aparece el sello "Agotado"
+    duracionMin: number;     // Duración en minutos (para Google Calendar)
+    organizador: string;
+    precio: string;          // Texto libre (ej: "$10" o "Bono contribución")
+    repertorio: string;      // Programa: una obra por línea
+    orden: number;           // Orden de aparición en el panel
 };
 
 // ============================================================
@@ -171,6 +179,58 @@ export type SolicitudAudicion = {
     fechaEnvio: string;
     estado: 'Pendiente' | 'Revisada' | 'Aceptada' | 'Rechazada';
 };
+
+// ============================================================
+// TIPO: Video de la sección Presentaciones & Media
+// (Coincide con la tabla public.videos de Supabase - Módulo 7)
+// ============================================================
+export type VideoMedia = {
+    id: string;
+    titulo: string;
+    descripcion: string;
+    tipoOrigen: 'youtube' | 'archivo';   // 'youtube' | 'archivo'
+    youtubeId: string;                   // ID del video de YouTube (si tipoOrigen = 'youtube')
+    urlVideo: string;                    // URL de YouTube o URL del archivo en Storage
+    categoria: string;
+    destacado: boolean;                  // Video destacado en la web
+    duracion: string;                    // Ej: "4:35" (opcional)
+    orden: number;                       // Posición al mostrar
+    activo: boolean;                     // Si es false, no aparece en la web
+    fechaSubida: string;
+};
+
+// ============================================================
+// TIPO: Foto de la Galería
+// (Coincide con la tabla public.galeria_fotos de Supabase - Módulo 7)
+// ============================================================
+export type FotoGaleria = {
+    id: string;
+    urlFoto: string;                     // URL en bucket 'galeria' o enlace externo
+    titulo: string;
+    enlaceTexto?: string;                // Opcional (ej: "Ver reseña del concierto")
+    enlaceUrl?: string;                  // Opcional (ej: "https://...")
+    categoria: string;
+    orden: number;                       // Posición al mostrar
+    activo: boolean;                     // Si es false, no aparece en la web
+    fechaSubida: string;
+};
+
+// Categorías reutilizables para videos y fotos
+export const CATEGORIAS_VIDEO = [
+    'Concierto',
+    'Festival',
+    'Ensayo',
+    'Videoclip',
+    'A Capella',
+] as const;
+
+export const CATEGORIAS_FOTO = [
+    'Conciertos',
+    'Giras',
+    'Ensayos',
+    'Backstage',
+    'General',
+] as const;
 
 // ============================================================
 // TIPO: Mensaje de Contacto
@@ -207,9 +267,7 @@ export type InfoGrupo = {
     mision: string;
     vision: string;
     anioFundacion: number;
-    totalConciertos: number;
     totalIntegrantes: number;
-    totalPartituras: number;
     emailContacto: string;
     redesSociales: {
         instagram?: string;
@@ -217,6 +275,11 @@ export type InfoGrupo = {
         youtube?: string;
         tiktok?: string;
     };
+    frasesBanner: string[];        // Frases de la cinta musical del Hero
+    ubicacion?: string;            // Nombre de la ciudad/zona (ej: "El Hatillo, Caracas")
+    mapaUrl?: string;              // Enlace a Google Maps
+    telefono?: string;             // Teléfono de contacto adicional
+    logoUrl?: string;              // Logo/foto oficial del grupo (bucket integrantes/logos)
 };
 
 // ============================================================
@@ -229,9 +292,7 @@ export const infoGrupoDefault: InfoGrupo = {
     mision: 'Difundir la música coral de alta calidad, formando puentes culturales y emocionando a cada audiencia con interpretaciones que trascienden el tiempo.',
     vision: 'Ser un referente de la música coral en nuestra región, reconocido por su excelencia interpretativa, su compromiso pedagógico y su capacidad de conectar emocionalmente con el público.',
     anioFundacion: 2019,
-    totalConciertos: 48,
     totalIntegrantes: 24,
-    totalPartituras: 120,
     emailContacto: 'dcgrupovocal@gmail.com',
     redesSociales: {
         instagram: 'https://www.instagram.com/dacapo_ve/',
@@ -239,46 +300,25 @@ export const infoGrupoDefault: InfoGrupo = {
         youtube: 'https://www.youtube.com/@dacapogrupovocal',
         tiktok: 'https://www.tiktok.com/@dacapo_ve',
     },
+    frasesBanner: [
+        'DaCapo',
+        'Grupo Vocal',
+        'Música Coral',
+        'Armonía',
+        'Repertorio Clásico',
+        'Contemporáneo',
+    ],
+    ubicacion: 'El Hatillo, Caracas',
+    telefono: '',
+    logoUrl: '',
 };
 
 // ============================================================
 // DATOS DE EJEMPLO: Eventos y Conciertos
 // ============================================================
-export const eventosDefault: Evento[] = [
-    {
-        id: 'evt-001',
-        titulo: 'Noche de Boleros y Música Latinoamericana',
-        descripcion: 'Una velada íntima donde DaCapo Grupo Vocal interpretará las joyas más preciadas del bolero latinoamericano. Un viaje musical por México, Cuba, Venezuela y Colombia.',
-        fecha: '2025-09-15T19:30:00',
-        lugar: 'Teatro Municipal',
-        direccion: 'Calle Principal 123, Centro Histórico',
-        tipoEntrada: 'Con entrada',
-        urlEntradas: 'https://tickets.ejemplo.com/dacapo-boleros',
-        urlMapa: 'https://maps.google.com',
-        activo: true,
-    },
-    {
-        id: 'evt-002',
-        titulo: 'DaCapo en el Parque: Concierto al Aire Libre',
-        descripcion: 'Concierto gratuito al aire libre en el Parque Central. ¡Trae una manta y disfruta de la música coral bajo las estrellas!',
-        fecha: '2025-10-05T17:00:00',
-        lugar: 'Parque Central',
-        direccion: 'Parque Central, zona verde principal',
-        tipoEntrada: 'Libre',
-        urlMapa: 'https://maps.google.com',
-        activo: true,
-    },
-    {
-        id: 'evt-003',
-        titulo: 'Concierto de Navidad: "Luz en la Oscuridad"',
-        descripcion: 'El tradicional concierto navideño de DaCapo, con un programa que mezcla lo sacro con lo popular. Colaboración especial con la Orquesta de Cámara local.',
-        fecha: '2025-12-20T20:00:00',
-        lugar: 'Catedral Metropolitana',
-        direccion: 'Plaza Mayor, frente a la alcaldía',
-        tipoEntrada: 'Donación voluntaria',
-        activo: true,
-    },
-];
+// La fuente de verdad son los datos de Supabase (tabla `eventos`).
+// Se deja el array vacío para que la web JAMÁS muestre eventos de ejemplo.
+export const eventosDefault: Evento[] = [];
 
 // ============================================================
 // ESTADO INICIAL DE SECCIONES (sin datos en Supabase)

@@ -48,6 +48,8 @@ import {
     EntradaChatbot,
     VistasBiblioteca,
     VistasIntegrantes,
+    VideoMedia,
+    FotoGaleria,
     vistasBibliotecaDefault,
     vistasIntegrantesDefault,
     eventosDefault,
@@ -72,6 +74,26 @@ import {
     eliminarArchivoStorageSupabase,
     obtenerConfiguracionDB,
     guardarConfiguracionDB,
+    obtenerVideosDB,
+    agregarVideoDB,
+    editarVideoDB,
+    eliminarVideoDB,
+    obtenerFotosGaleriaDB,
+    agregarFotoGaleriaDB,
+    editarFotoGaleriaDB,
+    eliminarFotoGaleriaDB,
+    obtenerSolicitudesAudicionDB,
+    agregarSolicitudAudicionDB,
+    actualizarEstadoSolicitudDB,
+    eliminarSolicitudAudicionDB,
+    obtenerMensajesContactoDB,
+    agregarMensajeContactoDB,
+    marcarMensajeLeidoDB,
+    eliminarMensajeContactoDB,
+    obtenerEventosDB,
+    agregarEventoDB,
+    editarEventoDB,
+    eliminarEventoDB,
 } from '../services/supabase';
 
 // ============================================================
@@ -108,10 +130,14 @@ type AppContextType = {
     estadoPartituras: EstadoCarga;
     estadoPistas: EstadoCarga;
     estadoIntegrantes: EstadoCarga;
+    estadoEventos: EstadoCarga;
     reintentarIntegrantes: () => void;
     reintentarPartituras: () => void;
+    reintentarEventos: () => void;
     solicitudesAudicion: SolicitudAudicion[];
     mensajesContacto: MensajeContacto[];
+    videosMedia: VideoMedia[];
+    fotosGaleria: FotoGaleria[];
     configuracionSecciones: ConfiguracionSecciones;
     respuestasChatbot: EntradaChatbot[];
 
@@ -158,6 +184,14 @@ type AppContextType = {
     editarPista: (id: string, datos: Partial<PistaAudio>) => void;
     eliminarPista: (id: string) => void;
 
+    // --- Funciones para Videos y Fotos (Presentaciones & Media) ---
+    agregarVideoMedia: (video: Omit<VideoMedia, 'id' | 'fechaSubida'>) => void;
+    editarVideoMedia: (id: string, datos: Partial<VideoMedia>) => void;
+    eliminarVideoMedia: (id: string) => void;
+    agregarFotoGaleria: (foto: Omit<FotoGaleria, 'id' | 'fechaSubida'>) => void;
+    editarFotoGaleria: (id: string, datos: Partial<FotoGaleria>) => void;
+    eliminarFotoGaleria: (id: string) => void;
+
     // --- Funciones para Info del Grupo ---
     actualizarInfoGrupo: (datos: Partial<InfoGrupo>) => void;
 
@@ -170,7 +204,9 @@ type AppContextType = {
 
     // --- Funciones para el Admin (Buzón) ---
     marcarSolicitudRevisada: (id: string, estado: SolicitudAudicion['estado']) => void;
-    marcarMensajeLeido: (id: string) => void;
+    eliminarSolicitudAudicion: (id: string) => void;
+    marcarMensajeLeido: (id: string, leido?: boolean) => void;
+    eliminarMensajeContacto: (id: string) => void;
 
     // --- Configuración del Asistente ---
     actualizarAsistente: (config: Partial<{ tipoAsistente: 'ninguno' | 'chatbot' | 'whatsapp'; numeroWhatsapp: string }>) => void;
@@ -216,6 +252,8 @@ const CLAVES_LS = {
     PISTAS: 'dacapo_pistas_audio',
     SOLICITUDES: 'dacapo_solicitudes_audicion',
     MENSAJES: 'dacapo_mensajes_contacto',
+    VIDEOS_MEDIA: 'dacapo_videos_media_v2',
+    FOTOS_GALERIA: 'dacapo_fotos_galeria',
     CONFIG_SECCIONES: 'dacapo_config_secciones',
     USUARIO: 'dacapo_usuario',
     MODO_OSCURO: 'dacapo_modo_oscuro',
@@ -226,6 +264,8 @@ const CLAVES_LS = {
     CLAVE_CONFIG_SECCIONES: 'config_secciones',
     VISTAS_INTEGRANTES: 'dacapo_vistas_integrantes',
     CLAVE_CONFIG_VISTAS_INTEGRANTES: 'vistas_integrantes',
+    CLAVE_CONFIG_INFO_GRUPO: 'info_general',
+    CLAVE_CONFIG_BANNER: 'banner_frases',
 };
 
 // ============================================================
@@ -304,9 +344,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         leerDesdeLocalStorage(CLAVES_LS.PARTITURAS, [])
     );
 
-    const [eventos, setEventos] = useState<Evento[]>(() =>
-        leerDesdeLocalStorage(CLAVES_LS.EVENTOS, eventosDefault)
-    );
+    const [eventos, setEventos] = useState<Evento[]>(() => {
+        const guardados = leerDesdeLocalStorage<Evento[] | null>(CLAVES_LS.EVENTOS, null);
+        return guardados ?? eventosDefault;
+    });
 
     const [pistasAudio, setPistasAudio] = useState<PistaAudio[]>(() =>
         leerDesdeLocalStorage(CLAVES_LS.PISTAS, [])
@@ -316,6 +357,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [estadoPartituras, setEstadoPartituras] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
     const [estadoPistas, setEstadoPistas] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
     const [estadoIntegrantes, setEstadoIntegrantes] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
+    const [estadoEventos, setEstadoEventos] = useState<EstadoCarga>(() => (supabase ? 'cargando' : 'error'));
 
     const [solicitudesAudicion, setSolicitudesAudicion] = useState<SolicitudAudicion[]>(() =>
         leerDesdeLocalStorage(CLAVES_LS.SOLICITUDES, [])
@@ -323,6 +365,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const [mensajesContacto, setMensajesContacto] = useState<MensajeContacto[]>(() =>
         leerDesdeLocalStorage(CLAVES_LS.MENSAJES, [])
+    );
+
+    const [videosMedia, setVideosMedia] = useState<VideoMedia[]>(() =>
+        leerDesdeLocalStorage(CLAVES_LS.VIDEOS_MEDIA, [])
+    );
+
+    const [fotosGaleria, setFotosGaleria] = useState<FotoGaleria[]>(() =>
+        leerDesdeLocalStorage(CLAVES_LS.FOTOS_GALERIA, [])
     );
 
     const [configuracionSecciones, setConfiguracionSecciones] = useState<ConfiguracionSecciones>(() =>
@@ -384,6 +434,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.PISTAS, pistasAudio); }, [pistasAudio]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.SOLICITUDES, solicitudesAudicion); }, [solicitudesAudicion]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.MENSAJES, mensajesContacto); }, [mensajesContacto]);
+    useEffect(() => { guardarEnLocalStorage(CLAVES_LS.VIDEOS_MEDIA, videosMedia); }, [videosMedia]);
+    useEffect(() => { guardarEnLocalStorage(CLAVES_LS.FOTOS_GALERIA, fotosGaleria); }, [fotosGaleria]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.CONFIG_SECCIONES, configuracionSecciones); }, [configuracionSecciones]);
     useEffect(() => { guardarEnLocalStorage(CLAVES_LS.USUARIO, usuarioActual); }, [usuarioActual]);
 
@@ -449,11 +501,88 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
     }, []);
 
+    // Carga los videos desde Supabase.
+    // Si la consulta falla, conservamos lo guardado en el navegador (caché local).
+    const cargarVideos = useCallback(() => {
+        if (!supabase) return;
+        obtenerVideosDB()
+            .then(lista => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía)
+                setVideosMedia(lista ?? []);
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar los videos (se mantienen los guardados):', err);
+            });
+    }, []);
+
+    // Carga las fotos de galería desde Supabase.
+    const cargarFotosGaleria = useCallback(() => {
+        if (!supabase) return;
+        obtenerFotosGaleriaDB()
+            .then(lista => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía)
+                setFotosGaleria(lista ?? []);
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar las fotos de galería (se mantienen las guardadas):', err);
+            });
+    }, []);
+
+    // Carga los eventos desde Supabase.
+    // Si la consulta falla, conservamos lo guardado en el navegador (caché local).
+    const cargarEventos = useCallback(() => {
+        if (!supabase) {
+            setEstadoEventos('error');
+            return;
+        }
+        setEstadoEventos('cargando');
+        obtenerEventosDB()
+            .then(lista => {
+                // Respuesta exitosa: siempre sincronizamos (aunque venga vacía),
+                // así se limpian los eventos de ejemplo antiguos del navegador.
+                setEventos(lista ?? []);
+                setEstadoEventos('listo');
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar los eventos (se mantienen los guardados):', err);
+                setEstadoEventos('error');
+            });
+    }, []);
+
+// Carga las solicitudes de audición desde Supabase (buzón del admin).
+    const cargarSolicitudesAudicion = useCallback(() => {
+        if (!supabase) return;
+        obtenerSolicitudesAudicionDB()
+            .then(lista => {
+                setSolicitudesAudicion(lista ?? []);
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar las solicitudes de audición (se mantienen las locales):', err);
+            });
+    }, []);
+
+    // Carga los mensajes de contacto desde Supabase (buzón del admin).
+    const cargarMensajesContacto = useCallback(() => {
+        if (!supabase) return;
+        obtenerMensajesContactoDB()
+            .then(lista => {
+                setMensajesContacto(lista ?? []);
+            })
+            .catch(err => {
+                console.warn('ℹ️ No se pudieron actualizar los mensajes de contacto (se mantienen los locales):', err);
+            });
+    }, []);
+
     // Al cargar la app: obtenemos partituras, pistas de audio, integrantes y vistas del Admin
     useEffect(() => {
         cargarPartituras();
         cargarPistas();
         cargarIntegrantes();
+        cargarEventos();
+        cargarVideos();
+        cargarFotosGaleria();
+        cargarSolicitudesAudicion();
+        cargarMensajesContacto();
 
         if (supabase) {
             obtenerConfiguracionDB<VistasBiblioteca>(CLAVES_LS.CLAVE_CONFIG_VISTAS)
@@ -488,8 +617,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 .catch(err => {
                     console.warn('ℹ️ Usando secciones locales (Supabase no disponible o error):', err);
                 });
+
+            obtenerConfiguracionDB<InfoGrupo>(CLAVES_LS.CLAVE_CONFIG_INFO_GRUPO)
+                .then(datos => {
+                    if (datos) {
+                        // Combinamos con el default para no perder campos futuros
+                        setInfoGrupo(prev => ({ ...prev, ...datos, redesSociales: { ...prev.redesSociales, ...(datos.redesSociales || {}) } }));
+                        guardarEnLocalStorage(CLAVES_LS.INFO_GRUPO, datos);
+                    }
+                })
+                .catch(err => {
+                    console.warn('ℹ️ Usando información del grupo local (Supabase no disponible o error):', err);
+                });
+
+            obtenerConfiguracionDB<string[]>(CLAVES_LS.CLAVE_CONFIG_BANNER)
+                .then(frases => {
+                    if (Array.isArray(frases) && frases.length) {
+                        setInfoGrupo(prev => ({ ...prev, frasesBanner: frases }));
+                    }
+                })
+                .catch(err => {
+                    console.warn('ℹ️ Usando frases del banner local (Supabase no disponible o error):', err);
+                });
         }
-    }, [cargarPartituras, cargarPistas, cargarIntegrantes]);
+    }, [cargarPartituras, cargarPistas, cargarIntegrantes, cargarEventos, cargarVideos, cargarFotosGaleria, cargarSolicitudesAudicion, cargarMensajesContacto]);
 
     // Reintentar manualmente la carga de integrantes (botón de los estados de error)
     const reintentarIntegrantes = () => {
@@ -499,6 +650,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Reintentar manualmente la carga de partituras (botón de los estados de error)
     const reintentarPartituras = () => {
         cargarPartituras();
+    };
+
+    // Reintentar manualmente la carga de eventos (botón de los estados de error)
+    const reintentarEventos = () => {
+        cargarEventos();
     };
 
     // ============================================================
@@ -699,16 +855,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // ============================================================
 
     const agregarEvento = (datos: Omit<Evento, 'id'>) => {
-        const nuevoEvento: Evento = { ...datos, id: `evt-${Date.now()}` };
+        const idTemp = `evt-${Date.now()}`;
+        const nuevoEvento: Evento = { ...datos, id: idTemp };
         setEventos(prev => [...prev, nuevoEvento]);
+
+        if (supabase) {
+            agregarEventoDB(datos).then(eventoDB => {
+                if (eventoDB) {
+                    setEventos(prev => prev.map(e => e.id === idTemp ? eventoDB : e));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar el evento en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const editarEvento = (id: string, datos: Partial<Evento>) => {
         setEventos(prev => prev.map(e => e.id === id ? { ...e, ...datos } : e));
+
+        if (supabase) {
+            editarEventoDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el evento en Supabase (se mantiene local):', err);
+            });
+        }
     };
 
     const eliminarEvento = (id: string) => {
         setEventos(prev => prev.filter(e => e.id !== id));
+
+        if (supabase) {
+            eliminarEventoDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar el evento en Supabase:', err);
+            });
+        }
     };
 
     // ============================================================
@@ -752,11 +931,110 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // ============================================================
+    // FUNCIONES CRUD: Videos y Fotos (Presentaciones & Media)
+    // ============================================================
+
+    const agregarVideoMedia = (datos: Omit<VideoMedia, 'id' | 'fechaSubida'>) => {
+        const idTemp = `vid-${Date.now()}`;
+        const nuevoVideo: VideoMedia = {
+            ...datos,
+            id: idTemp,
+            fechaSubida: new Date().toISOString(),
+        };
+        setVideosMedia(prev => [...prev, nuevoVideo]);
+
+        if (supabase) {
+            agregarVideoDB(datos).then(videoDB => {
+                if (videoDB) {
+                    setVideosMedia(prev => prev.map(v => v.id === idTemp ? videoDB : v));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar el video en Supabase (se mantiene local):', err);
+            });
+        }
+    };
+
+    const editarVideoMedia = (id: string, datos: Partial<VideoMedia>) => {
+        setVideosMedia(prev => prev.map(v => v.id === id ? { ...v, ...datos } : v));
+
+        if (supabase) {
+            editarVideoDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el video en Supabase (se mantiene local):', err);
+            });
+        }
+    };
+
+    const eliminarVideoMedia = (id: string) => {
+        const video = videosMedia.find(v => v.id === id);
+        setVideosMedia(prev => prev.filter(v => v.id !== id));
+
+        if (supabase && video) {
+            eliminarVideoDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar el video en Supabase:', err);
+            });
+        }
+    };
+
+    const agregarFotoGaleria = (datos: Omit<FotoGaleria, 'id' | 'fechaSubida'>) => {
+        const idTemp = `foto-${Date.now()}`;
+        const nuevaFoto: FotoGaleria = {
+            ...datos,
+            id: idTemp,
+            fechaSubida: new Date().toISOString(),
+        };
+        setFotosGaleria(prev => [...prev, nuevaFoto]);
+
+        if (supabase) {
+            agregarFotoGaleriaDB(datos).then(fotoDB => {
+                if (fotoDB) {
+                    setFotosGaleria(prev => prev.map(f => f.id === idTemp ? fotoDB : f));
+                }
+            }).catch(err => {
+                console.warn('⚠️ No se pudo guardar la foto en Supabase (se mantiene local):', err);
+            });
+        }
+    };
+
+    const editarFotoGaleria = (id: string, datos: Partial<FotoGaleria>) => {
+        setFotosGaleria(prev => prev.map(f => f.id === id ? { ...f, ...datos } : f));
+
+        if (supabase) {
+            editarFotoGaleriaDB(id, datos).catch(err => {
+                console.warn('⚠️ No se pudo actualizar la foto en Supabase (se mantiene local):', err);
+            });
+        }
+    };
+
+    const eliminarFotoGaleria = (id: string) => {
+        const foto = fotosGaleria.find(f => f.id === id);
+        setFotosGaleria(prev => prev.filter(f => f.id !== id));
+
+        if (supabase && foto) {
+            eliminarFotoGaleriaDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar la foto en Supabase:', err);
+            });
+        }
+    };
+
+    // ============================================================
     // OTRAS FUNCIONES
     // ============================================================
 
     const actualizarInfoGrupo = (datos: Partial<InfoGrupo>) => {
-        setInfoGrupo(prev => ({ ...prev, ...datos }));
+        const siguiente = { ...infoGrupo, ...datos };
+        setInfoGrupo(siguiente);
+        guardarEnLocalStorage(CLAVES_LS.INFO_GRUPO, siguiente);
+
+        if (supabase) {
+            guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_INFO_GRUPO, siguiente).catch(err => {
+                console.warn('⚠️ No se pudo guardar la información del grupo en Supabase (se mantiene local):', err);
+            });
+            if (datos.frasesBanner) {
+                guardarConfiguracionDB(CLAVES_LS.CLAVE_CONFIG_BANNER, datos.frasesBanner).catch(err => {
+                    console.warn('⚠️ No se pudieron guardar las frases del banner en Supabase:', err);
+                });
+            }
+        }
     };
 
     const toggleSeccion = (seccion: keyof ConfiguracionSecciones) => {
@@ -771,35 +1049,89 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const enviarSolicitudAudicion = (datos: Omit<SolicitudAudicion, 'id' | 'fechaEnvio' | 'estado'>) => {
-        const solicitud: SolicitudAudicion = {
+        // Optimista: agregamos la solicitud de inmediato con una id temporal.
+        const solicitudTemporal: SolicitudAudicion = {
             ...datos,
             id: `sol-${Date.now()}`,
             fechaEnvio: new Date().toISOString(),
             estado: 'Pendiente',
         };
-        setSolicitudesAudicion(prev => [...prev, solicitud]);
+        setSolicitudesAudicion(prev => [...prev, solicitudTemporal]);
+
+        if (supabase) {
+            agregarSolicitudAudicionDB(datos)
+                .then(guardada => {
+                    if (guardada) {
+                        // Reemplazamos la temporal por la definitiva (viene con id y fecha reales)
+                        setSolicitudesAudicion(prev => prev.map(s => s.id === solicitudTemporal.id ? guardada : s));
+                    }
+                })
+                .catch(err => {
+                    console.warn('⚠️ No se pudo guardar la solicitud en Supabase (queda local):', err);
+                });
+        }
     };
 
     const enviarMensajeContacto = (datos: Omit<MensajeContacto, 'id' | 'fechaEnvio' | 'leido'>) => {
-        const mensaje: MensajeContacto = {
+        const mensajeTemporal: MensajeContacto = {
             ...datos,
             id: `msg-${Date.now()}`,
             fechaEnvio: new Date().toISOString(),
             leido: false,
         };
-        setMensajesContacto(prev => [...prev, mensaje]);
+        setMensajesContacto(prev => [...prev, mensajeTemporal]);
+
+        if (supabase) {
+            agregarMensajeContactoDB(datos)
+                .then(guardado => {
+                    if (guardado) {
+                        setMensajesContacto(prev => prev.map(m => m.id === mensajeTemporal.id ? guardado : m));
+                    }
+                })
+                .catch(err => {
+                    console.warn('⚠️ No se pudo guardar el mensaje en Supabase (queda local):', err);
+                });
+        }
     };
 
     const marcarSolicitudRevisada = (id: string, estado: SolicitudAudicion['estado']) => {
         setSolicitudesAudicion(prev =>
             prev.map(s => s.id === id ? { ...s, estado } : s)
         );
+        if (supabase) {
+            actualizarEstadoSolicitudDB(id, estado).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el estado de la solicitud en Supabase:', err);
+            });
+        }
     };
 
-    const marcarMensajeLeido = (id: string) => {
+    const eliminarSolicitudAudicion = (id: string) => {
+        setSolicitudesAudicion(prev => prev.filter(s => s.id !== id));
+        if (supabase) {
+            eliminarSolicitudAudicionDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar la solicitud en Supabase:', err);
+            });
+        }
+    };
+
+    const marcarMensajeLeido = (id: string, leido = true) => {
         setMensajesContacto(prev =>
-            prev.map(m => m.id === id ? { ...m, leido: true } : m)
+            prev.map(m => m.id === id ? { ...m, leido } : m)
         );
+        if (supabase) {
+            marcarMensajeLeidoDB(id, leido).catch(err => {
+                console.warn('⚠️ No se pudo actualizar el mensaje en Supabase:', err);
+            });
+        }
+    };
+
+    const eliminarMensajeContacto = (id: string) => {
+        setMensajesContacto(prev => prev.filter(m => m.id !== id));
+        if (supabase) {
+            eliminarMensajeContactoDB(id).catch(err => {
+                console.warn('⚠️ No se pudo eliminar el mensaje en Supabase:', err);
+            });
+        }
     };
 
     const toggleModoOscuro = () => {
@@ -842,10 +1174,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         estadoPartituras,
         estadoPistas,
         estadoIntegrantes,
+        estadoEventos,
         reintentarIntegrantes,
         reintentarPartituras,
+        reintentarEventos,
         solicitudesAudicion,
         mensajesContacto,
+        videosMedia,
+        fotosGaleria,
         configuracionSecciones,
         respuestasChatbot: respuestasChatbotDefault,
         usuarioActual,
@@ -870,12 +1206,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         agregarPista,
         editarPista,
         eliminarPista,
+        agregarVideoMedia,
+        editarVideoMedia,
+        eliminarVideoMedia,
+        agregarFotoGaleria,
+        editarFotoGaleria,
+        eliminarFotoGaleria,
         actualizarInfoGrupo,
         toggleSeccion,
         enviarSolicitudAudicion,
         enviarMensajeContacto,
         marcarSolicitudRevisada,
+        eliminarSolicitudAudicion,
         marcarMensajeLeido,
+        eliminarMensajeContacto,
         actualizarAsistente,
         modoOscuro,
         toggleModoOscuro,

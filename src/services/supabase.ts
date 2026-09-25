@@ -27,7 +27,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { PistaAudio, Partitura, Integrante } from '../data/mockData';
+import type { PistaAudio, Partitura, Integrante, VideoMedia, FotoGaleria, SolicitudAudicion, MensajeContacto, Evento } from '../data/mockData';
 
 // ============================================================
 // PASO 1: PEGA TUS CREDENCIALES DE SUPABASE AQUÍ
@@ -753,6 +753,687 @@ export const guardarConfiguracionDB = async (clave: string, valor: unknown): Pro
             .insert([{ clave, valor }]);
         if (error) console.error('Error al insertar configuración:', error);
     }
+};
+
+// ============================================================
+// FUNCIONES PARA PRESENTACIONES & MEDIA (Módulo 7 - Supabase)
+// ============================================================
+
+/**
+ * Obtener todos los videos desde Supabase (tabla 'videos')
+ */
+export const obtenerVideosDB = async (): Promise<VideoMedia[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+        .from('videos')
+        .select('*')
+        .order('orden', { ascending: true });
+
+    if (error) {
+        console.error('Error al obtener videos:', error);
+        return null;
+    }
+
+    return (data || []).map((row: any) => ({
+        id: row.id,
+        titulo: row.titulo,
+        descripcion: row.descripcion || '',
+        tipoOrigen: row.tipo_origen || 'youtube',
+        youtubeId: row.youtube_id || '',
+        urlVideo: row.url_video,
+        categoria: row.categoria || 'Concierto',
+        destacado: row.destacado || false,
+        duracion: row.duracion || '',
+        orden: row.orden || 0,
+        activo: row.activo !== false,
+        fechaSubida: row.created_at || new Date().toISOString(),
+    }));
+};
+
+/**
+ * Agregar un nuevo video a Supabase (tabla 'videos')
+ */
+export const agregarVideoDB = async (video: Omit<VideoMedia, 'id' | 'fechaSubida'>): Promise<VideoMedia | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('videos') as any)
+        .insert([{
+            titulo: video.titulo,
+            descripcion: video.descripcion,
+            tipo_origen: video.tipoOrigen,
+            youtube_id: video.youtubeId || null,
+            url_video: video.urlVideo,
+            categoria: video.categoria,
+            destacado: video.destacado,
+            duracion: video.duracion || null,
+            orden: video.orden,
+            activo: video.activo,
+        }])
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error al agregar video:', error);
+        return null;
+    }
+
+    return {
+        id: data.id,
+        titulo: data.titulo,
+        descripcion: data.descripcion || '',
+        tipoOrigen: data.tipo_origen || 'youtube',
+        youtubeId: data.youtube_id || '',
+        urlVideo: data.url_video,
+        categoria: data.categoria || 'Concierto',
+        destacado: data.destacado || false,
+        duracion: data.duracion || '',
+        orden: data.orden || 0,
+        activo: data.activo !== false,
+        fechaSubida: data.created_at || new Date().toISOString(),
+    };
+};
+
+/**
+ * Editar un video existente en Supabase
+ */
+export const editarVideoDB = async (id: string, datos: Partial<VideoMedia>): Promise<boolean> => {
+    if (!supabase) return false;
+    const updateData: Record<string, any> = {};
+    if (datos.titulo !== undefined) updateData.titulo = datos.titulo;
+    if (datos.descripcion !== undefined) updateData.descripcion = datos.descripcion;
+    if (datos.tipoOrigen !== undefined) updateData.tipo_origen = datos.tipoOrigen;
+    if (datos.youtubeId !== undefined) updateData.youtube_id = datos.youtubeId;
+    if (datos.urlVideo !== undefined) updateData.url_video = datos.urlVideo;
+    if (datos.categoria !== undefined) updateData.categoria = datos.categoria;
+    if (datos.destacado !== undefined) updateData.destacado = datos.destacado;
+    if (datos.duracion !== undefined) updateData.duracion = datos.duracion;
+    if (datos.orden !== undefined) updateData.orden = datos.orden;
+    if (datos.activo !== undefined) updateData.activo = datos.activo;
+
+    const { error } = await (supabase.from('videos') as any)
+        .update(updateData)
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al actualizar video:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Eliminar un video en Supabase
+ */
+export const eliminarVideoDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('videos') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar video:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Obtener todas las fotos de galería desde Supabase (tabla 'galeria_fotos')
+ */
+export const obtenerFotosGaleriaDB = async (): Promise<FotoGaleria[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+        .from('galeria_fotos')
+        .select('*')
+        .order('orden', { ascending: true });
+
+    if (error) {
+        console.error('Error al obtener fotos de galería:', error);
+        return null;
+    }
+
+    return (data || []).map((row: any) => ({
+        id: row.id,
+        urlFoto: row.url_foto,
+        titulo: row.titulo,
+        enlaceTexto: row.enlace_texto || '',
+        enlaceUrl: row.enlace_url || '',
+        categoria: row.categoria || 'General',
+        orden: row.orden || 0,
+        activo: row.activo !== false,
+        fechaSubida: row.created_at || new Date().toISOString(),
+    }));
+};
+
+/**
+ * Agregar una nueva foto de galería a Supabase
+ */
+export const agregarFotoGaleriaDB = async (foto: Omit<FotoGaleria, 'id' | 'fechaSubida'>): Promise<FotoGaleria | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('galeria_fotos') as any)
+        .insert([{
+            url_foto: foto.urlFoto,
+            titulo: foto.titulo,
+            enlace_texto: foto.enlaceTexto || null,
+            enlace_url: foto.enlaceUrl || null,
+            categoria: foto.categoria,
+            orden: foto.orden,
+            activo: foto.activo,
+        }])
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error al agregar foto de galería:', error);
+        return null;
+    }
+
+    return {
+        id: data.id,
+        urlFoto: data.url_foto,
+        titulo: data.titulo,
+        enlaceTexto: data.enlace_texto || '',
+        enlaceUrl: data.enlace_url || '',
+        categoria: data.categoria || 'General',
+        orden: data.orden || 0,
+        activo: data.activo !== false,
+        fechaSubida: data.created_at || new Date().toISOString(),
+    };
+};
+
+/**
+ * Editar una foto de galería existente en Supabase
+ */
+export const editarFotoGaleriaDB = async (id: string, datos: Partial<FotoGaleria>): Promise<boolean> => {
+    if (!supabase) return false;
+    const updateData: Record<string, any> = {};
+    if (datos.urlFoto !== undefined) updateData.url_foto = datos.urlFoto;
+    if (datos.titulo !== undefined) updateData.titulo = datos.titulo;
+    if (datos.enlaceTexto !== undefined) updateData.enlace_texto = datos.enlaceTexto;
+    if (datos.enlaceUrl !== undefined) updateData.enlace_url = datos.enlaceUrl;
+    if (datos.categoria !== undefined) updateData.categoria = datos.categoria;
+    if (datos.orden !== undefined) updateData.orden = datos.orden;
+    if (datos.activo !== undefined) updateData.activo = datos.activo;
+
+    const { error } = await (supabase.from('galeria_fotos') as any)
+        .update(updateData)
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al actualizar foto de galería:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Eliminar una foto de galería en Supabase
+ */
+export const eliminarFotoGaleriaDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('galeria_fotos') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar foto de galería:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Subir una foto de galería al Storage de Supabase (bucket 'galeria', carpeta 'galeria')
+ */
+export const subirFotoGaleriaSupabase = async (archivo: File): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = (archivo.name.split('.').pop() || 'jpg').toLowerCase();
+    const nombreLimpio = archivo.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(new RegExp(`\\.${extension}$`, 'i'), '');
+    const rutaArchivo = `galeria/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('galeria')
+        .upload(rutaArchivo, archivo, {
+            contentType: archivo.type || 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error al subir foto de galería:', error);
+        return null;
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('galeria')
+        .getPublicUrl(rutaArchivo);
+
+    return urlData.publicUrl;
+};
+
+/**
+ * Subir el logo/foto oficial del grupo al Storage de Supabase (bucket 'integrantes', carpeta 'logos')
+ */
+export const subirLogoGrupoSupabase = async (archivo: File): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = (archivo.name.split('.').pop() || 'jpg').toLowerCase();
+    const nombreLimpio = archivo.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(new RegExp(`\\.${extension}$`, 'i'), '');
+    const rutaArchivo = `logos/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('integrantes')
+        .upload(rutaArchivo, archivo, {
+            contentType: archivo.type || 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error al subir el logo del grupo:', error);
+        return null;
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('integrantes')
+        .getPublicUrl(rutaArchivo);
+
+    return urlData.publicUrl;
+};
+
+// ============================================================
+// FUNCIONES PARA EVENTOS Y CONCIERTOS (Módulo 4 - Supabase)
+// ============================================================
+
+/**
+ * Convierte una fila de la base de datos en el objeto Evento que usa la app
+ */
+const mapearEvento = (fila: any): Evento => ({
+    id: fila.id,
+    titulo: fila.titulo,
+    descripcion: fila.descripcion || '',
+    fecha: fila.fecha || new Date().toISOString(),
+    lugar: fila.lugar || '',
+    direccion: fila.direccion || '',
+    tipoEntrada: (fila.tipo_entrada as Evento['tipoEntrada']) || 'Libre',
+    urlEntradas: fila.url_entradas || undefined,
+    urlMapa: fila.url_mapa || undefined,
+    imagen: fila.imagen || undefined,
+    activo: fila.activo !== false,
+    categoria: fila.categoria || 'Concierto',
+    destacado: fila.destacado || false,
+    agotado: fila.agotado || false,
+    duracionMin: fila.duracion_min ?? 120,
+    organizador: fila.organizador || '',
+    precio: fila.precio || '',
+    repertorio: fila.repertorio || '',
+    orden: fila.orden ?? 0,
+});
+
+/**
+ * Convierte un objeto Evento en la fila (snake_case) que espera la tabla
+ */
+const eventoAFila = (evento: Partial<Evento>): Record<string, any> => {
+    const fila: Record<string, any> = {};
+    if (evento.titulo !== undefined) fila.titulo = evento.titulo;
+    if (evento.descripcion !== undefined) fila.descripcion = evento.descripcion;
+    if (evento.fecha !== undefined) fila.fecha = evento.fecha;
+    if (evento.lugar !== undefined) fila.lugar = evento.lugar;
+    if (evento.direccion !== undefined) fila.direccion = evento.direccion;
+    if (evento.tipoEntrada !== undefined) fila.tipo_entrada = evento.tipoEntrada;
+    if (evento.urlEntradas !== undefined) fila.url_entradas = evento.urlEntradas || null;
+    if (evento.urlMapa !== undefined) fila.url_mapa = evento.urlMapa || null;
+    if (evento.imagen !== undefined) fila.imagen = evento.imagen || null;
+    if (evento.activo !== undefined) fila.activo = evento.activo;
+    if (evento.categoria !== undefined) fila.categoria = evento.categoria;
+    if (evento.destacado !== undefined) fila.destacado = evento.destacado;
+    if (evento.agotado !== undefined) fila.agotado = evento.agotado;
+    if (evento.duracionMin !== undefined) fila.duracion_min = evento.duracionMin;
+    if (evento.organizador !== undefined) fila.organizador = evento.organizador || null;
+    if (evento.precio !== undefined) fila.precio = evento.precio || null;
+    if (evento.repertorio !== undefined) fila.repertorio = evento.repertorio || null;
+    if (evento.orden !== undefined) fila.orden = evento.orden;
+    return fila;
+};
+
+/**
+ * Obtener todos los eventos desde Supabase (tabla 'eventos')
+ */
+export const obtenerEventosDB = async (): Promise<Evento[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('eventos') as any)
+        .select('*')
+        .order('orden', { ascending: true })
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error al obtener eventos:', error);
+        return null;
+    }
+    return (data || []).map(mapearEvento);
+};
+
+/**
+ * Agregar un nuevo evento a Supabase (tabla 'eventos')
+ */
+export const agregarEventoDB = async (evento: Omit<Evento, 'id'>): Promise<Evento | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('eventos') as any)
+        .insert([eventoAFila(evento)])
+        .select()
+        .single();
+
+    if (error || !data) {
+        console.error('Error al agregar evento:', error);
+        return null;
+    }
+    return mapearEvento(data);
+};
+
+/**
+ * Editar un evento existente en Supabase
+ */
+export const editarEventoDB = async (id: string, datos: Partial<Evento>): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('eventos') as any)
+        .update(eventoAFila(datos))
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al actualizar evento:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Eliminar un evento DEFINITIVAMENTE de Supabase
+ */
+export const eliminarEventoDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('eventos') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar evento:', error);
+        return false;
+    }
+    return true;
+};
+
+/**
+ * Subir una imagen de evento al Storage de Supabase (bucket 'eventos', carpeta 'imagenes')
+ */
+export const subirImagenEventoSupabase = async (archivo: File): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = (archivo.name.split('.').pop() || 'jpg').toLowerCase();
+    const nombreLimpio = archivo.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(new RegExp(`\\.${extension}$`, 'i'), '');
+    const rutaArchivo = `imagenes/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('eventos')
+        .upload(rutaArchivo, archivo, {
+            contentType: archivo.type || 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error al subir imagen de evento:', error);
+        return null;
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('eventos')
+        .getPublicUrl(rutaArchivo);
+
+    return urlData.publicUrl;
+};
+
+/**
+ * Subir un archivo de video al Storage de Supabase (bucket 'videos')
+ */
+export const subirVideoMediaSupabase = async (archivo: File): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = (archivo.name.split('.').pop() || 'mp4').toLowerCase();
+    const nombreLimpio = archivo.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(new RegExp(`\\.${extension}$`, 'i'), '');
+    const rutaArchivo = `videos/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('videos')
+        .upload(rutaArchivo, archivo, {
+            contentType: archivo.type || 'video/mp4',
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error al subir video:', error);
+        return null;
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('videos')
+        .getPublicUrl(rutaArchivo);
+
+    return urlData.publicUrl;
+};
+
+// ============================================================
+// BUZÓN DE AUDICIONES Y MENSAJES (Módulos 5 y 6, Supabase)
+// ============================================================
+
+const mapearSolicitud = (fila: any): SolicitudAudicion => ({
+    id: fila.id,
+    nombre: fila.nombre,
+    email: fila.email,
+    telefono: fila.telefono || '',
+    tipoVoz: fila.tipo_voz || '',
+    experiencia: fila.experiencia || '',
+    urlAudioPrueba: fila.url_audio_prueba || undefined,
+    fechaEnvio: fila.fecha_envio,
+    estado: (fila.estado as SolicitudAudicion['estado']) || 'Pendiente',
+});
+
+export const obtenerSolicitudesAudicionDB = async (): Promise<SolicitudAudicion[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('solicitudes_audicion') as any)
+        .select('*')
+        .order('fecha_envio', { ascending: false });
+
+    if (error) {
+        console.error('Error al obtener solicitudes de audición:', error);
+        return null;
+    }
+    return (data ?? []).map(mapearSolicitud);
+};
+
+export const agregarSolicitudAudicionDB = async (datos: Omit<SolicitudAudicion, 'id' | 'fechaEnvio' | 'estado'>): Promise<SolicitudAudicion | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('solicitudes_audicion') as any)
+        .insert({
+            nombre: datos.nombre,
+            email: datos.email,
+            telefono: datos.telefono || null,
+            tipo_voz: datos.tipoVoz || null,
+            experiencia: datos.experiencia || null,
+            url_audio_prueba: datos.urlAudioPrueba || null,
+        })
+        .select()
+        .single();
+
+    if (error || !data) {
+        console.error('Error al insertar solicitud de audición:', error);
+        return null;
+    }
+    return mapearSolicitud(data);
+};
+
+// Extrae la extensión partiendo del tipo MIME del blob (webm, ogg, mp4, mp3...)
+const extensionDesdeMime = (mime: string): string => {
+    const mapa: Record<string, string> = {
+        'audio/webm': 'webm',
+        'video/webm': 'webm',
+        'audio/ogg': 'ogg',
+        'video/ogg': 'ogg',
+        'audio/mp4': 'm4a',
+        'video/mp4': 'mp4',
+        'audio/mpeg': 'mp3',
+        'audio/wav': 'wav',
+        'audio/x-wav': 'wav',
+        'audio/mp3': 'mp3',
+    };
+    return mapa[mime.split(';')[0]] || 'webm';
+};
+
+/**
+ * Subir un archivo de audición (grabado o adjuntado) al bucket PRIVADO
+ * 'audiciones'. Devuelve la RUTA dentro del bucket (no hay URL pública).
+ * El admin la resuelve con obtenerUrlAudicionSupabase (signed URL).
+ */
+export const subirAudicionSupabase = async (archivo: Blob, nombreBase: string): Promise<string | null> => {
+    if (!supabase) return null;
+
+    const extension = extensionDesdeMime(archivo.type) ;
+    const nombreLimpio = (nombreBase || 'prueba')
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .slice(0, 40);
+    const ruta = `audiciones/${Date.now()}_${nombreLimpio}.${extension}`;
+
+    const { error } = await supabase.storage
+        .from('audiciones')
+        .upload(ruta, archivo, {
+            contentType: archivo.type || 'application/octet-stream',
+            upsert: false,
+        });
+
+    if (error) {
+        console.error('Error al subir archivo de audición:', error);
+        return null;
+    }
+    return ruta;
+};
+
+/**
+ * Resuelve una ruta del bucket privado 'audiciones' a una URL firmada
+ * temporal (el bucket no es público). Devuelve '' si falla.
+ */
+export const obtenerUrlAudicionSupabase = async (ruta: string): Promise<string> => {
+    if (!supabase) return '';
+    const { data, error } = await supabase.storage
+        .from('audiciones')
+        .createSignedUrl(ruta, 3600);
+
+    if (error || !data) {
+        console.error('Error al firmar URL de audición:', error);
+        return '';
+    }
+    return data.signedUrl;
+}
+
+export const actualizarEstadoSolicitudDB = async (id: string, estado: SolicitudAudicion['estado']): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('solicitudes_audicion') as any)
+        .update({ estado })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al actualizar el estado de la solicitud:', error);
+        return false;
+    }
+    return true;
+};
+
+export const eliminarSolicitudAudicionDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('solicitudes_audicion') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar solicitud de audición:', error);
+        return false;
+    }
+    return true;
+};
+
+const mapearMensaje = (fila: any): MensajeContacto => ({
+    id: fila.id,
+    nombre: fila.nombre,
+    email: fila.email,
+    asunto: fila.asunto || '',
+    mensaje: fila.mensaje || '',
+    fechaEnvio: fila.fecha_envio,
+    leido: fila.leido === true,
+});
+
+export const obtenerMensajesContactoDB = async (): Promise<MensajeContacto[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('mensajes_contacto') as any)
+        .select('*')
+        .order('fecha_envio', { ascending: false });
+
+    if (error) {
+        console.error('Error al obtener mensajes de contacto:', error);
+        return null;
+    }
+    return (data ?? []).map(mapearMensaje);
+};
+
+export const agregarMensajeContactoDB = async (datos: Omit<MensajeContacto, 'id' | 'fechaEnvio' | 'leido'>): Promise<MensajeContacto | null> => {
+    if (!supabase) return null;
+    const { data, error } = await (supabase.from('mensajes_contacto') as any)
+        .insert({
+            nombre: datos.nombre,
+            email: datos.email,
+            asunto: datos.asunto || null,
+            mensaje: datos.mensaje,
+        })
+        .select()
+        .single();
+
+    if (error || !data) {
+        console.error('Error al insertar mensaje de contacto:', error);
+        return null;
+    }
+    return mapearMensaje(data);
+};
+
+export const marcarMensajeLeidoDB = async (id: string, leido = true): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('mensajes_contacto') as any)
+        .update({ leido })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al marcar mensaje como leído:', error);
+        return false;
+    }
+    return true;
+};
+
+export const eliminarMensajeContactoDB = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await (supabase.from('mensajes_contacto') as any)
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error al eliminar mensaje de contacto:', error);
+        return false;
+    }
+    return true;
 };
 
 // Exportamos el cliente principal

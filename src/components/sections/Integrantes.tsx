@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import {
-    X, Music, Award, LayoutGrid, List, Grid3x3, Rows2,
+    X, ZoomIn, Music, Award, LayoutGrid, List, Grid3x3, Rows2,
     AlertCircle, RefreshCw
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -50,7 +50,7 @@ const pluralCuerda = (cuerda: string) => PLURAL_CUERDA[cuerda] ?? `${cuerda}s`;
 
 const INFO_VISTAS: Record<TipoVistaIntegrantes, { etiqueta: string; icono: JSX.Element }> = {
     grid: { etiqueta: 'Cuadrícula', icono: <LayoutGrid className="w-4 h-4" /> },
-    satb: { etiqueta: 'Paneles SATB', icono: <Rows2 className="w-4 h-4" /> },
+    satb: { etiqueta: 'Paneles', icono: <Rows2 className="w-4 h-4" /> },
     lista: { etiqueta: 'Directorio', icono: <List className="w-4 h-4" /> },
     mosaico: { etiqueta: 'Mosaico', icono: <Grid3x3 className="w-4 h-4" /> },
 };
@@ -91,6 +91,21 @@ const AvatarIntegrante = ({ integrante, className, circulo }: {
 // ============================================================
 const ModalIntegrante = ({ integrante, alCerrar }: { integrante: Integrante; alCerrar: () => void }) => {
     const colores = COLORES_CUERDA[integrante.cuerda];
+    const esFoto = !!integrante.foto;
+    const [fotoCompleta, setFotoCompleta] = useState(false);
+
+    const cerrarFoto = () => setFotoCompleta(false);
+
+    // Cierra el lightbox (o el modal) con la tecla Escape
+    useEffect(() => {
+        const alPulsar = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return;
+            if (fotoCompleta) cerrarFoto();
+            else alCerrar();
+        };
+        window.addEventListener('keydown', alPulsar);
+        return () => window.removeEventListener('keydown', alPulsar);
+    }, [fotoCompleta, alCerrar]);
 
     return createPortal(
         <motion.div
@@ -103,7 +118,7 @@ const ModalIntegrante = ({ integrante, alCerrar }: { integrante: Integrante; alC
             <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
 
             <motion.div
-                className="relative card-modal max-w-md w-full p-8 z-10 rounded-3xl overflow-hidden"
+                className="relative card-modal max-w-md w-full p-6 sm:p-8 z-10 rounded-3xl overflow-hidden flex flex-col max-h-[85dvh]"
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.9, y: 20 }}
@@ -119,10 +134,26 @@ const ModalIntegrante = ({ integrante, alCerrar }: { integrante: Integrante; alC
                     <X className="w-4 h-4" />
                 </button>
 
-                <div className="flex flex-col items-center mb-6">
-                    <div className={`w-24 h-24 rounded-full overflow-hidden border-2 ${colores.border} mb-4 shadow-card`}>
-                        <AvatarIntegrante integrante={integrante} className="w-full h-full" circulo />
-                    </div>
+                {/* Cabecera fija: foto, nombre, badges y datos */}
+                <div className="flex flex-col items-center mb-5 shrink-0">
+                    {esFoto ? (
+                        <button
+                            onClick={() => setFotoCompleta(true)}
+                            aria-label="Ver foto completa"
+                            className={`w-24 h-24 rounded-full overflow-hidden border-2 ${colores.border} mb-4 shadow-card relative group cursor-zoom-in`}
+                        >
+                            <AvatarIntegrante integrante={integrante} className="w-full h-full" circulo />
+                            <span className="absolute inset-0 flex items-center justify-center
+                                      bg-black/0 group-hover:bg-black/40 transition-colors duration-300">
+                                <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100
+                                           transition-opacity duration-300 drop-shadow-lg" />
+                            </span>
+                        </button>
+                    ) : (
+                        <div className={`w-24 h-24 rounded-full overflow-hidden border-2 ${colores.border} mb-4 shadow-card`}>
+                            <AvatarIntegrante integrante={integrante} className="w-full h-full" circulo />
+                        </div>
+                    )}
 
                     <h3 className="text-2xl font-display font-bold text-secundario text-center">
                         {integrante.nombre}
@@ -151,27 +182,63 @@ const ModalIntegrante = ({ integrante, alCerrar }: { integrante: Integrante; alC
                             Instagram
                         </a>
                     )}
-                </div>
 
-                <div className="flex justify-center gap-2 mb-6 flex-wrap">
-                    <div className="px-4 py-2 rounded-full bg-sutil border borde-subtle">
-                        <span className="text-xs t-muted uppercase tracking-wider">Rango Vocal: </span>
-                        <span className="text-sm font-medium text-khaki">{integrante.rangoVocal}</span>
-                    </div>
-                    {integrante.anioIngreso !== undefined && (
-                        <div className="px-4 py-2 rounded-full bg-vinotinto/10 border border-vinotinto/20">
-                            <span className="text-xs t-muted uppercase tracking-wider">En el coro desde: </span>
-                            <span className="text-sm font-medium text-vinotinto dark:text-vinotinto-claro">{integrante.anioIngreso}</span>
+                    <div className="flex justify-center gap-2 mt-4 flex-wrap">
+                        <div className="px-4 py-2 rounded-full bg-sutil border borde-subtle">
+                            <span className="text-xs t-muted uppercase tracking-wider">Rango Vocal: </span>
+                            <span className="text-sm font-medium text-khaki">{integrante.rangoVocal}</span>
                         </div>
-                    )}
+                        {integrante.anioIngreso !== undefined && (
+                            <div className="px-4 py-2 rounded-full bg-vinotinto/10 border border-vinotinto/20">
+                                <span className="text-xs t-muted uppercase tracking-wider">En el coro desde: </span>
+                                <span className="text-sm font-medium text-vinotinto dark:text-vinotinto-claro">{integrante.anioIngreso}</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                <div className="linea-decorativa mx-auto mb-6" />
-
-                <p className="t-muted-high text-sm leading-relaxed text-center italic">
-                    “{integrante.biografia}”
-                </p>
+                {/* Biografía: espacio fijo con scroll interno */}
+                <div className="shrink-0 mb-1 flex items-center gap-2">
+                    <span className="text-[10px] t-muted-low uppercase tracking-widest">Sobre {integrante.nombre.split(' ')[0]}</span>
+                    <div className="flex-1 h-px bg-white/10 dark:bg-white/5" />
+                </div>
+                <div className="bg-fondo-card rounded-2xl border borde-subtle p-5 min-h-0">
+                    <div className="h-36 sm:h-40 overflow-y-auto pr-2">
+                        <p className="t-muted-high text-sm leading-relaxed italic">
+                            “{integrante.biografia}”
+                        </p>
+                    </div>
+                </div>
             </motion.div>
+
+            {/* Lightbox: foto completa sin recorte */}
+            {esFoto && fotoCompleta && (
+                <motion.div
+                    className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={cerrarFoto}
+                >
+                    <button
+                        onClick={cerrarFoto}
+                        aria-label="Cerrar foto"
+                        className="absolute top-5 right-5 z-10 w-10 h-10 flex items-center justify-center rounded-full
+                                  bg-white/10 hover:bg-white/25 text-white transition-all duration-200"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                    <motion.img
+                        src={integrante.foto}
+                        alt={integrante.nombre}
+                        className="max-h-[86vh] max-w-[92vw] object-contain rounded-2xl shadow-2xl"
+                        onClick={e => e.stopPropagation()}
+                        initial={{ scale: 0.85, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.3 }}
+                    />
+                </motion.div>
+            )}
         </motion.div>,
         document.body
     );
@@ -281,8 +348,8 @@ const VistaGrid = ({ integrantes, alAbrir }: { integrantes: Integrante[]; alAbri
                         key={filtro}
                         onClick={() => setFiltroActivo(filtro)}
                         className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${filtroActivo === filtro
-                                ? 'bg-vinotinto text-white shadow-glow-vinotinto'
-                                : 'bg-sutil t-muted-high hover:bg-sutil-hover hover:text-secundario border borde-subtle'
+                            ? 'bg-vinotinto text-white shadow-glow-vinotinto'
+                            : 'bg-sutil t-muted-high hover:bg-sutil-hover hover:text-secundario border borde-subtle'
                             }`}
                     >
                         {filtro === 'Todos' ? `Todos (${integrantes.length})` : pluralCuerda(filtro)}
@@ -553,11 +620,10 @@ const SeccionIntegrantes = () => {
                             <button
                                 key={v}
                                 onClick={() => setVistaActual(v)}
-                                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-all duration-300 ${
-                                    vistaEfectiva === v
+                                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-all duration-300 ${vistaEfectiva === v
                                         ? 'bg-vinotinto text-white shadow-glow-vinotinto'
                                         : 'bg-sutil t-muted-high hover:bg-sutil-hover hover:text-secundario border borde-subtle'
-                                }`}
+                                    }`}
                             >
                                 {INFO_VISTAS[v].icono}
                                 {INFO_VISTAS[v].etiqueta}

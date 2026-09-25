@@ -6,11 +6,11 @@
  * ============================================================
  */
 
-import { Heart, Mail } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useApp } from '../../context/AppContext';
 import { EnlaceRedSocial, IconoInstagram, IconoFacebook, IconoYoutube, IconoTiktok } from '../ui/IconosRedes';
-import LogoDaCapo from '../ui/LogoDaCapo';
+import LogoGrupo from '../ui/LogoGrupo';
 
 const Footer = () => {
     const { infoGrupo, configuracionSecciones } = useApp();
@@ -28,8 +28,8 @@ const Footer = () => {
                     {/* Logo e info */}
                     <div>
                         <div className="mb-4">
-                            {/* Logo oficial (incluye nombre y subtítulo del grupo) */}
-                            <LogoDaCapo
+                            {/* Logo oficial (o respaldo SVG si no hay logo cargado) */}
+                            <LogoGrupo
                                 className="h-24 w-24 sm:h-28 sm:w-28"
                                 colorClase="text-white"
                             />
@@ -54,14 +54,6 @@ const Footer = () => {
                                     colorNeon={red.colorNeon}
                                 />
                             ))}
-                            <a
-                                href={`mailto:${infoGrupo.emailContacto}`}
-                                className="group relative w-10 h-10 rounded-xl footer-bg-subtle border footer-border flex items-center justify-center footer-text hover:text-orange-400 hover:border-current hover:shadow-[0_0_15px_currentColor] transition-all duration-300 hover:scale-110"
-                                title="Correo electrónico"
-                            >
-                                <Mail className="w-4 h-4" />
-                                <span className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-20 bg-current blur-md transition-opacity duration-300" />
-                            </a>
                         </div>
                     </div>
 
@@ -93,7 +85,7 @@ const Footer = () => {
                                     </div>
                                     <p className="text-vinotinto-claro font-medium text-xs mb-1">¿Quieres ser parte del coro?</p>
                                     <p className="text-[10px] footer-text mb-2">Únete a DaCapo Grupo Vocal</p>
-                                    <motion.button 
+                                    <motion.button
                                         onClick={() => irASeccion('#audiciones')}
                                         className="text-xs bg-vinotinto hover:bg-vinotinto-claro text-white px-3 py-1.5 rounded-lg transition-all duration-300 shadow-glow-vinotinto hover:shadow-lg"
                                         whileHover={{ scale: 1.05 }}

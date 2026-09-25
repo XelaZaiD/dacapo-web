@@ -6,86 +6,71 @@
  * ============================================================
  */
 
-import { useState, useRef } from 'react';
-import { motion, useInView } from 'framer-motion';
-import { Play, ChevronLeft, ChevronRight, Video } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
+import { Play, Pause, ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import CarruselMovil from '../ui/CarruselMovil';
+import { useApp } from '../../context/AppContext';
+import { VideoMedia, FotoGaleria } from '../../data/mockData';
 
-// ============================================================
-// DATOS: Videos de YouTube de ejemplo
-// ============================================================
-// Para cambiar los videos: reemplaza el "id" con el ID del video de YouTube
-// El ID está en la URL después de "v=": youtube.com/watch?v=ESTE_ES_EL_ID
-const VIDEOS_YOUTUBE = [
-    {
-        id: 'vid-001',
-        titulo: 'Ave Verum Corpus - DaCapo Grupo Vocal',
-        descripcion: 'Presentación en el Teatro Municipal · Diciembre 2024',
-        youtubeId: 'HLuKWZcN5b4', // ID del video de YouTube (reemplazar con el real)
-    },
-    {
-        id: 'vid-002',
-        titulo: 'Cantate Domino - Monteverdi · DaCapo',
-        descripcion: 'Festival Coral Internacional · Septiembre 2024',
-        youtubeId: '_wFTAj7Ydv4',
-    },
-    {
-        id: 'vid-003',
-        titulo: 'Concierto de Navidad 2023 · Completo',
-        descripcion: 'Catedral Metropolitana · Diciembre 2023',
-        youtubeId: 'KDibgQfVj7E',
-    },
-];
-
-// ============================================================
-// DATOS: Fotos de ejemplo (usando DiceBear como placeholder)
-// ============================================================
-// En el proyecto real, estas serán URLs de fotos subidas a Supabase Storage
-const FOTOS_GALERIA = [
-    { id: 1, src: 'https://picsum.photos/seed/concert1/800/600', alt: 'Concierto de Navidad 2023' },
-    { id: 2, src: 'https://picsum.photos/seed/choir2/800/600', alt: 'Ensayo General' },
-    { id: 3, src: 'https://picsum.photos/seed/music3/800/600', alt: 'Festival Coral 2024' },
-    { id: 4, src: 'https://picsum.photos/seed/stage4/800/600', alt: 'Teatro Municipal' },
-    { id: 5, src: 'https://picsum.photos/seed/vocal5/800/600', alt: 'Presentación al Aire Libre' },
-    { id: 6, src: 'https://picsum.photos/seed/group6/800/600', alt: 'Gira Regional 2024' },
-];
+type TarjetaVideoProps = {
+    video: VideoMedia;
+};
 
 // ============================================================
 // COMPONENTE: TarjetaVideo
 // ============================================================
-const TarjetaVideo = ({ video }: { video: typeof VIDEOS_YOUTUBE[0] }) => {
+const TarjetaVideo = ({ video }: TarjetaVideoProps) => {
     const [reproduciendo, setReproduciendo] = useState(false);
 
     return (
         <div className="card-glass rounded-xl overflow-hidden group">
-            {/* Si el usuario hace clic en "Play", mostramos el iframe de YouTube */}
+            {/* Si el usuario hace clic en "Play", mostramos el reproductor (YouTube o archivo) */}
             {reproduciendo ? (
                 <div className="aspect-video">
-                    <iframe
-                        src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1`}
-                        title={video.titulo}
-                        className="w-full h-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
-                        allowFullScreen
-                    />
+                    {video.tipoOrigen === 'archivo' ? (
+                        <video
+                            src={video.urlVideo}
+                            controls
+                            autoPlay
+                            playsInline
+                            className="w-full h-full object-contain bg-black"
+                        />
+                    ) : (
+                        <iframe
+                            src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1`}
+                            title={video.titulo}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
+                            allowFullScreen
+                        />
+                    )}
                 </div>
             ) : (
                 // Miniatura del video con botón de Play
                 <div
-                    className="aspect-video relative cursor-pointer"
+                    className="aspect-video relative cursor-pointer bg-black"
                     onClick={() => setReproduciendo(true)}
                 >
-                    {/* Miniatura del video de YouTube */}
-                    <img
-                        src={`https://img.youtube.com/vi/${video.youtubeId}/maxresdefault.jpg`}
-                        alt={video.titulo}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                            // Si falla la miniatura HD, usar la estándar
-                            (e.target as HTMLImageElement).src =
-                                `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`;
-                        }}
-                    />
+                    {video.tipoOrigen === 'archivo' ? (
+                        <video
+                            src={video.urlVideo}
+                            preload="metadata"
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover opacity-60"
+                        />
+                    ) : (
+                        <img
+                            src={`https://img.youtube.com/vi/${video.youtubeId}/maxresdefault.jpg`}
+                            alt={video.titulo}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).src =
+                                    `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`;
+                            }}
+                        />
+                    )}
                     {/* Overlay oscuro */}
                     <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors" />
                     {/* Logo de YouTube */}
@@ -114,22 +99,252 @@ const TarjetaVideo = ({ video }: { video: typeof VIDEOS_YOUTUBE[0] }) => {
 };
 
 // ============================================================
+// CARRUSEL DE VIDEOS DE ESCRITORIO: 2 por página con paginación
+// ============================================================
+const VIDEOS_POR_PAGINA = 2;
+
+const CarruselVideosDesktop = ({ videos }: { videos: VideoMedia[] }) => {
+    const [pagina, setPagina] = useState(0);
+    const totalPaginas = Math.max(1, Math.ceil(videos.length / VIDEOS_POR_PAGINA));
+    const paginaSegura = Math.min(pagina, totalPaginas - 1);
+    const inicio = paginaSegura * VIDEOS_POR_PAGINA;
+    const visibles = videos.slice(inicio, inicio + VIDEOS_POR_PAGINA);
+    const tieneVariasPaginas = totalPaginas > 1;
+
+    return (
+        <div>
+            {/* Página actual (2 videos) con transición */}
+            <div className="md:min-h-[430px]">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={paginaSegura}
+                        className="grid md:grid-cols-2 md:gap-6"
+                        initial={{ opacity: 0, x: 48 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -48 }}
+                        transition={{ duration: 0.4 }}
+                    >
+                        {visibles.map(video => (
+                            <TarjetaVideo key={video.id} video={video} />
+                        ))}
+                    </motion.div>
+                </AnimatePresence>
+            </div>
+
+            {/* Controles: flechas + contador + puntos */}
+            {tieneVariasPaginas && (
+                <div className="flex items-center justify-center gap-4 mt-8">
+                    <button
+                        onClick={() => setPagina(Math.max(0, paginaSegura - 1))}
+                        disabled={paginaSegura === 0}
+                        aria-label="Videos anteriores"
+                        className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm border borde-medium
+                                   flex items-center justify-center text-white
+                                   hover:bg-vinotinto transition-all duration-300
+                                   disabled:opacity-30 disabled:hover:bg-black/50"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs t-muted-high tabular-nums bg-sutil border borde-subtle inline-block rounded-full px-3 py-1">
+                            {paginaSegura + 1} / {totalPaginas}
+                        </span>
+                        <div className="flex gap-1.5">
+                            {Array.from({ length: totalPaginas }).map((_, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setPagina(i)}
+                                    aria-label={`Ir a la página ${i + 1}`}
+                                    className={`h-2 rounded-full transition-all duration-300 ${i === paginaSegura
+                                            ? 'w-5 bg-vinotinto'
+                                            : 'w-2 bg-sutil-hover hover:bg-vinotinto/40'
+                                        }`}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={() => setPagina(Math.min(totalPaginas - 1, paginaSegura + 1))}
+                        disabled={paginaSegura >= totalPaginas - 1}
+                        aria-label="Videos siguientes"
+                        className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm border borde-medium
+                                   flex items-center justify-center text-white
+                                   hover:bg-vinotinto transition-all duration-300
+                                   disabled:opacity-30 disabled:hover:bg-black/50"
+                    >
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ============================================================
+// CARRUSEL DE FOTOS CON REPRODUCCIÓN AUTOMÁTICA
+// Avanza solo (5s), se pausa al pasar el cursor sobre la foto
+// y tiene botón de reproducir/pausar. Solo avanza cuando está
+// visible en pantalla (IntersectionObserver).
+// ============================================================
+const INTERVALO_AUTOPLAY = 5000;
+
+const CarruselFotos = ({ fotos }: { fotos: FotoGaleria[] }) => {
+    const [indice, setIndice] = useState(0);
+    const [automatico, setAutomatico] = useState(true);
+    const [pausadoHover, setPausadoHover] = useState(false);
+    const [visible, setVisible] = useState(false);
+    const reproductorRef = useRef<HTMLDivElement>(null);
+
+    const indiceSeguro = Math.min(indice, Math.max(0, fotos.length - 1));
+    const tieneVarias = fotos.length > 1;
+    const foto = fotos[indiceSeguro];
+
+    // Solo avanza si el carrusel está realmente en pantalla
+    useEffect(() => {
+        const el = reproductorRef.current;
+        if (!el) return;
+        const obs = new IntersectionObserver(
+            ([entrada]) => setVisible(entrada.isIntersecting),
+            { threshold: 0.4 }
+        );
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, []);
+
+    // Avance automático: se reinicia con cada foto (o al pausar)
+    useEffect(() => {
+        if (!automatico || pausadoHover || !visible || !tieneVarias) return;
+        const id = window.setTimeout(() => {
+            setIndice(i => (i >= fotos.length - 1 ? 0 : i + 1));
+        }, INTERVALO_AUTOPLAY);
+        return () => window.clearTimeout(id);
+    }, [automatico, pausadoHover, visible, indice, fotos.length, tieneVarias]);
+
+    const anterior = () => setIndice(i => (i === 0 ? fotos.length - 1 : i - 1));
+    const siguiente = () => setIndice(i => (i === fotos.length - 1 ? 0 : i + 1));
+
+    return (
+        <div>
+            <div className="relative">
+                {/* Foto principal */}
+                <div
+                    ref={reproductorRef}
+                    className="aspect-video rounded-2xl overflow-hidden relative"
+                    onMouseEnter={() => setPausadoHover(true)}
+                    onMouseLeave={() => setPausadoHover(false)}
+                >
+                    <AnimatePresence mode="wait">
+                        <motion.img
+                            key={indiceSeguro}
+                            src={foto.urlFoto}
+                            alt={foto.titulo}
+                            className="w-full h-full object-cover"
+                            initial={{ opacity: 0, x: 50 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -50 }}
+                            transition={{ duration: 0.4 }}
+                        />
+                    </AnimatePresence>
+
+                    {/* Botón de reproducir / pausar */}
+                    {tieneVarias && (
+                        <button
+                            onClick={() => setAutomatico(!automatico)}
+                            aria-label={automatico
+                                ? 'Pausar reproducción automática'
+                                : 'Reproducción automática'}
+                            className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full
+                                       bg-black/50 backdrop-blur-sm border borde-medium
+                                       flex items-center justify-center text-white
+                                       hover:bg-vinotinto transition-all duration-300"
+                        >
+                            {automatico ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                        </button>
+                    )}
+
+                    {/* Descripción de la foto */}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70">
+                        <p className="text-white font-medium">{foto.titulo}</p>
+                        {foto.enlaceUrl && (
+                            <a
+                                href={foto.enlaceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-vinotinto-luz hover:underline mt-1"
+                            >
+                                {foto.enlaceTexto || 'Ver más'}
+                            </a>
+                        )}
+                        <p className="t-muted text-sm">{indiceSeguro + 1} / {fotos.length}</p>
+                    </div>
+                </div>
+
+                {/* Botones de navegación */}
+                <button
+                    onClick={anterior}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
+                         bg-black/50 backdrop-blur-sm border borde-medium
+                         flex items-center justify-center text-white
+                         hover:bg-vinotinto transition-all duration-300"
+                >
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={siguiente}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
+                         bg-black/50 backdrop-blur-sm border borde-medium
+                         flex items-center justify-center text-white
+                         hover:bg-vinotinto transition-all duration-300"
+                >
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+            </div>
+
+            {/* Barra de progreso del autoplay */}
+            {tieneVarias && automatico && !pausadoHover && visible && (
+                <div className="mt-3 h-1 rounded-full bg-white/10 overflow-hidden">
+                    <motion.div
+                        key={indiceSeguro}
+                        className="h-full rounded-full bg-khaki/80"
+                        initial={{ width: '0%' }}
+                        animate={{ width: '100%' }}
+                        transition={{ duration: INTERVALO_AUTOPLAY / 1000, ease: 'linear' }}
+                    />
+                </div>
+            )}
+
+            {/* Miniaturas del carrusel */}
+            <div className="flex gap-3 mt-4 overflow-x-auto sin-scrollbar py-2">
+                {fotos.map((f, i) => (
+                    <button
+                        key={f.id}
+                        onClick={() => setIndice(i)}
+                        className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 ${i === indiceSeguro ? 'border-vinotinto' : 'border-transparent opacity-60 hover:opacity-80'
+                            }`}
+                    >
+                        <img src={f.urlFoto} alt={f.titulo} className="w-full h-full object-cover" />
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// ============================================================
 // COMPONENTE PRINCIPAL: SeccionPresentaciones
 // ============================================================
 const SeccionPresentaciones = () => {
+    const { videosMedia, fotosGaleria } = useApp();
     const ref = useRef(null);
     const estaEnPantalla = useInView(ref, { once: true, margin: '-100px' });
-    const [indiceCarrusel, setIndiceCarrusel] = useState(0);
 
-    // Navegar al foto anterior en el carrusel
-    const anteriorFoto = () => {
-        setIndiceCarrusel(prev => (prev === 0 ? FOTOS_GALERIA.length - 1 : prev - 1));
-    };
+    const videosVisibles = videosMedia.filter(v => v.activo);
+    const fotosVisibles = fotosGaleria.filter(f => f.activo);
 
-    // Navegar a la foto siguiente en el carrusel
-    const siguienteFoto = () => {
-        setIndiceCarrusel(prev => (prev === FOTOS_GALERIA.length - 1 ? 0 : prev + 1));
-    };
+    const hayVideos = videosVisibles.length > 0;
+    const hayFotos = fotosVisibles.length > 0;
 
     return (
         <section id="presentaciones" className="py-24 bg-fondo-medio relative overflow-hidden">
@@ -154,100 +369,61 @@ const SeccionPresentaciones = () => {
                 </motion.div>
 
                 {/* ---- VIDEOS DE YOUTUBE ---- */}
-                <motion.div
-                    className="mb-20"
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
-                    transition={{ duration: 0.7, delay: 0.2 }}
-                >
-                    <h3 className="text-xl font-semibold t-muted-high mb-6 flex items-center gap-2">
-                        <Video className="w-5 h-5 text-red-500" />
-                        Videos
-                    </h3>
-                    <CarruselMovil
-                        slides={VIDEOS_YOUTUBE.map(video => (
-                            <TarjetaVideo key={video.id} video={video} />
-                        ))}
-                        claseSlide="w-[82%] md:w-auto"
-                        gridDesktop="md:grid md:grid-cols-3 md:gap-6"
-                        ariaLabel="Carrusel de videos"
-                    />
-                </motion.div>
+                {hayVideos && (
+                    <motion.div
+                        className="mb-20"
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
+                        transition={{ duration: 0.7, delay: 0.2 }}
+                    >
+                        <h3 className="text-xl font-semibold t-muted-high mb-6 flex items-center gap-2">
+                            <Video className="w-5 h-5 text-red-500" />
+                            Videos
+                            {videosVisibles.length > 2 && (
+                                <span className="text-xs t-muted-low font-normal bg-sutil border borde-subtle rounded-full px-2.5 py-0.5">
+                                    {videosVisibles.length} videos
+                                </span>
+                            )}
+                        </h3>
 
-                {/* ---- CARRUSEL DE FOTOS ---- */}
-                <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
-                    transition={{ duration: 0.7, delay: 0.4 }}
-                >
-                    <h3 className="text-xl font-semibold t-muted-high mb-6">Galería de Fotos</h3>
-
-                    {/* Carrusel principal */}
-                    <div className="relative">
-                        {/* Foto principal */}
-                        <div className="aspect-video rounded-2xl overflow-hidden relative">
-                            <AnimatePresence mode="wait">
-                                <motion.img
-                                    key={indiceCarrusel}
-                                    src={FOTOS_GALERIA[indiceCarrusel].src}
-                                    alt={FOTOS_GALERIA[indiceCarrusel].alt}
-                                    className="w-full h-full object-cover"
-                                    initial={{ opacity: 0, x: 50 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -50 }}
-                                    transition={{ duration: 0.4 }}
-                                />
-                            </AnimatePresence>
-
-                            {/* Descripción de la foto */}
-                            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70">
-                                <p className="text-white font-medium">{FOTOS_GALERIA[indiceCarrusel].alt}</p>
-                                <p className="t-muted text-sm">{indiceCarrusel + 1} / {FOTOS_GALERIA.length}</p>
-                            </div>
+                        {/* Móvil: swipe con peek */}
+                        <div className="md:hidden">
+                            <CarruselMovil
+                                slides={videosVisibles.map(video => (
+                                    <TarjetaVideo key={video.id} video={video} />
+                                ))}
+                                claseSlide="w-[86%]"
+                                ariaLabel="Carrusel de videos en móvil"
+                            />
                         </div>
 
-                        {/* Botones de navegación */}
-                        <button
-                            onClick={anteriorFoto}
-                            className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
-                         bg-black/50 backdrop-blur-sm border borde-medium
-                         flex items-center justify-center text-white
-                         hover:bg-vinotinto transition-all duration-300"
-                        >
-                            <ChevronLeft className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={siguienteFoto}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
-                         bg-black/50 backdrop-blur-sm border borde-medium
-                         flex items-center justify-center text-white
-                         hover:bg-vinotinto transition-all duration-300"
-                        >
-                            <ChevronRight className="w-5 h-5" />
-                        </button>
-                    </div>
+                        {/* Escritorio: carrusel paginado de 2 en 2 */}
+                        <div className="hidden md:block">
+                            <CarruselVideosDesktop videos={videosVisibles} />
+                        </div>
+                    </motion.div>
+                )}
 
-                    {/* Miniaturas del carrusel */}
-                    <div className="flex gap-3 mt-4 overflow-x-auto sin-scrollbar py-2">
-                        {FOTOS_GALERIA.map((foto, indice) => (
-                            <button
-                                key={foto.id}
-                                onClick={() => setIndiceCarrusel(indice)}
-                                className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 ${indice === indiceCarrusel ? 'border-vinotinto' : 'border-transparent opacity-60 hover:opacity-80'
-                                    }`}
-                            >
-                                <img src={foto.src} alt={foto.alt} className="w-full h-full object-cover" />
-                            </button>
-                        ))}
-                    </div>
-                </motion.div>
+                {/* ---- CARRUSEL DE FOTOS ---- */}
+                {hayFotos && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
+                        transition={{ duration: 0.7, delay: 0.4 }}
+                    >
+                        <h3 className="text-xl font-semibold t-muted-high mb-6">Galería de Fotos</h3>
+
+                        <CarruselFotos fotos={fotosVisibles} />
+                    </motion.div>
+                )}
+
+                {!hayVideos && !hayFotos && (
+                    <p className="t-muted text-center py-10">Aún no hay contenido de presentaciones.</p>
+                )}
 
             </div>
         </section>
     );
 };
-
-// Necesitamos importar AnimatePresence para el carrusel
-import { AnimatePresence } from 'framer-motion';
 
 export default SeccionPresentaciones;
