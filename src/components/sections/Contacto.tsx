@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import {
-    Mail, Send, CheckCircle, Heart, ExternalLink, MapPin, Phone,
+    Mail, Send, CheckCircle, Heart, ExternalLink, MapPin,
     Music2, Users, GraduationCap, Sparkles, AlertCircle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -109,9 +109,6 @@ const SeccionContacto = () => {
     const canales: CanalContactoProps[] = [
         { icono: <Mail className="w-5 h-5" />, etiqueta: 'Email', valor: infoGrupo.emailContacto, href: `mailto:${infoGrupo.emailContacto}` },
     ];
-    if (infoGrupo.telefono) {
-        canales.push({ icono: <Phone className="w-5 h-5" />, etiqueta: 'Teléfono', valor: infoGrupo.telefono, href: `tel:${infoGrupo.telefono.replace(/\s/g, '')}` });
-    }
     if (infoGrupo.ubicacion) {
         canales.push({ icono: <MapPin className="w-5 h-5" />, etiqueta: 'Ubicación', valor: infoGrupo.ubicacion, href: infoGrupo.mapaUrl || undefined });
     }
