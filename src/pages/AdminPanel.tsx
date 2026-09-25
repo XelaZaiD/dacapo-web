@@ -99,56 +99,71 @@ const normalizarTexto = (texto: string): string =>
     texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 // Barra de filtros reutilizable: buscador + chips con contador
-const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, chips, filtroActivo, alCambiarFiltro, ocultarBuscador }: {
+type GrupoFiltros = {
+    etiqueta: string;
+    chips: { clave: string; etiqueta: string; contador: number }[];
+    filtroActivo: string;
+    alCambiar: (clave: string) => void;
+};
+
+const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, grupos, alLimpiar }: {
     termino: string;
     alCambiarTermino: (texto: string) => void;
     placeholder?: string;
-    chips: { clave: string; etiqueta: string; contador: number }[];
-    filtroActivo: string;
-    alCambiarFiltro: (clave: string) => void;
-    ocultarBuscador?: boolean;
+    grupos: GrupoFiltros[];
+    alLimpiar?: () => void;
 }) => {
+    const hayFiltrosActivos = termino !== '' || grupos.some(g => g.filtroActivo !== g.chips[0]?.clave);
     return (
         <div className="card-glass rounded-xl p-3 space-y-3">
-            {!ocultarBuscador && (
-                <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 t-muted-low pointer-events-none" />
-                    <input
-                        value={termino}
-                        onChange={e => alCambiarTermino(e.target.value)}
-                        placeholder={placeholder || 'Buscar...'}
-                        className="input-campo pl-9 pr-9 w-full"
-                    />
-                    {termino && (
-                        <button
-                            onClick={() => alCambiarTermino('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
-                            title="Limpiar búsqueda"
-                        >
-                            <X className="w-3.5 h-3.5" />
+            <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 t-muted-low pointer-events-none" />
+                <input
+                    value={termino}
+                    onChange={e => alCambiarTermino(e.target.value)}
+                    placeholder={placeholder || 'Buscar...'}
+                    className="input-campo pl-9 pr-9 w-full"
+                />
+                {termino && (
+                    <button
+                        onClick={() => alCambiarTermino('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
+                        title="Limpiar búsqueda"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                )}
+            </div>
+            {grupos.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    {grupos.map((g, idx) => (
+                        <div key={idx} className="flex items-center gap-2 flex-wrap">
+                            {idx > 0 && <span className="hidden sm:block w-px h-5 bg-borde-subtle mx-2 flex-shrink-0" />}
+                            <span className="text-[10px] uppercase tracking-wide t-muted-low font-semibold flex-shrink-0">{g.etiqueta}</span>
+                            {g.chips.map(c => {
+                                const activo = g.filtroActivo === c.clave;
+                                return (
+                                    <button
+                                        key={c.clave}
+                                        onClick={() => g.alCambiar(c.clave)}
+                                        className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                                            activo
+                                                ? 'bg-vinotinto text-white border-vinotinto shadow-glow-vinotinto'
+                                                : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
+                                        }`}
+                                    >
+                                        {c.etiqueta}
+                                        <span className={`ml-1 ${activo ? 'text-white/70' : 'opacity-60'}`}>({c.contador})</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ))}
+                    {hayFiltrosActivos && alLimpiar && (
+                        <button onClick={alLimpiar} className="text-xs px-3 py-1.5 rounded-full border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-1 ml-auto">
+                            <X className="w-3 h-3" /> Limpiar filtros
                         </button>
                     )}
-                </div>
-            )}
-            {chips.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap">
-                    {chips.map(c => {
-                        const activo = filtroActivo === c.clave;
-                        return (
-                            <button
-                                key={c.clave}
-                                onClick={() => alCambiarFiltro(c.clave)}
-                                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                                    activo
-                                        ? 'bg-vinotinto text-white border-vinotinto shadow-glow-vinotinto'
-                                        : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
-                                }`}
-                            >
-                                {c.etiqueta}
-                                <span className={`ml-1 ${activo ? 'text-white/70' : 'opacity-60'}`}>({c.contador})</span>
-                            </button>
-                        );
-                    })}
                 </div>
             )}
         </div>
@@ -985,24 +1000,33 @@ const ModuloIntegrantes = () => {
                         termino={filtroBusqueda}
                         alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaIntegrantes(1); }}
                         placeholder="Buscar por nombre o cargo..."
-                        chips={[
-                            { clave: 'Todas', etiqueta: 'Todas', contador: integrantes.length },
-                            ...CUERDAS_INTEGRANTE.map(c => ({ clave: c, etiqueta: c, contador: integrantes.filter(i => i.cuerda === c).length })),
+                        grupos={[
+                            {
+                                etiqueta: 'Cuerda',
+                                chips: [
+                                    { clave: 'Todas', etiqueta: 'Todas', contador: integrantes.length },
+                                    ...CUERDAS_INTEGRANTE.map(c => ({ clave: c, etiqueta: c, contador: integrantes.filter(i => i.cuerda === c).length })),
+                                ],
+                                filtroActivo: filtroCuerda,
+                                alCambiar: cambiarFiltro(setFiltroCuerda),
+                            },
+                            {
+                                etiqueta: 'Rol',
+                                chips: [
+                                    { clave: 'Todos', etiqueta: 'Todos', contador: integrantes.length },
+                                    { clave: 'Directiva', etiqueta: 'Directiva', contador: integrantes.filter(i => i.esDirectivo).length },
+                                    { clave: 'Coro', etiqueta: 'Coro', contador: integrantes.filter(i => !i.esDirectivo).length },
+                                ],
+                                filtroActivo: filtroDirectivo,
+                                alCambiar: cambiarFiltro(setFiltroDirectivo),
+                            },
                         ]}
-                        filtroActivo={filtroCuerda}
-                        alCambiarFiltro={cambiarFiltro(setFiltroCuerda)}
-                    />
-                    <BarraFiltrosAdmin
-                        termino=""
-                        alCambiarTermino={() => {}}
-                        ocultarBuscador
-                        chips={[
-                            { clave: 'Todos', etiqueta: 'Todos', contador: integrantes.length },
-                            { clave: 'Directiva', etiqueta: 'Directiva', contador: integrantes.filter(i => i.esDirectivo).length },
-                            { clave: 'Coro', etiqueta: 'Coro', contador: integrantes.filter(i => !i.esDirectivo).length },
-                        ]}
-                        filtroActivo={filtroDirectivo}
-                        alCambiarFiltro={cambiarFiltro(setFiltroDirectivo)}
+                        alLimpiar={() => {
+                            setFiltroBusqueda('');
+                            setFiltroCuerda('Todas');
+                            setFiltroDirectivo('Todos');
+                            setPaginaIntegrantes(1);
+                        }}
                     />
 
                     {integrantesPaginados.length === 0 ? (
@@ -1361,55 +1385,59 @@ const ModuloEventos = () => {
                         termino={filtroBusqueda}
                         alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaEventos(1); }}
                         placeholder="Buscar por título, lugar u organizador..."
-                        chips={chipsTipo}
-                        filtroActivo={filtroTipo}
-                        alCambiarFiltro={cambiarFiltro(setFiltroTipo)}
-                    />
-                    <BarraFiltrosAdmin
-                        termino=""
-                        alCambiarTermino={() => {}}
-                        ocultarBuscador
-                        chips={chipsMomento}
-                        filtroActivo={filtroMomento}
-                        alCambiarFiltro={cambiarFiltro(setFiltroMomento)}
-                    />
-                    <BarraFiltrosAdmin
-                        termino=""
-                        alCambiarTermino={() => {}}
-                        ocultarBuscador
-                        chips={[
-                            { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
-                            { clave: 'Visible', etiqueta: 'Visibles', contador: eventos.filter(e => e.activo).length },
-                            { clave: 'Oculto', etiqueta: 'Ocultos', contador: eventos.filter(e => !e.activo).length },
+                        grupos={[
+                            {
+                                etiqueta: 'Tipo',
+                                chips: chipsTipo,
+                                filtroActivo: filtroTipo,
+                                alCambiar: cambiarFiltro(setFiltroTipo),
+                            },
+                            {
+                                etiqueta: 'Momento',
+                                chips: chipsMomento,
+                                filtroActivo: filtroMomento,
+                                alCambiar: cambiarFiltro(setFiltroMomento),
+                            },
+                            {
+                                etiqueta: 'Estado',
+                                chips: [
+                                    { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+                                    { clave: 'Visible', etiqueta: 'Visibles', contador: eventos.filter(e => e.activo).length },
+                                    { clave: 'Oculto', etiqueta: 'Ocultos', contador: eventos.filter(e => !e.activo).length },
+                                ],
+                                filtroActivo: filtroVisibilidad,
+                                alCambiar: cambiarFiltro(setFiltroVisibilidad),
+                            },
+                            {
+                                etiqueta: 'Relevancia',
+                                chips: chipDestacado,
+                                filtroActivo: filtroDestacado,
+                                alCambiar: cambiarFiltro(setFiltroDestacado),
+                            },
+                            ...(categoriasPresentes.length > 0 ? [{
+                                etiqueta: 'Categoría',
+                                chips: [
+                                    { clave: 'Todos', etiqueta: 'Todas', contador: eventos.length },
+                                    ...categoriasPresentes.map(c => ({
+                                        clave: c,
+                                        etiqueta: c,
+                                        contador: eventos.filter(e => e.categoria === c).length,
+                                    })),
+                                ],
+                                filtroActivo: filtroCategoria,
+                                alCambiar: cambiarFiltro(setFiltroCategoria),
+                            } as GrupoFiltros] : []),
                         ]}
-                        filtroActivo={filtroVisibilidad}
-                        alCambiarFiltro={cambiarFiltro(setFiltroVisibilidad)}
+                        alLimpiar={() => {
+                            setFiltroBusqueda('');
+                            setFiltroTipo('Todos');
+                            setFiltroMomento('Todos');
+                            setFiltroVisibilidad('Todos');
+                            setFiltroDestacado('Todos');
+                            setFiltroCategoria('Todos');
+                            setPaginaEventos(1);
+                        }}
                     />
-                    <BarraFiltrosAdmin
-                        termino=""
-                        alCambiarTermino={() => {}}
-                        ocultarBuscador
-                        chips={chipDestacado}
-                        filtroActivo={filtroDestacado}
-                        alCambiarFiltro={cambiarFiltro(setFiltroDestacado)}
-                    />
-                    {categoriasPresentes.length > 0 && (
-                        <BarraFiltrosAdmin
-                            termino=""
-                            alCambiarTermino={() => {}}
-                            ocultarBuscador
-                            chips={[
-                                { clave: 'Todos', etiqueta: 'Todas', contador: eventos.length },
-                                ...categoriasPresentes.map(c => ({
-                                    clave: c,
-                                    etiqueta: c,
-                                    contador: eventos.filter(e => e.categoria === c).length,
-                                })),
-                            ]}
-                            filtroActivo={filtroCategoria}
-                            alCambiarFiltro={cambiarFiltro(setFiltroCategoria)}
-                        />
-                    )}
 
                     {eventosPaginados.length === 0 ? (
                         <div className="card-glass rounded-xl p-10 text-center t-muted">
@@ -1826,9 +1854,7 @@ const ModuloAudio = () => {
                         termino={filtroBusquedaAudio}
                         alCambiarTermino={t => { setFiltroBusquedaAudio(t); setPaginaAudio(1); }}
                         placeholder="Buscar por título o compositor..."
-                        chips={[]}
-                        filtroActivo="Todos"
-                        alCambiarFiltro={() => {}}
+                        grupos={[]}
                     />
                 )}
                 {pistasAudio.length === 0 ? (
@@ -2310,24 +2336,33 @@ const ModuloMedia = () => {
                                 termino={filtroBusquedaVideo}
                                 alCambiarTermino={t => { setFiltroBusquedaVideo(t); setPaginaVideos(1); }}
                                 placeholder="Buscar por título o descripción..."
-                                chips={[
-                                    { clave: 'Todos', etiqueta: 'Todos', contador: videosMedia.length },
-                                    { clave: 'Activo', etiqueta: 'Visible', contador: videosMedia.filter(v => v.activo).length },
-                                    { clave: 'Oculto', etiqueta: 'Oculto', contador: videosMedia.filter(v => !v.activo).length },
+                                grupos={[
+                                    {
+                                        etiqueta: 'Estado',
+                                        chips: [
+                                            { clave: 'Todos', etiqueta: 'Todos', contador: videosMedia.length },
+                                            { clave: 'Activo', etiqueta: 'Visible', contador: videosMedia.filter(v => v.activo).length },
+                                            { clave: 'Oculto', etiqueta: 'Oculto', contador: videosMedia.filter(v => !v.activo).length },
+                                        ],
+                                        filtroActivo: filtroActivoVideo,
+                                        alCambiar: cambiarFiltro(setFiltroActivoVideo),
+                                    },
+                                    {
+                                        etiqueta: 'Categoría',
+                                        chips: [
+                                            { clave: 'Todas', etiqueta: 'Todas', contador: videosMedia.length },
+                                            ...CATEGORIAS_VIDEO.map(c => ({ clave: c, etiqueta: c, contador: videosMedia.filter(v => v.categoria === c).length })),
+                                        ],
+                                        filtroActivo: filtroCategoriaVideo,
+                                        alCambiar: cambiarFiltro(setFiltroCategoriaVideo),
+                                    },
                                 ]}
-                                filtroActivo={filtroActivoVideo}
-                                alCambiarFiltro={cambiarFiltro(setFiltroActivoVideo)}
-                            />
-                            <BarraFiltrosAdmin
-                                termino=""
-                                alCambiarTermino={() => {}}
-                                ocultarBuscador
-                                chips={[
-                                    { clave: 'Todas', etiqueta: 'Todas', contador: videosMedia.length },
-                                    ...CATEGORIAS_VIDEO.map(c => ({ clave: c, etiqueta: c, contador: videosMedia.filter(v => v.categoria === c).length })),
-                                ]}
-                                filtroActivo={filtroCategoriaVideo}
-                                alCambiarFiltro={cambiarFiltro(setFiltroCategoriaVideo)}
+                                alLimpiar={() => {
+                                    setFiltroBusquedaVideo('');
+                                    setFiltroActivoVideo('Todos');
+                                    setFiltroCategoriaVideo('Todas');
+                                    setPaginaVideos(1);
+                                }}
                             />
 
                             {videosPaginados.length === 0 ? (
@@ -2442,13 +2477,23 @@ const ModuloMedia = () => {
                                 termino={filtroBusquedaFoto}
                                 alCambiarTermino={t => { setFiltroBusquedaFoto(t); setPaginaFotos(1); }}
                                 placeholder="Buscar por título..."
-                                chips={[
-                                    { clave: 'Todos', etiqueta: 'Todos', contador: fotosGaleria.length },
-                                    { clave: 'Activo', etiqueta: 'Visible', contador: fotosGaleria.filter(f => f.activo).length },
-                                    { clave: 'Oculto', etiqueta: 'Oculto', contador: fotosGaleria.filter(f => !f.activo).length },
+                                grupos={[
+                                    {
+                                        etiqueta: 'Estado',
+                                        chips: [
+                                            { clave: 'Todos', etiqueta: 'Todos', contador: fotosGaleria.length },
+                                            { clave: 'Activo', etiqueta: 'Visible', contador: fotosGaleria.filter(f => f.activo).length },
+                                            { clave: 'Oculto', etiqueta: 'Oculto', contador: fotosGaleria.filter(f => !f.activo).length },
+                                        ],
+                                        filtroActivo: filtroActivoFoto,
+                                        alCambiar: cambiarFiltro(setFiltroActivoFoto),
+                                    },
                                 ]}
-                                filtroActivo={filtroActivoFoto}
-                                alCambiarFiltro={cambiarFiltro(setFiltroActivoFoto)}
+                                alLimpiar={() => {
+                                    setFiltroBusquedaFoto('');
+                                    setFiltroActivoFoto('Todos');
+                                    setPaginaFotos(1);
+                                }}
                             />
 
                             {fotosPaginadas.length === 0 ? (
@@ -2924,32 +2969,39 @@ const ModuloPartituras = () => {
             {/* Lista de partituras */}
             <div className="space-y-2">
                 {partituras.length > 0 && (
-                    <>
                         <BarraFiltrosAdmin
                             termino={filtroBusquedaPartitura}
                             alCambiarTermino={t => { setFiltroBusquedaPartitura(t); setPaginaPartituras(1); }}
                             placeholder="Buscar por título, compositor o arreglista..."
-                            chips={[
-                                { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
-                                { clave: 'Descargable', etiqueta: 'Descargable', contador: partituras.filter(p => p.descargable).length },
-                                { clave: 'No Descargable', etiqueta: 'Solo lectura', contador: partituras.filter(p => !p.descargable).length },
+                            grupos={[
+                                {
+                                    etiqueta: 'Acceso',
+                                    chips: [
+                                        { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
+                                        { clave: 'Descargable', etiqueta: 'Descargable', contador: partituras.filter(p => p.descargable).length },
+                                        { clave: 'No Descargable', etiqueta: 'Solo lectura', contador: partituras.filter(p => !p.descargable).length },
+                                    ],
+                                    filtroActivo: filtroDescargable,
+                                    alCambiar: cambiarFiltroPartitura(setFiltroDescargable),
+                                },
+                                {
+                                    etiqueta: 'Estado',
+                                    chips: [
+                                        { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
+                                        { clave: 'Activo', etiqueta: 'Visible', contador: partituras.filter(p => p.activo !== false).length },
+                                        { clave: 'Oculto', etiqueta: 'Oculta', contador: partituras.filter(p => p.activo === false).length },
+                                    ],
+                                    filtroActivo: filtroActivoPartitura,
+                                    alCambiar: cambiarFiltroPartitura(setFiltroActivoPartitura),
+                                },
                             ]}
-                            filtroActivo={filtroDescargable}
-                            alCambiarFiltro={cambiarFiltroPartitura(setFiltroDescargable)}
+                            alLimpiar={() => {
+                                setFiltroBusquedaPartitura('');
+                                setFiltroDescargable('Todos');
+                                setFiltroActivoPartitura('Todos');
+                                setPaginaPartituras(1);
+                            }}
                         />
-                        <BarraFiltrosAdmin
-                            termino=""
-                            alCambiarTermino={() => {}}
-                            ocultarBuscador
-                            chips={[
-                                { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
-                                { clave: 'Activo', etiqueta: 'Visible', contador: partituras.filter(p => p.activo !== false).length },
-                                { clave: 'Oculto', etiqueta: 'Oculta', contador: partituras.filter(p => p.activo === false).length },
-                            ]}
-                            filtroActivo={filtroActivoPartitura}
-                            alCambiarFiltro={cambiarFiltroPartitura(setFiltroActivoPartitura)}
-                        />
-                    </>
                 )}
                 {partituras.length === 0 ? (
                     <div className="card-glass rounded-xl p-12 text-center t-muted">
@@ -3432,34 +3484,28 @@ const ModuloBuzonAudiciones = () => {
 
             {/* Búsqueda + Filtro por estado */}
             {solicitudesAudicion.length > 0 && (
-                <div className="space-y-3">
-                    <BarraFiltrosAdmin
-                        termino={filtroBusquedaAudicion}
-                        alCambiarTermino={t => { setFiltroBusquedaAudicion(t); setPaginaAudiciones(1); }}
-                        placeholder="Buscar por nombre, email o voz..."
-                        chips={[]}
-                        filtroActivo="Todas"
-                        alCambiarFiltro={() => {}}
-                    />
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {ESTADOS_FILTRO.map(estado => (
-                            <button
-                                key={estado}
-                                onClick={() => { setFiltroEstado(estado); setPaginaAudiciones(1); }}
-                                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                                    filtroEstado === estado
-                                        ? 'bg-vinotinto text-white border-vinotinto'
-                                        : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
-                                }`}
-                            >
-                                {estado}
-                                {estado !== 'Todas' && (
-                                    <span className="ml-1 opacity-70">({solicitudesAudicion.filter(s => s.estado === estado).length})</span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                <BarraFiltrosAdmin
+                    termino={filtroBusquedaAudicion}
+                    alCambiarTermino={t => { setFiltroBusquedaAudicion(t); setPaginaAudiciones(1); }}
+                    placeholder="Buscar por nombre, email o voz..."
+                    grupos={[
+                        {
+                            etiqueta: 'Estado',
+                            chips: ESTADOS_FILTRO.map(estado => ({
+                                clave: estado,
+                                etiqueta: estado,
+                                contador: estado === 'Todas' ? solicitudesAudicion.length : solicitudesAudicion.filter(s => s.estado === estado).length,
+                            })),
+                            filtroActivo: filtroEstado,
+                            alCambiar: (clave) => { setFiltroEstado(clave as SolicitudAudicion['estado'] | 'Todas'); setPaginaAudiciones(1); },
+                        },
+                    ]}
+                    alLimpiar={() => {
+                        setFiltroBusquedaAudicion('');
+                        setFiltroEstado('Todas');
+                        setPaginaAudiciones(1);
+                    }}
+                />
             )}
 
             {solicitudesAudicion.length === 0 ? (
@@ -3582,32 +3628,28 @@ const ModuloBuzonMensajes = () => {
 
             {/* Búsqueda + Filtro por estado de lectura */}
             {mensajesContacto.length > 0 && (
-                <div className="space-y-3">
-                    <BarraFiltrosAdmin
-                        termino={filtroBusquedaMensaje}
-                        alCambiarTermino={t => { setFiltroBusquedaMensaje(t); setPaginaMensajes(1); }}
-                        placeholder="Buscar por nombre, email o asunto..."
-                        chips={[]}
-                        filtroActivo="Todos"
-                        alCambiarFiltro={() => {}}
-                    />
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {(['Todos', 'No leídos', 'Leídos'] as const).map(estado => (
-                            <button
-                                key={estado}
-                                onClick={() => { setFiltroLeido(estado); setPaginaMensajes(1); }}
-                                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                                    filtroLeido === estado
-                                        ? 'bg-vinotinto text-white border-vinotinto'
-                                        : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
-                                }`}
-                            >
-                                {estado}
-                                {estado === 'No leídos' && <span className="ml-1 opacity-70">({noLeidos})</span>}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                <BarraFiltrosAdmin
+                    termino={filtroBusquedaMensaje}
+                    alCambiarTermino={t => { setFiltroBusquedaMensaje(t); setPaginaMensajes(1); }}
+                    placeholder="Buscar por nombre, email o asunto..."
+                    grupos={[
+                        {
+                            etiqueta: 'Lectura',
+                            chips: [
+                                { clave: 'Todos', etiqueta: 'Todos', contador: mensajesContacto.length },
+                                { clave: 'No leídos', etiqueta: 'No leídos', contador: noLeidos },
+                                { clave: 'Leídos', etiqueta: 'Leídos', contador: mensajesContacto.length - noLeidos },
+                            ],
+                            filtroActivo: filtroLeido,
+                            alCambiar: (clave) => { setFiltroLeido(clave as typeof filtroLeido); setPaginaMensajes(1); },
+                        },
+                    ]}
+                    alLimpiar={() => {
+                        setFiltroBusquedaMensaje('');
+                        setFiltroLeido('Todos');
+                        setPaginaMensajes(1);
+                    }}
+                />
             )}
 
             {mensajesContacto.length === 0 ? (
