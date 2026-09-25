@@ -8,7 +8,7 @@
  * ============================================================
  */
 
-import { useState, type ChangeEvent, type ReactNode } from 'react';
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,7 +19,8 @@ import {
     Mail, Mic, Upload, Play, Pause, Disc, Loader2, AlertCircle,
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
     ArrowUp, ArrowDown, Video, Image as ImageIcon,
-    Lock, AtSign, ExternalLink, Music2, Star
+    Lock, AtSign, ExternalLink, Music2, Star,
+    Search, GripVertical, Ticket
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
@@ -87,6 +88,216 @@ const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
             </button>
         </div>
     );
+};
+
+// ============================================================
+// UTILIDADES COMUNES: búsqueda, filtros, reorden y toggles
+// ============================================================
+
+// Quita tildes y mayúsculas para buscar "sin fricción"
+const normalizarTexto = (texto: string): string =>
+    texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+// Barra de filtros reutilizable: buscador + chips con contador
+const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, chips, filtroActivo, alCambiarFiltro, ocultarBuscador }: {
+    termino: string;
+    alCambiarTermino: (texto: string) => void;
+    placeholder?: string;
+    chips: { clave: string; etiqueta: string; contador: number }[];
+    filtroActivo: string;
+    alCambiarFiltro: (clave: string) => void;
+    ocultarBuscador?: boolean;
+}) => {
+    return (
+        <div className="card-glass rounded-xl p-3 space-y-3">
+            {!ocultarBuscador && (
+                <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 t-muted-low pointer-events-none" />
+                    <input
+                        value={termino}
+                        onChange={e => alCambiarTermino(e.target.value)}
+                        placeholder={placeholder || 'Buscar...'}
+                        className="input-campo pl-9 pr-9 w-full"
+                    />
+                    {termino && (
+                        <button
+                            onClick={() => alCambiarTermino('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
+                            title="Limpiar búsqueda"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+            )}
+            {chips.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                    {chips.map(c => {
+                        const activo = filtroActivo === c.clave;
+                        return (
+                            <button
+                                key={c.clave}
+                                onClick={() => alCambiarFiltro(c.clave)}
+                                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                                    activo
+                                        ? 'bg-vinotinto text-white border-vinotinto shadow-glow-vinotinto'
+                                        : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
+                                }`}
+                            >
+                                {c.etiqueta}
+                                <span className={`ml-1 ${activo ? 'text-white/70' : 'opacity-60'}`}>({c.contador})</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Flechas subir/bajar basadas en el índice GLOBAL (cruzan páginas)
+const FlechasOrden = ({ puedeSubir, puedeBajar, alSubir, alBajar, className = 'bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario' }: {
+    puedeSubir: boolean;
+    puedeBajar: boolean;
+    alSubir: () => void;
+    alBajar: () => void;
+    className?: string;
+}) => (
+    <div className="flex flex-col gap-0.5 flex-shrink-0">
+        <button
+            onClick={alSubir}
+            disabled={!puedeSubir}
+            className={`w-7 h-6 flex items-center justify-center rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-all ${className}`}
+            title="Mover hacia arriba"
+        >
+            <ArrowUp className="w-3 h-3" />
+        </button>
+        <button
+            onClick={alBajar}
+            disabled={!puedeBajar}
+            className={`w-7 h-6 flex items-center justify-center rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-all ${className}`}
+            title="Mover hacia abajo"
+        >
+            <ArrowDown className="w-3 h-3" />
+        </button>
+    </div>
+);
+
+// Tarjeta con toggle-switch (para destacado / agotado / visible, etc.)
+const ToggleCampo = ({ activo, alCambiar, icono, etiqueta, descripcion, colorActivo = 'bg-vinotinto' }: {
+    activo: boolean;
+    alCambiar: () => void;
+    icono: ReactNode;
+    etiqueta: string;
+    descripcion?: string;
+    colorActivo?: string;
+}) => (
+    <button
+        type="button"
+        onClick={alCambiar}
+        className={`flex items-center gap-3 rounded-xl p-3 border transition-all text-left ${
+            activo
+                ? 'bg-vinotinto/5 dark:bg-khaki/5 border-vinotinto/30 dark:border-khaki/30'
+                : 'bg-sutil border-borde-subtle'
+        }`}
+    >
+        <span className={`${activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`}>{icono}</span>
+        <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium text-secundario">{etiqueta}</span>
+            {descripcion && <span className="block text-[11px] t-muted truncate">{descripcion}</span>}
+        </span>
+        <span
+            className={`toggle-switch ${activo ? colorActivo : 'bg-sutil-hover'}`}
+            role="switch"
+            aria-checked={activo}
+        >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${activo ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        </span>
+    </button>
+);
+
+// Mueve un registro a un índice GLOBAL objetivo, renumera "orden" y persiste.
+// Devuelve el índice final (para auto-navegar a la página correcta).
+const moverRegistroGlobal = <T extends { id: string; orden?: number }>(
+    lista: T[],
+    sorter: (a: T, b: T) => number,
+    id: string,
+    indiceObjetivo: number,
+    alCambiarOrden: (id: string, orden: number) => void,
+): number => {
+    const ordenados = [...lista].sort(sorter);
+    const desde = ordenados.findIndex(x => x.id === id);
+    if (desde < 0) return -1;
+    let objetivo = Math.max(0, Math.min(indiceObjetivo, ordenados.length - 1));
+    const [movido] = ordenados.splice(desde, 1);
+    if (objetivo > desde) objetivo -= 1;
+    ordenados.splice(objetivo, 0, movido);
+    ordenados.forEach((item, pos) => {
+        if (item.orden !== pos) alCambiarOrden(item.id, pos);
+    });
+    return objetivo;
+};
+
+// Reordenar con arrastre: ratón inmediato + móvil con pulsación larga (220ms).
+// Funciona tanto en desktop como en pantallas táctiles.
+const useArrastre = (alSoltar: (desde: number, hasta: number) => void) => {
+    const [desde, setDesde] = useState<number | null>(null);
+    const [sobre, setSobre] = useState<number | null>(null);
+    const [activado, setActivado] = useState(false);
+    const timerRef = useRef<number | null>(null);
+    const origenRef = useRef<{ x: number; y: number } | null>(null);
+
+    const limpiar = () => {
+        if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+        origenRef.current = null;
+        setActivado(false);
+    };
+
+    const iniciar = (indice: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        origenRef.current = { x: e.clientX, y: e.clientY };
+        try { (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId); } catch { /* sin efecto */ }
+        timerRef.current = window.setTimeout(() => {
+            setActivado(true);
+            setDesde(indice);
+            setSobre(indice);
+        }, 220);
+    };
+
+    const mover = (e: React.PointerEvent<HTMLButtonElement>) => {
+        const origen = origenRef.current;
+        if (!activado) {
+            // Si se mueve antes de la pulsación larga → es scroll, se cancela
+            if (origen && Math.hypot(e.clientX - origen.x, e.clientY - origen.y) > 10) limpiar();
+            return;
+        }
+        if (desde === null) return;
+        const punto = document.elementFromPoint(e.clientX, e.clientY);
+        const fila = punto?.closest?.('[data-reordenable]') as HTMLElement | null;
+        const idx = fila?.dataset.reordenable;
+        if (idx !== undefined && idx !== null && Number(idx) !== sobre) setSobre(Number(idx));
+    };
+
+    const terminar = () => {
+        if (activado && desde !== null && sobre !== null && desde !== sobre) alSoltar(desde, sobre);
+        setDesde(null);
+        setSobre(null);
+        limpiar();
+    };
+
+    return {
+        arrastrando: desde !== null,
+        desde,
+        sobre,
+        activado,
+        manejador: (indice: number): React.HTMLAttributes<HTMLButtonElement> => ({
+            onPointerDown: iniciar(indice),
+            onPointerMove: mover,
+            onPointerUp: terminar,
+            onPointerCancel: terminar,
+        }),
+    };
 };
 
 // ============================================================
@@ -596,6 +807,16 @@ const ModuloIntegrantes = () => {
     const [aviso, setAviso] = useState<{ mensaje: string; tipo: 'ok' | 'error' } | null>(null);
     const [paginaIntegrantes, setPaginaIntegrantes] = useState(1);
 
+    // --- Filtros ---
+    const [filtroBusqueda, setFiltroBusqueda] = useState('');
+    const [filtroCuerda, setFiltroCuerda] = useState('Todas');
+    const [filtroDirectivo, setFiltroDirectivo] = useState('Todos');
+
+    const cambiarFiltro = (set: (v: string) => void) => (clave: string) => {
+        set(clave);
+        setPaginaIntegrantes(1);
+    };
+
     const COLORES_CUERDA: Record<string, string> = {
         'Soprano': 'text-rose-600 dark:text-rose-300', 'Contralto': 'text-amber-600 dark:text-amber-300', 'Tenor': 'text-blue-600 dark:text-blue-300', 'Bajo': 'text-purple-600 dark:text-purple-300'
     };
@@ -657,26 +878,35 @@ const ModuloIntegrantes = () => {
         }
     };
 
-    // Reordena un integrante (botones subir/bajar) actualizando el campo "orden"
-    const mover = (id: string, direccion: -1 | 1) => {
-        const ordenados = [...integrantes]
-            .sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999) || a.nombre.localeCompare(b.nombre));
-        const indice = ordenados.findIndex(i => i.id === id);
-        const nuevoIndice = indice + direccion;
-        if (indice < 0 || nuevoIndice < 0 || nuevoIndice >= ordenados.length) return;
-        const [movido] = ordenados.splice(indice, 1);
-        ordenados.splice(nuevoIndice, 0, movido);
-        ordenados.forEach((i, pos) => {
-            if ((i.orden ?? 9999) !== pos) editarIntegrante(i.id, { orden: pos });
-        });
+    const sorterIntegrantes = (a: Integrante, b: Integrante) =>
+        (a.orden ?? 9999) - (b.orden ?? 9999) || a.nombre.localeCompare(b.nombre);
+
+    const integrantesOrdenados = [...integrantes].sort(sorterIntegrantes);
+
+    // --- Reordenamiento global (flechas cruzan páginas + arrastre) ---
+    const indiceGlobalIntegrante = (id: string) => integrantesOrdenados.findIndex(i => i.id === id);
+    const moverIntegrante = (id: string, objetivoGlobal: number) => {
+        const nuevo = moverRegistroGlobal(integrantes, sorterIntegrantes, id, objetivoGlobal, (idI, orden) => editarIntegrante(idI, { orden }));
+        if (nuevo >= 0) setPaginaIntegrantes(Math.floor(nuevo / REGISTROS_POR_PAGINA) + 1);
     };
+    const arrastreIntegrantes = useArrastre((desde, hasta) => {
+        const visible = integrantesPaginados[desde];
+        if (visible) moverIntegrante(visible.id, (paginaIntegrantesClamp - 1) * REGISTROS_POR_PAGINA + hasta);
+    });
 
-    const integrantesOrdenados = [...integrantes]
-        .sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999) || a.nombre.localeCompare(b.nombre));
+    // --- Filtrado ---
+    const q = normalizarTexto(filtroBusqueda);
+    const integrantesFiltrados = integrantesOrdenados.filter(i => {
+        if (q && !normalizarTexto(i.nombre).includes(q) && !normalizarTexto(i.cargo || '').includes(q)) return false;
+        if (filtroCuerda !== 'Todas' && i.cuerda !== filtroCuerda) return false;
+        if (filtroDirectivo === 'Directiva' && !i.esDirectivo) return false;
+        if (filtroDirectivo === 'Coro' && i.esDirectivo) return false;
+        return true;
+    });
 
-    const totalPaginasIntegrantes = Math.max(1, Math.ceil(integrantesOrdenados.length / REGISTROS_POR_PAGINA));
+    const totalPaginasIntegrantes = Math.max(1, Math.ceil(integrantesFiltrados.length / REGISTROS_POR_PAGINA));
     const paginaIntegrantesClamp = Math.min(paginaIntegrantes, totalPaginasIntegrantes);
-    const integrantesPaginados = integrantesOrdenados.slice(
+    const integrantesPaginados = integrantesFiltrados.slice(
         (paginaIntegrantesClamp - 1) * REGISTROS_POR_PAGINA,
         paginaIntegrantesClamp * REGISTROS_POR_PAGINA
     );
@@ -750,44 +980,89 @@ const ModuloIntegrantes = () => {
                     <p className="t-muted text-sm">Aún no hay integrantes. Presiona "Añadir" para registrar el primero.</p>
                 </div>
             ) : (
-                <div className="space-y-2">
-                    {integrantesPaginados.map((i, indice) => (
-                        <div key={i.id} className="card-glass rounded-xl p-4 flex items-center gap-3">
-                            <img src={i.foto} alt={i.nombre}
-                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                className="w-10 h-10 rounded-full object-cover bg-fondo-medio flex-shrink-0" />
-                            <div className="flex flex-col items-start">
-                                <div className="flex gap-1">
-                                    <button onClick={() => mover(i.id, -1)} disabled={indice === 0}
-                                        className="w-6 h-6 flex items-center justify-center rounded bg-sutil hover:bg-sutil-hover t-muted disabled:opacity-30 transition-all"
-                                        title="Subir">
-                                        <ArrowUp className="w-3 h-3" />
-                                    </button>
-                                    <button onClick={() => mover(i.id, 1)} disabled={indice === integrantesPaginados.length - 1}
-                                        className="w-6 h-6 flex items-center justify-center rounded bg-sutil hover:bg-sutil-hover t-muted disabled:opacity-30 transition-all"
-                                        title="Bajar">
-                                        <ArrowDown className="w-3 h-3" />
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium text-secundario text-sm">{i.nombre}</p>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <span className={`text-xs ${COLORES_CUERDA[i.cuerda]}`}>{i.cuerda}</span>
-                                    {i.esDirectivo && <span className="text-xs text-khaki">· {i.cargo}</span>}
-                                    {i.anioIngreso !== undefined && <span className="text-[11px] t-muted-low">· Desde {i.anioIngreso}</span>}
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => abrirEditar(i)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
-                                    <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => eliminarIntegrante(i.id)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
+                <div className="space-y-3">
+                    <BarraFiltrosAdmin
+                        termino={filtroBusqueda}
+                        alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaIntegrantes(1); }}
+                        placeholder="Buscar por nombre o cargo..."
+                        chips={[
+                            { clave: 'Todas', etiqueta: 'Todas', contador: integrantes.length },
+                            ...CUERDAS_INTEGRANTE.map(c => ({ clave: c, etiqueta: c, contador: integrantes.filter(i => i.cuerda === c).length })),
+                        ]}
+                        filtroActivo={filtroCuerda}
+                        alCambiarFiltro={cambiarFiltro(setFiltroCuerda)}
+                    />
+                    <BarraFiltrosAdmin
+                        termino=""
+                        alCambiarTermino={() => {}}
+                        ocultarBuscador
+                        chips={[
+                            { clave: 'Todos', etiqueta: 'Todos', contador: integrantes.length },
+                            { clave: 'Directiva', etiqueta: 'Directiva', contador: integrantes.filter(i => i.esDirectivo).length },
+                            { clave: 'Coro', etiqueta: 'Coro', contador: integrantes.filter(i => !i.esDirectivo).length },
+                        ]}
+                        filtroActivo={filtroDirectivo}
+                        alCambiarFiltro={cambiarFiltro(setFiltroDirectivo)}
+                    />
+
+                    {integrantesPaginados.length === 0 ? (
+                        <div className="card-glass rounded-xl p-10 text-center t-muted">
+                            No hay integrantes que coincidan con los filtros.
                         </div>
-                    ))}
+                    ) : (
+                        <>
+                            {integrantesPaginados.map((i, indice) => {
+                                const gGlobal = indiceGlobalIntegrante(i.id);
+                                return (
+                                    <div key={i.id}
+                                        data-reordenable={indice}
+                                        className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 transition-all ${
+                                            arrastreIntegrantes.arrastrando && arrastreIntegrantes.sobre === indice
+                                                ? 'ring-2 ring-vinotinto/60 border-vinotinto/60'
+                                                : ''
+                                        }`}>
+                                        <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                                            <FlechasOrden
+                                                puedeSubir={gGlobal > 0}
+                                                puedeBajar={gGlobal < integrantes.length - 1}
+                                                alSubir={() => moverIntegrante(i.id, gGlobal - 1)}
+                                                alBajar={() => moverIntegrante(i.id, gGlobal + 1)}
+                                            />
+                                            <span className="text-[10px] t-muted-low font-mono">#{gGlobal + 1}</span>
+                                        </div>
+                                        <button
+                                            {...arrastreIntegrantes.manejador(indice)}
+                                            title="Mantener y arrastrar para reordenar"
+                                            className={`touch-none select-none flex items-center justify-center w-7 h-14 rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-vinotinto transition-all cursor-grab active:cursor-grabbing flex-shrink-0 ${
+                                                arrastreIntegrantes.arrastrando && arrastreIntegrantes.desde === indice ? 'bg-vinotinto/15 text-vinotinto' : ''
+                                            }`}
+                                        >
+                                            <GripVertical className="w-4 h-4" />
+                                        </button>
+                                        <img src={i.foto} alt={i.nombre}
+                                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                            className="w-10 h-10 rounded-full object-cover bg-fondo-medio flex-shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-secundario text-sm">{i.nombre}</p>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className={`text-xs ${COLORES_CUERDA[i.cuerda]}`}>{i.cuerda}</span>
+                                                {i.esDirectivo && <span className="text-xs text-khaki">· {i.cargo}</span>}
+                                                {i.anioIngreso !== undefined && <span className="text-[11px] t-muted-low">· Desde {i.anioIngreso}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 flex-shrink-0">
+                                            <button onClick={() => abrirEditar(i)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => eliminarIntegrante(i.id)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </>
+                    )}
                     <PaginadorRegistros
                         pagina={paginaIntegrantesClamp}
                         totalPaginas={totalPaginasIntegrantes}
@@ -806,14 +1081,16 @@ const ModuloIntegrantes = () => {
                                 <h3 className="font-display font-bold text-lg text-secundario">{editando ? 'Editar' : 'Añadir'} Integrante</h3>
                                 <button onClick={() => setMostrarFormulario(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="col-span-2"><label className="label-campo">Nombre *</label><input className="input-campo" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre completo" /></div>
-                                <div><label className="label-campo">Cuerda</label><select className="input-campo" value={form.cuerda} onChange={e => setForm(p => ({ ...p, cuerda: e.target.value as Integrante['cuerda'] }))}>
-                                    {CUERDAS_INTEGRANTE.map(c => <option key={c}>{c}</option>)}
-                                </select></div>
-                                <div><label className="label-campo">Rango Vocal</label><input className="input-campo" value={form.rangoVocal} onChange={e => setForm(p => ({ ...p, rangoVocal: e.target.value }))} placeholder="C4 - G5" /></div>
-                                <div className="col-span-2"><label className="label-campo">Foto</label>
-                                    <div className="flex gap-2">
+                            <div className="grid grid-cols-1 gap-3">
+                                <div className="col-span-full"><label className="label-campo">Nombre *</label><input className="input-campo" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre completo" /></div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div><label className="label-campo">Cuerda</label><select className="input-campo" value={form.cuerda} onChange={e => setForm(p => ({ ...p, cuerda: e.target.value as Integrante['cuerda'] }))}>
+                                        {CUERDAS_INTEGRANTE.map(c => <option key={c}>{c}</option>)}
+                                    </select></div>
+                                    <div><label className="label-campo">Rango Vocal</label><input className="input-campo" value={form.rangoVocal} onChange={e => setForm(p => ({ ...p, rangoVocal: e.target.value }))} placeholder="C4 - G5" /></div>
+                                </div>
+                                <div className="col-span-full"><label className="label-campo">Foto</label>
+                                    <div className="flex flex-col sm:flex-row gap-2">
                                         <button onClick={() => (document.getElementById('input-foto-integrante') as HTMLInputElement)?.click()}
                                             className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
                                             {subiendoFoto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir foto
@@ -828,14 +1105,21 @@ const ModuloIntegrantes = () => {
                                         />
                                     </div>
                                 </div>
-                                <div className="col-span-2"><label className="label-campo">Biografía</label><textarea rows={3} className="input-campo resize-none" value={form.biografia} onChange={e => setForm(p => ({ ...p, biografia: e.target.value }))} placeholder="Mini-biografía..." /></div>
-                                <div className="flex items-center gap-2 col-span-2">
-                                    <input type="checkbox" id="esDirectivo" checked={form.esDirectivo} onChange={e => setForm(p => ({ ...p, esDirectivo: e.target.checked }))} className="cursor-pointer" />
-                                    <label htmlFor="esDirectivo" className="text-sm t-muted-high cursor-pointer">Es miembro directivo</label>
+                                <div className="col-span-full"><label className="label-campo">Biografía</label><textarea rows={3} className="input-campo resize-none" value={form.biografia} onChange={e => setForm(p => ({ ...p, biografia: e.target.value }))} placeholder="Mini-biografía..." /></div>
+                                <div className="col-span-full">
+                                    <ToggleCampo
+                                        activo={form.esDirectivo}
+                                        alCambiar={() => setForm(p => ({ ...p, esDirectivo: !p.esDirectivo }))}
+                                        icono={<Users className="w-4 h-4" />}
+                                        etiqueta="Es miembro directivo"
+                                        descripcion="Aparece en la sección de directiva"
+                                    />
                                 </div>
-                                {form.esDirectivo && <div className="col-span-2"><label className="label-campo">Cargo</label><input className="input-campo" value={form.cargo} onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))} placeholder="Ej: Presidenta" /></div>}
-                                <div><label className="label-campo">Año de ingreso</label><input type="number" min={1900} max={2100} className="input-campo" value={form.anioIngreso} onChange={e => setForm(p => ({ ...p, anioIngreso: e.target.value.replace(/[^0-9]/g, '') }))} placeholder="2019" /></div>
-                                <div><label className="label-campo">Instagram</label><input className="input-campo" value={form.urlInstagram} onChange={e => setForm(p => ({ ...p, urlInstagram: e.target.value }))} placeholder="https://instagram.com/..." /></div>
+                                {form.esDirectivo && <div className="col-span-full"><label className="label-campo">Cargo</label><input className="input-campo" value={form.cargo} onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))} placeholder="Ej: Presidenta" /></div>}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div><label className="label-campo">Año de ingreso</label><input type="number" min={1900} max={2100} className="input-campo" value={form.anioIngreso} onChange={e => setForm(p => ({ ...p, anioIngreso: e.target.value.replace(/[^0-9]/g, '') }))} placeholder="2019" /></div>
+                                    <div><label className="label-campo">Instagram</label><input className="input-campo" value={form.urlInstagram} onChange={e => setForm(p => ({ ...p, urlInstagram: e.target.value }))} placeholder="https://instagram.com/..." /></div>
+                                </div>
                             </div>
                             <button onClick={guardar} className="btn-primario w-full justify-center">
                                 <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Integrante'}
@@ -868,18 +1152,31 @@ const ModuloEventos = () => {
         titulo: '', descripcion: '', fecha: '', lugar: '', direccion: '',
         tipoEntrada: 'Libre' as Evento['tipoEntrada'], urlEntradas: '', urlMapa: '', imagen: '',
         categoria: 'Concierto', destacado: false, agotado: false, activo: true,
-        duracionMin: 120, organizador: 'DaCapo Grupo Vocal', precio: '', repertorio: '', orden: 0,
+        duracionMin: 120, organizador: 'DaCapo Grupo Vocal', precio: '', repertorio: '',
     });
     const [subiendoImagen, setSubiendoImagen] = useState(false);
     const [aviso, setAviso] = useState<{ mensaje: string; tipo: 'ok' | 'error' } | null>(null);
     const [confirmaEliminar, setConfirmaEliminar] = useState<string | null>(null);
     const [paginaEventos, setPaginaEventos] = useState(1);
 
+    // --- Filtros ---
+    const [filtroBusqueda, setFiltroBusqueda] = useState('');
+    const [filtroTipo, setFiltroTipo] = useState('Todos');
+    const [filtroVisibilidad, setFiltroVisibilidad] = useState('Todos');
+    const [filtroMomento, setFiltroMomento] = useState('Todos');
+    const [filtroCategoria, setFiltroCategoria] = useState('Todos');
+    const [filtroDestacado, setFiltroDestacado] = useState('Todos');
+
+    const cambiarFiltro = (set: (v: string) => void) => (clave: string) => {
+        set(clave);
+        setPaginaEventos(1);
+    };
+
     const formVacio = () => ({
         titulo: '', descripcion: '', fecha: '', lugar: '', direccion: '',
         tipoEntrada: 'Libre' as Evento['tipoEntrada'], urlEntradas: '', urlMapa: '', imagen: '',
         categoria: 'Concierto', destacado: false, agotado: false, activo: true,
-        duracionMin: 120, organizador: 'DaCapo Grupo Vocal', precio: '', repertorio: '', orden: 0,
+        duracionMin: 120, organizador: 'DaCapo Grupo Vocal', precio: '', repertorio: '',
     });
 
     const abrirCrear = () => {
@@ -908,7 +1205,6 @@ const ModuloEventos = () => {
             organizador: e.organizador || 'DaCapo Grupo Vocal',
             precio: e.precio || '',
             repertorio: e.repertorio || '',
-            orden: e.orden ?? 0,
         });
         setMostrarForm(true);
     };
@@ -931,7 +1227,7 @@ const ModuloEventos = () => {
         organizador: formEvento.organizador,
         precio: formEvento.precio,
         repertorio: formEvento.repertorio,
-        orden: formEvento.orden,
+        orden: 0,
     });
 
     const guardar = () => {
@@ -942,6 +1238,15 @@ const ModuloEventos = () => {
             agregarEvento({ ...aDatos(), orden: eventos.length });
         }
         setMostrarForm(false);
+    };
+
+    const cambiarTipoEntrada = (tipo: Evento['tipoEntrada']) => {
+        setFormEvento(p => {
+            const nuevo = { ...p, tipoEntrada: tipo };
+            if (tipo === 'Libre') { nuevo.urlEntradas = ''; nuevo.precio = ''; nuevo.agotado = false; }
+            if (tipo === 'Con entrada' || tipo === 'Donación voluntaria') { nuevo.urlEntradas = ''; nuevo.precio = ''; }
+            return nuevo;
+        });
     };
 
     const subirImagen = async (archivo: File | null) => {
@@ -966,22 +1271,73 @@ const ModuloEventos = () => {
         }
     };
 
-    const eventosOrdenados = [...eventos]
-        .sort((a, b) => (a.orden ?? 9999) - (b.orden ?? 9999) || new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    const sorterEventos = (a: Evento, b: Evento) =>
+        (a.orden ?? 9999) - (b.orden ?? 9999) || new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
 
-    const totalPaginasEventos = Math.max(1, Math.ceil(eventosOrdenados.length / REGISTROS_POR_PAGINA));
+    const eventosOrdenados = [...eventos].sort(sorterEventos);
+
+    // --- Reordenamiento (flechas globales + arrastre) ---
+    const indiceGlobalEvento = (id: string) => eventosOrdenados.findIndex(e => e.id === id);
+    const moverEvento = (id: string, objetivoGlobal: number) => {
+        const nuevo = moverRegistroGlobal(eventos, sorterEventos, id, objetivoGlobal, (idE, orden) => editarEvento(idE, { orden }));
+        if (nuevo >= 0) setPaginaEventos(Math.floor(nuevo / REGISTROS_POR_PAGINA) + 1);
+    };
+    const arrastreEventos = useArrastre((desde, hasta) => {
+        const visible = eventosPaginados[desde];
+        if (visible) moverEvento(visible.id, (paginaEventosClamp - 1) * REGISTROS_POR_PAGINA + hasta);
+    });
+
+    // --- Filtrado ---
+    const q = normalizarTexto(filtroBusqueda);
+    const eventosFiltrados = eventosOrdenados.filter(e => {
+        if (q && ![e.titulo, e.lugar, e.organizador, e.direccion].some(x => normalizarTexto(x || '').includes(q))) return false;
+        if (filtroTipo !== 'Todos' && e.tipoEntrada !== filtroTipo) return false;
+        if (filtroVisibilidad === 'Visible' && !e.activo) return false;
+        if (filtroVisibilidad === 'Oculto' && e.activo) return false;
+        if (filtroMomento === 'Futuros' && new Date(e.fecha).getTime() <= Date.now()) return false;
+        if (filtroMomento === 'Pasados' && new Date(e.fecha).getTime() > Date.now()) return false;
+        if (filtroCategoria !== 'Todos' && e.categoria !== filtroCategoria) return false;
+        if (filtroDestacado === 'Destacados' && !e.destacado) return false;
+        if (filtroDestacado === 'No destacados' && e.destacado) return false;
+        return true;
+    });
+
+    const totalPaginasEventos = Math.max(1, Math.ceil(eventosFiltrados.length / REGISTROS_POR_PAGINA));
     const paginaEventosClamp = Math.min(paginaEventos, totalPaginasEventos);
-    const eventosPaginados = eventosOrdenados.slice(
+    const eventosPaginados = eventosFiltrados.slice(
         (paginaEventosClamp - 1) * REGISTROS_POR_PAGINA,
         paginaEventosClamp * REGISTROS_POR_PAGINA
     );
+
+    const momentoTipo = (e: Evento) => new Date(e.fecha).getTime() <= Date.now() ? 'Pasado' : 'Futuro';
+    const categoriasPresentes = [...new Set(eventos.map(e => e.categoria).filter(Boolean))];
+    const chipsTipo = [
+        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Libre', etiqueta: 'Libre', contador: eventos.filter(e => e.tipoEntrada === 'Libre').length },
+        { clave: 'Con entrada', etiqueta: 'Con entrada', contador: eventos.filter(e => e.tipoEntrada === 'Con entrada').length },
+        { clave: 'Donación voluntaria', etiqueta: 'Donación', contador: eventos.filter(e => e.tipoEntrada === 'Donación voluntaria').length },
+    ];
+    const chipsMomento = [
+        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Futuros', etiqueta: 'Futuros', contador: eventos.filter(e => momentoTipo(e) === 'Futuro').length },
+        { clave: 'Pasados', etiqueta: 'Pasados', contador: eventos.filter(e => momentoTipo(e) === 'Pasado').length },
+    ];
+    const chipDestacado = [
+        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Destacados', etiqueta: 'Destacados', contador: eventos.filter(e => e.destacado).length },
+        { clave: 'No destacados', etiqueta: 'No destacados', contador: eventos.filter(e => !e.destacado).length },
+    ];
+
+    const esDonacion = formEvento.tipoEntrada === 'Donación voluntaria';
+    const esEntrada = formEvento.tipoEntrada === 'Con entrada';
+    const mostrarBloqueEntradas = esEntrada || esDonacion;
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-display font-bold text-secundario mb-1">Eventos</h2>
-                    <p className="t-muted text-sm">{eventos.length} eventos</p>
+                    <p className="t-muted text-sm">{eventos.length} eventos · Ordena con las flechas o arrastrando (# = posición)</p>
                 </div>
                 <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
                     <Plus className="w-4 h-4" /> Nuevo Evento
@@ -1000,56 +1356,149 @@ const ModuloEventos = () => {
                     <p className="t-muted text-sm">Aún no hay eventos. Presiona "Nuevo Evento" para registrar el primero.</p>
                 </div>
             ) : (
-                <div className="space-y-2">
-                    {eventosPaginados.map(e => (
-                        <div key={e.id} className="card-glass rounded-xl p-4 flex items-center gap-3">
-                            {e.imagen ? (
-                                <img src={e.imagen} alt={e.titulo}
-                                    onError={ev => { (ev.target as HTMLImageElement).style.display = 'none'; }}
-                                    className="w-12 h-12 rounded-lg object-cover bg-fondo-medio flex-shrink-0" />
-                            ) : (
-                                <div className="w-12 h-12 rounded-lg bg-sutil flex items-center justify-center flex-shrink-0">
-                                    <Calendar className="w-5 h-5 t-muted-low" />
-                                </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="font-medium text-secundario text-sm truncate">{e.titulo}</p>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full ${e.activo ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : 'bg-sutil-hover t-muted-low'}`}>
-                                        {e.activo ? 'Visible' : 'Oculto'}
-                                    </span>
-                                    {e.destacado && <span className="text-xs px-2 py-0.5 rounded-full bg-khaki/20 text-amber-700 dark:text-khaki">Destacado</span>}
-                                    {e.agotado && <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400">Agotado</span>}
-                                </div>
-                                <p className="text-xs t-muted truncate">
-                                    {new Date(e.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {e.lugar} · {e.tipoEntrada}
-                                </p>
-                            </div>
-                            <div className="flex gap-1.5 flex-shrink-0">
-                                <button onClick={() => editarEvento(e.id, { destacado: !e.destacado })}
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${e.destacado ? 'bg-khaki/25 text-amber-700 dark:text-khaki' : 'bg-sutil hover:bg-sutil-hover t-muted'}`}
-                                    title={e.destacado ? 'Quitar destacado' : 'Marcar como destacado'}>
-                                    <Star className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => editarEvento(e.id, { activo: !e.activo })} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title={e.activo ? 'Ocultar de la web' : 'Mostrar en la web'}>
-                                    {e.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                </button>
-                                <button onClick={() => abrirEditar(e)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title="Editar">
-                                    <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => confirmarEliminar(e)}
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${confirmaEliminar === e.id ? 'bg-red-600 text-white' : 'bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400'}`}
-                                    title={confirmaEliminar === e.id ? '¿Seguro? Haz clic de nuevo' : 'Eliminar'}>
-                                    {confirmaEliminar === e.id ? <Check className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-                    <PaginadorRegistros
-                        pagina={paginaEventosClamp}
-                        totalPaginas={totalPaginasEventos}
-                        alCambiar={setPaginaEventos}
+                <div className="space-y-3">
+                    <BarraFiltrosAdmin
+                        termino={filtroBusqueda}
+                        alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaEventos(1); }}
+                        placeholder="Buscar por título, lugar u organizador..."
+                        chips={chipsTipo}
+                        filtroActivo={filtroTipo}
+                        alCambiarFiltro={cambiarFiltro(setFiltroTipo)}
                     />
+                    <BarraFiltrosAdmin
+                        termino=""
+                        alCambiarTermino={() => {}}
+                        ocultarBuscador
+                        chips={chipsMomento}
+                        filtroActivo={filtroMomento}
+                        alCambiarFiltro={cambiarFiltro(setFiltroMomento)}
+                    />
+                    <BarraFiltrosAdmin
+                        termino=""
+                        alCambiarTermino={() => {}}
+                        ocultarBuscador
+                        chips={[
+                            { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+                            { clave: 'Visible', etiqueta: 'Visibles', contador: eventos.filter(e => e.activo).length },
+                            { clave: 'Oculto', etiqueta: 'Ocultos', contador: eventos.filter(e => !e.activo).length },
+                        ]}
+                        filtroActivo={filtroVisibilidad}
+                        alCambiarFiltro={cambiarFiltro(setFiltroVisibilidad)}
+                    />
+                    <BarraFiltrosAdmin
+                        termino=""
+                        alCambiarTermino={() => {}}
+                        ocultarBuscador
+                        chips={chipDestacado}
+                        filtroActivo={filtroDestacado}
+                        alCambiarFiltro={cambiarFiltro(setFiltroDestacado)}
+                    />
+                    {categoriasPresentes.length > 0 && (
+                        <BarraFiltrosAdmin
+                            termino=""
+                            alCambiarTermino={() => {}}
+                            ocultarBuscador
+                            chips={[
+                                { clave: 'Todos', etiqueta: 'Todas', contador: eventos.length },
+                                ...categoriasPresentes.map(c => ({
+                                    clave: c,
+                                    etiqueta: c,
+                                    contador: eventos.filter(e => e.categoria === c).length,
+                                })),
+                            ]}
+                            filtroActivo={filtroCategoria}
+                            alCambiarFiltro={cambiarFiltro(setFiltroCategoria)}
+                        />
+                    )}
+
+                    {eventosPaginados.length === 0 ? (
+                        <div className="card-glass rounded-xl p-10 text-center t-muted">
+                            No hay eventos que coincidan con los filtros.
+                        </div>
+                    ) : (
+                        <>
+                            {eventosPaginados.map((e, i) => {
+                                const gGlobal = indiceGlobalEvento(e.id);
+                                return (
+                                    <div key={e.id}
+                                        data-reordenable={i}
+                                        className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 transition-all ${
+                                            arrastreEventos.arrastrando && arrastreEventos.sobre === i
+                                                ? 'ring-2 ring-vinotinto/60 border-vinotinto/60'
+                                                : ''
+                                        }`}>
+                                        {/* Orden: flechas globales + garra */}
+                                        <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                                            <FlechasOrden
+                                                puedeSubir={gGlobal > 0}
+                                                puedeBajar={gGlobal < eventos.length - 1}
+                                                alSubir={() => moverEvento(e.id, gGlobal - 1)}
+                                                alBajar={() => moverEvento(e.id, gGlobal + 1)}
+                                            />
+                                            <span className="text-[10px] t-muted-low font-mono">#{gGlobal + 1}</span>
+                                        </div>
+                                        <button
+                                            {...arrastreEventos.manejador(i)}
+                                            title="Mantener y arrastrar para reordenar"
+                                            className={`touch-none select-none flex items-center justify-center w-7 h-14 rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-vinotinto transition-all cursor-grab active:cursor-grabbing flex-shrink-0 ${
+                                                arrastreEventos.arrastrando && arrastreEventos.desde === i ? 'bg-vinotinto/15 text-vinotinto' : ''
+                                            }`}
+                                        >
+                                            <GripVertical className="w-4 h-4" />
+                                        </button>
+
+                                        {e.imagen ? (
+                                            <img src={e.imagen} alt={e.titulo}
+                                                onError={ev => { (ev.target as HTMLImageElement).style.display = 'none'; }}
+                                                className="w-11 h-11 rounded-lg object-cover bg-fondo-medio flex-shrink-0" />
+                                        ) : (
+                                            <div className="w-11 h-11 rounded-lg bg-sutil flex items-center justify-center flex-shrink-0">
+                                                <Calendar className="w-5 h-5 t-muted-low" />
+                                            </div>
+                                        )}
+
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="font-medium text-secundario text-sm truncate">{e.titulo}</p>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full ${e.activo ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' : 'bg-sutil-hover t-muted-low'}`}>
+                                                    {e.activo ? 'Visible' : 'Oculto'}
+                                                </span>
+                                                {e.destacado && <span className="text-[10px] px-2 py-0.5 rounded-full bg-khaki/20 text-amber-700 dark:text-khaki">Destacado</span>}
+                                                {e.agotado && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400">Agotado</span>}
+                                            </div>
+                                            <p className="text-xs t-muted truncate mt-0.5">
+                                                {new Date(e.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {e.lugar} · {e.tipoEntrada}{e.categoria && e.categoria !== 'Concierto' ? ` · ${e.categoria}` : ''}
+                                            </p>
+                                        </div>
+
+                                        <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                                            <button onClick={() => editarEvento(e.id, { destacado: !e.destacado })}
+                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${e.destacado ? 'bg-khaki/25 text-amber-700 dark:text-khaki' : 'bg-sutil hover:bg-sutil-hover t-muted'}`}
+                                                title={e.destacado ? 'Quitar destacado' : 'Marcar como destacado'}>
+                                                <Star className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => editarEvento(e.id, { activo: !e.activo })} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title={e.activo ? 'Ocultar de la web' : 'Mostrar en la web'}>
+                                                {e.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                            </button>
+                                            <button onClick={() => abrirEditar(e)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title="Editar">
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button onClick={() => confirmarEliminar(e)}
+                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${confirmaEliminar === e.id ? 'bg-red-600 text-white' : 'bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400'}`}
+                                                title={confirmaEliminar === e.id ? '¿Seguro? Haz clic de nuevo' : 'Eliminar'}>
+                                                {confirmaEliminar === e.id ? <Check className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            <PaginadorRegistros
+                                pagina={paginaEventosClamp}
+                                totalPaginas={totalPaginasEventos}
+                                alCambiar={setPaginaEventos}
+                            />
+                        </>
+                    )}
                 </div>
             )}
 
@@ -1062,10 +1511,10 @@ const ModuloEventos = () => {
                                 <h3 className="font-display font-bold text-lg text-secundario">{editando ? 'Editar' : 'Nuevo'} Evento</h3>
                                 <button onClick={() => setMostrarForm(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="col-span-2"><label className="label-campo">Título *</label><input className="input-campo" value={formEvento.titulo} onChange={e => setFormEvento(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del concierto" /></div>
-                                <div className="col-span-2"><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formEvento.descripcion} onChange={e => setFormEvento(p => ({ ...p, descripcion: e.target.value }))} /></div>
-                                <div className="col-span-2"><label className="label-campo">Fecha y Hora *</label><input type="datetime-local" className="input-campo" value={formEvento.fecha} onChange={e => setFormEvento(p => ({ ...p, fecha: e.target.value }))} /></div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="col-span-full"><label className="label-campo">Título *</label><input className="input-campo" value={formEvento.titulo} onChange={e => setFormEvento(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del concierto" /></div>
+                                <div className="col-span-full"><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formEvento.descripcion} onChange={e => setFormEvento(p => ({ ...p, descripcion: e.target.value }))} /></div>
+                                <div className="col-span-full"><label className="label-campo">Fecha y Hora *</label><input type="datetime-local" className="input-campo" value={formEvento.fecha} onChange={e => setFormEvento(p => ({ ...p, fecha: e.target.value }))} /></div>
                                 <div><label className="label-campo">Lugar</label><input className="input-campo" value={formEvento.lugar} onChange={e => setFormEvento(p => ({ ...p, lugar: e.target.value }))} placeholder="Teatro / Iglesia / Sala" /></div>
                                 <div><label className="label-campo">Dirección</label><input className="input-campo" value={formEvento.direccion} onChange={e => setFormEvento(p => ({ ...p, direccion: e.target.value }))} /></div>
                                 <div><label className="label-campo">Categoría</label>
@@ -1075,16 +1524,49 @@ const ModuloEventos = () => {
                                 </div>
                                 <div><label className="label-campo">Organizador</label><input className="input-campo" value={formEvento.organizador} onChange={e => setFormEvento(p => ({ ...p, organizador: e.target.value }))} /></div>
                                 <div><label className="label-campo">Duración (minutos)</label><input type="number" min={15} step={15} className="input-campo" value={formEvento.duracionMin} onChange={e => setFormEvento(p => ({ ...p, duracionMin: Number(e.target.value) || 120 }))} /></div>
-                                <div><label className="label-campo">Precio / Bono</label><input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder='Ej: Bs. 10' /></div>
-                                <div><label className="label-campo">Tipo de Entrada</label>
-                                    <select className="input-campo" value={formEvento.tipoEntrada} onChange={e => setFormEvento(p => ({ ...p, tipoEntrada: e.target.value as Evento['tipoEntrada'] }))}>
+                                <div><label className="label-campo">URL Mapa</label><input className="input-campo" value={formEvento.urlMapa} onChange={e => setFormEvento(p => ({ ...p, urlMapa: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
+                                <div className="col-span-full"><label className="label-campo">Tipo de Entrada</label>
+                                    <select className="input-campo" value={formEvento.tipoEntrada} onChange={e => cambiarTipoEntrada(e.target.value as Evento['tipoEntrada'])}>
                                         {['Libre', 'Con entrada', 'Donación voluntaria'].map(t => <option key={t}>{t}</option>)}
                                     </select>
                                 </div>
-                                <div><label className="label-campo">URL Entradas</label><input className="input-campo" value={formEvento.urlEntradas} onChange={e => setFormEvento(p => ({ ...p, urlEntradas: e.target.value }))} placeholder="https://..." /></div>
-                                <div><label className="label-campo">URL Mapa</label><input className="input-campo" value={formEvento.urlMapa} onChange={e => setFormEvento(p => ({ ...p, urlMapa: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
-                                <div className="col-span-2"><label className="label-campo">Imagen promocional</label>
-                                    <div className="flex gap-2">
+
+                                {/* Bloque dinámico según tipo de entrada */}
+                                {mostrarBloqueEntradas && (
+                                    <div className="col-span-full border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-3">
+                                        <p className="label-campo flex items-center gap-1.5 font-semibold text-vinotinto dark:text-khaki">
+                                            <Ticket className="w-3.5 h-3.5" /> {esEntrada ? 'Entradas' : 'Donaciones'}
+                                        </p>
+                                        {esEntrada && (
+                                            <div>
+                                                <label className="label-campo">Precio / Bono</label>
+                                                <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 10" />
+                                            </div>
+                                        )}
+                                        {esDonacion && (
+                                            <div>
+                                                <label className="label-campo">Aporte sugerido</label>
+                                                <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 5 / aporte libre" />
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className="label-campo">{esEntrada ? 'URL del sitio de venta' : 'Link de donación'}</label>
+                                            <input className="input-campo" value={formEvento.urlEntradas} onChange={e => setFormEvento(p => ({ ...p, urlEntradas: e.target.value }))} placeholder="https://..." />
+                                        </div>
+                                        {esEntrada && (
+                                            <ToggleCampo
+                                                activo={formEvento.agotado}
+                                                alCambiar={() => setFormEvento(p => ({ ...p, agotado: !p.agotado }))}
+                                                icono={<Ticket className="w-4 h-4" />}
+                                                etiqueta="Entradas agotadas"
+                                                descripcion="Mostrar el aviso de agotado en la web"
+                                            />
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="col-span-full"><label className="label-campo">Imagen promocional</label>
+                                    <div className="flex flex-col sm:flex-row gap-2">
                                         <button onClick={() => (document.getElementById('input-imagen-evento') as HTMLInputElement)?.click()}
                                             className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
                                             {subiendoImagen ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir imagen
@@ -1099,20 +1581,26 @@ const ModuloEventos = () => {
                                         />
                                     </div>
                                 </div>
-                                <div className="col-span-2"><label className="label-campo">Repertorio (una obra por línea)</label><textarea rows={5} className="input-campo resize-none font-mono text-xs" value={formEvento.repertorio} onChange={e => setFormEvento(p => ({ ...p, repertorio: e.target.value }))} placeholder={"Parte I:\nAlleluia\nBogoroditse Djevo\n..."} /></div>
-                                <div className="col-span-2"><label className="label-campo">Orden</label><input type="number" className="input-campo" value={formEvento.orden} onChange={e => setFormEvento(p => ({ ...p, orden: Number(e.target.value) || 0 }))} /></div>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" checked={formEvento.destacado} onChange={e => setFormEvento(p => ({ ...p, destacado: e.target.checked }))} className="cursor-pointer" />
-                                    <span className="text-sm t-muted-high">Destacado en la web</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" checked={formEvento.agotado} onChange={e => setFormEvento(p => ({ ...p, agotado: e.target.checked }))} className="cursor-pointer" />
-                                    <span className="text-sm t-muted-high">Entradas agotadas</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer col-span-2">
-                                    <input type="checkbox" checked={formEvento.activo} onChange={e => setFormEvento(p => ({ ...p, activo: e.target.checked }))} className="cursor-pointer" />
-                                    <span className="text-sm t-muted-high">Visible en la web</span>
-                                </label>
+                                <div className="col-span-full"><label className="label-campo">Repertorio (una obra por línea)</label><textarea rows={5} className="input-campo resize-none font-mono text-xs" value={formEvento.repertorio} onChange={e => setFormEvento(p => ({ ...p, repertorio: e.target.value }))} placeholder={"Parte I:\nAlleluia\nBogoroditse Djevo\n..."} /></div>
+
+                                {/* Publicación con toggles rediseñados */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 col-span-full">
+                                    <ToggleCampo
+                                        activo={formEvento.destacado}
+                                        alCambiar={() => setFormEvento(p => ({ ...p, destacado: !p.destacado }))}
+                                        icono={<Star className="w-4 h-4" />}
+                                        etiqueta="Destacado en la web"
+                                        descripcion="Se muestra en tarjeta grande con imagen"
+                                        colorActivo="bg-khaki"
+                                    />
+                                    <ToggleCampo
+                                        activo={formEvento.activo}
+                                        alCambiar={() => setFormEvento(p => ({ ...p, activo: !p.activo }))}
+                                        icono={formEvento.activo ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                        etiqueta="Visible en la web"
+                                        descripcion={formEvento.activo ? 'Este evento se muestra al público' : 'Oculto temporalmente'}
+                                    />
+                                </div>
                             </div>
                             <button onClick={guardar} className="btn-primario w-full justify-center">
                                 <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Guardar Evento'}
@@ -1152,10 +1640,12 @@ const ModuloAudio = () => {
     const [pistaEnPreescucha, setPistaEnPreescucha] = useState<string | null>(null);
     const [audioPreescucha] = useState<HTMLAudioElement>(() => new Audio());
     const [paginaAudio, setPaginaAudio] = useState(1);
+    const [filtroBusquedaAudio, setFiltroBusquedaAudio] = useState('');
 
-    const totalPaginasAudio = Math.max(1, Math.ceil(pistasAudio.length / REGISTROS_POR_PAGINA));
+    const pistasFiltradas = pistasAudio.filter(p => !filtroBusquedaAudio.trim() || normalizarTexto(`${p.titulo} ${p.compositor}`).includes(normalizarTexto(filtroBusquedaAudio.trim())));
+    const totalPaginasAudio = Math.max(1, Math.ceil(pistasFiltradas.length / REGISTROS_POR_PAGINA));
     const paginaAudioClamp = Math.min(paginaAudio, totalPaginasAudio);
-    const pistasAudioPaginadas = pistasAudio.slice(
+    const pistasAudioPaginadas = pistasFiltradas.slice(
         (paginaAudioClamp - 1) * REGISTROS_POR_PAGINA,
         paginaAudioClamp * REGISTROS_POR_PAGINA
     );
@@ -1331,11 +1821,25 @@ const ModuloAudio = () => {
 
             {/* Lista de pistas */}
             <div className="space-y-2">
+                {pistasAudio.length > 0 && (
+                    <BarraFiltrosAdmin
+                        termino={filtroBusquedaAudio}
+                        alCambiarTermino={t => { setFiltroBusquedaAudio(t); setPaginaAudio(1); }}
+                        placeholder="Buscar por título o compositor..."
+                        chips={[]}
+                        filtroActivo="Todos"
+                        alCambiarFiltro={() => {}}
+                    />
+                )}
                 {pistasAudio.length === 0 ? (
                     <div className="card-glass rounded-xl p-12 text-center t-muted">
                         <Disc className="w-12 h-12 mx-auto mb-3 opacity-30" />
                         <p>No hay pistas en el reproductor.</p>
                         <p className="text-xs mt-1">Haz clic en "Añadir Pista" para subir tu primer archivo .mp3</p>
+                    </div>
+                ) : pistasAudioPaginadas.length === 0 ? (
+                    <div className="card-glass rounded-xl p-10 text-center t-muted">
+                        No hay pistas que coincidan con la búsqueda.
                     </div>
                 ) : (
                     pistasAudioPaginadas.map(p => {
@@ -1469,7 +1973,7 @@ const ModuloAudio = () => {
                                 </div>
 
                                 {/* Compositor y Duración */}
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
                                         <label className="label-campo">Compositor / Arreglista</label>
                                         <input
@@ -1591,7 +2095,6 @@ type FormVideoMedia = {
     categoria: string;
     destacado: boolean;
     duracion: string;
-    orden: number;
     activo: boolean;
 };
 
@@ -1601,7 +2104,6 @@ type FormFotoGaleria = {
     categoria: string;
     enlaceTexto: string;
     enlaceUrl: string;
-    orden: number;
     activo: boolean;
 };
 
@@ -1614,13 +2116,24 @@ const ModuloMedia = () => {
     const [paginaVideos, setPaginaVideos] = useState(1);
     const [mostrarFormVideo, setMostrarFormVideo] = useState(false);
     const [editandoVideo, setEditandoVideo] = useState<VideoMedia | null>(null);
-    const [formVideo, setFormVideo] = useState<FormVideoMedia>({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', orden: 0, activo: true });
+    const [formVideo, setFormVideo] = useState<FormVideoMedia>({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true });
+    const [filtroBusquedaVideo, setFiltroBusquedaVideo] = useState('');
+    const [filtroActivoVideo, setFiltroActivoVideo] = useState('Todos');
+    const [filtroCategoriaVideo, setFiltroCategoriaVideo] = useState('Todas');
 
     // --- Estado de Fotos ---
     const [paginaFotos, setPaginaFotos] = useState(1);
     const [mostrarFormFoto, setMostrarFormFoto] = useState(false);
     const [editandoFoto, setEditandoFoto] = useState<FotoGaleria | null>(null);
-    const [formFoto, setFormFoto] = useState<FormFotoGaleria>({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', orden: 0, activo: true });
+    const [formFoto, setFormFoto] = useState<FormFotoGaleria>({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', activo: true });
+    const [filtroBusquedaFoto, setFiltroBusquedaFoto] = useState('');
+    const [filtroActivoFoto, setFiltroActivoFoto] = useState('Todos');
+
+    const cambiarFiltro = (set: (v: string) => void) => (clave: string) => {
+        set(clave);
+        setPaginaVideos(1);
+        setPaginaFotos(1);
+    };
 
     // --- Utilidad para extraer el ID de un video de YouTube ---
     const extraerYoutubeId = (url: string): string => {
@@ -1637,20 +2150,51 @@ const ModuloMedia = () => {
         return limpia;
     };
 
-    // --- Paginación ---
-    const totalPaginasVideos = Math.max(1, Math.ceil(videosMedia.length / REGISTROS_POR_PAGINA));
+    // --- Filtros y paginación: Videos ---
+    const videosFiltrados = videosMedia
+        .filter(v => filtroActivoVideo === 'Todos' || (filtroActivoVideo === 'Activo' ? v.activo : !v.activo))
+        .filter(v => filtroCategoriaVideo === 'Todas' || v.categoria === filtroCategoriaVideo)
+        .filter(v => !filtroBusquedaVideo.trim() || normalizarTexto(v.titulo + ' ' + v.descripcion).includes(normalizarTexto(filtroBusquedaVideo.trim())));
+    const videosConOrden = [...videosFiltrados].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const totalPaginasVideos = Math.max(1, Math.ceil(videosConOrden.length / REGISTROS_POR_PAGINA));
     const paginaVideosClamp = Math.min(paginaVideos, totalPaginasVideos);
-    const videosPaginados = videosMedia.slice(
+    const videosPaginados = videosConOrden.slice(
         (paginaVideosClamp - 1) * REGISTROS_POR_PAGINA,
         paginaVideosClamp * REGISTROS_POR_PAGINA
     );
 
-    const totalPaginasFotos = Math.max(1, Math.ceil(fotosGaleria.length / REGISTROS_POR_PAGINA));
+    const indiceGlobalVideo = (id: string) => videosConOrden.findIndex(v => v.id === id);
+    const moverVideo = (id: string, objetivo: number) => {
+        const nuevo = moverRegistroGlobal(videosConOrden, (a, b) => (a.orden ?? 0) - (b.orden ?? 0), id, objetivo, (vid, pos) => editarVideoMedia(vid, { orden: pos }));
+        setPaginaVideos(Math.floor(nuevo / REGISTROS_POR_PAGINA) + 1);
+    };
+    const arrastreVideos = useArrastre((desde, hasta) => {
+        const video = videosPaginados[desde];
+        if (!video) return;
+        moverRegistroGlobal(videosConOrden, (a, b) => (a.orden ?? 0) - (b.orden ?? 0), video.id, (paginaVideosClamp - 1) * REGISTROS_POR_PAGINA + hasta, (vid, pos) => editarVideoMedia(vid, { orden: pos }));
+    });
+
+    // --- Filtros y paginación: Fotos ---
+    const fotosFiltradas = fotosGaleria
+        .filter(f => filtroActivoFoto === 'Todos' || (filtroActivoFoto === 'Activo' ? f.activo : !f.activo))
+        .filter(f => !filtroBusquedaFoto.trim() || normalizarTexto(f.titulo).includes(normalizarTexto(filtroBusquedaFoto.trim())));
+    const fotosConOrden = [...fotosFiltradas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const totalPaginasFotos = Math.max(1, Math.ceil(fotosConOrden.length / REGISTROS_POR_PAGINA));
     const paginaFotosClamp = Math.min(paginaFotos, totalPaginasFotos);
-    const fotosPaginadas = fotosGaleria.slice(
+    const fotosPaginadas = fotosConOrden.slice(
         (paginaFotosClamp - 1) * REGISTROS_POR_PAGINA,
         paginaFotosClamp * REGISTROS_POR_PAGINA
     );
+
+    const indiceGlobalFoto = (id: string) => fotosConOrden.findIndex(f => f.id === id);
+    const moverFoto = (id: string, objetivo: number) => {
+        const nuevo = moverRegistroGlobal(fotosConOrden, (a, b) => (a.orden ?? 0) - (b.orden ?? 0), id, objetivo, (fid, pos) => editarFotoGaleria(fid, { orden: pos }));
+        setPaginaFotos(Math.floor(nuevo / REGISTROS_POR_PAGINA) + 1);
+    };
+    const arrastreFotos = useArrastre((desde, hasta) => {
+        moverRegistroGlobal(fotosConOrden, (a, b) => (a.orden ?? 0) - (b.orden ?? 0), fotosPaginadas[desde].id, (paginaFotosClamp - 1) * REGISTROS_POR_PAGINA + hasta, (fid, pos) => editarFotoGaleria(fid, { orden: pos }));
+        setPaginaFotos(Math.floor(((paginaFotosClamp - 1) * REGISTROS_POR_PAGINA + hasta) / REGISTROS_POR_PAGINA) + 1);
+    });
 
     const guardarVideo = () => {
         const youtubeId = extraerYoutubeId(formVideo.urlYoutube);
@@ -1664,7 +2208,7 @@ const ModuloMedia = () => {
             categoria: formVideo.categoria,
             destacado: formVideo.destacado,
             duracion: formVideo.duracion.trim(),
-            orden: formVideo.orden,
+            orden: editandoVideo ? editandoVideo.orden : videosMedia.length,
             activo: formVideo.activo,
         };
         if (editandoVideo) {
@@ -1674,12 +2218,12 @@ const ModuloMedia = () => {
         }
         setMostrarFormVideo(false);
         setEditandoVideo(null);
-        setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', orden: 0, activo: true });
+        setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true });
     };
 
     const abrirEditarVideo = (v: VideoMedia) => {
         setEditandoVideo(v);
-        setFormVideo({ titulo: v.titulo, descripcion: v.descripcion, urlYoutube: v.youtubeId, categoria: v.categoria, destacado: v.destacado, duracion: v.duracion, orden: v.orden, activo: v.activo });
+        setFormVideo({ titulo: v.titulo, descripcion: v.descripcion, urlYoutube: v.youtubeId, categoria: v.categoria, destacado: v.destacado, duracion: v.duracion, activo: v.activo });
         setMostrarFormVideo(true);
     };
 
@@ -1691,7 +2235,7 @@ const ModuloMedia = () => {
             categoria: formFoto.categoria,
             enlaceTexto: formFoto.enlaceTexto.trim(),
             enlaceUrl: formFoto.enlaceUrl.trim(),
-            orden: formFoto.orden,
+            orden: editandoFoto ? editandoFoto.orden : fotosGaleria.length,
             activo: formFoto.activo,
         };
         if (editandoFoto) {
@@ -1701,12 +2245,12 @@ const ModuloMedia = () => {
         }
         setMostrarFormFoto(false);
         setEditandoFoto(null);
-        setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', orden: 0, activo: true });
+        setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', activo: true });
     };
 
     const abrirEditarFoto = (f: FotoGaleria) => {
         setEditandoFoto(f);
-        setFormFoto({ titulo: f.titulo, src: f.urlFoto, categoria: f.categoria, enlaceTexto: f.enlaceTexto || '', enlaceUrl: f.enlaceUrl || '', orden: f.orden, activo: f.activo });
+        setFormFoto({ titulo: f.titulo, src: f.urlFoto, categoria: f.categoria, enlaceTexto: f.enlaceTexto || '', enlaceUrl: f.enlaceUrl || '', activo: f.activo });
         setMostrarFormFoto(true);
     };
 
@@ -1750,7 +2294,7 @@ const ModuloMedia = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-secundario">Videos de YouTube</h3>
-                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', orden: 0, activo: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
+                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
                             <Plus className="w-4 h-4" /> Añadir Video
                         </button>
                     </div>
@@ -1761,55 +2305,112 @@ const ModuloMedia = () => {
                             <p>Aún no hay videos registrados.</p>
                         </div>
                     ) : (
-                        <div className="space-y-2">
-                            {videosPaginados.map(v => (
-                                <div key={v.id} className={`card-glass rounded-xl p-4 flex items-center gap-4 transition-all ${v.activo ? '' : 'opacity-60'}`}>
-                                    {/* Miniatura */}
-                                    <img
-                                        src={`https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`}
-                                        alt={v.titulo}
-                                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        className="w-24 h-14 rounded-lg object-cover bg-fondo-medio flex-shrink-0 border border-black/10 dark:border-white/5"
-                                    />
-                                    {/* Datos */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <p className="font-medium text-secundario text-sm truncate">{v.titulo}</p>
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sutil t-muted">{v.categoria}</span>
-                                            {v.destacado && (
-                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
-                                                    Destacado
-                                                </span>
-                                            )}
-                                            {!v.activo && (
-                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
-                                                    Oculta
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-xs t-muted truncate mt-0.5">{v.descripcion || `youtube.com/watch?v=${v.youtubeId}`}</p>
-                                        <p className="text-[11px] t-muted mt-0.5">Duración: {v.duracion || '—'} · Orden: {v.orden}</p>
-                                    </div>
-                                    {/* Acciones */}
-                                    <div className="flex gap-1.5">
-                                        <button
-                                            onClick={() => editarVideoMedia(v.id, { activo: !v.activo })}
-                                            title={v.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
-                                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
-                                        >
-                                            {v.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                        </button>
-                                        <button onClick={() => abrirEditarVideo(v)} title="Editar"
-                                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
-                                            <Pencil className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => eliminarVideoMedia(v.id)}
-                                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
+                        <div className="space-y-3">
+                            <BarraFiltrosAdmin
+                                termino={filtroBusquedaVideo}
+                                alCambiarTermino={t => { setFiltroBusquedaVideo(t); setPaginaVideos(1); }}
+                                placeholder="Buscar por título o descripción..."
+                                chips={[
+                                    { clave: 'Todos', etiqueta: 'Todos', contador: videosMedia.length },
+                                    { clave: 'Activo', etiqueta: 'Visible', contador: videosMedia.filter(v => v.activo).length },
+                                    { clave: 'Oculto', etiqueta: 'Oculto', contador: videosMedia.filter(v => !v.activo).length },
+                                ]}
+                                filtroActivo={filtroActivoVideo}
+                                alCambiarFiltro={cambiarFiltro(setFiltroActivoVideo)}
+                            />
+                            <BarraFiltrosAdmin
+                                termino=""
+                                alCambiarTermino={() => {}}
+                                ocultarBuscador
+                                chips={[
+                                    { clave: 'Todas', etiqueta: 'Todas', contador: videosMedia.length },
+                                    ...CATEGORIAS_VIDEO.map(c => ({ clave: c, etiqueta: c, contador: videosMedia.filter(v => v.categoria === c).length })),
+                                ]}
+                                filtroActivo={filtroCategoriaVideo}
+                                alCambiarFiltro={cambiarFiltro(setFiltroCategoriaVideo)}
+                            />
+
+                            {videosPaginados.length === 0 ? (
+                                <div className="card-glass rounded-xl p-10 text-center t-muted">
+                                    No hay videos que coincidan con los filtros.
                                 </div>
-                            ))}
+                            ) : (
+                                <>
+                                    {videosPaginados.map((v, indice) => {
+                                        const gGlobal = indiceGlobalVideo(v.id);
+                                        return (
+                                            <div key={v.id}
+                                                data-reordenable={indice}
+                                                className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-3 transition-all ${v.activo ? '' : 'opacity-60'} ${
+                                                    arrastreVideos.arrastrando && arrastreVideos.sobre === indice ? 'ring-2 ring-vinotinto/60 border-vinotinto/60' : ''
+                                                }`}>
+                                                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                                                    <FlechasOrden
+                                                        puedeSubir={gGlobal > 0}
+                                                        puedeBajar={gGlobal < videosConOrden.length - 1}
+                                                        alSubir={() => moverVideo(v.id, gGlobal - 1)}
+                                                        alBajar={() => moverVideo(v.id, gGlobal + 1)}
+                                                    />
+                                                    <span className="text-[10px] t-muted-low font-mono">#{gGlobal + 1}</span>
+                                                </div>
+                                                <button
+                                                    {...arrastreVideos.manejador(indice)}
+                                                    title="Arrastrar para reordenar"
+                                                    className={`touch-none select-none flex items-center justify-center w-7 h-14 rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-vinotinto transition-all cursor-grab active:cursor-grabbing flex-shrink-0 ${
+                                                        arrastreVideos.arrastrando && arrastreVideos.desde === indice ? 'bg-vinotinto/15 text-vinotinto' : ''
+                                                    }`}
+                                                >
+                                                    <GripVertical className="w-4 h-4" />
+                                                </button>
+                                                {/* Miniatura */}
+                                                <img
+                                                    src={`https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg`}
+                                                    alt={v.titulo}
+                                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                    className="w-20 h-12 rounded-lg object-cover bg-fondo-medio flex-shrink-0 border border-black/10 dark:border-white/5"
+                                                />
+                                                {/* Datos */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <p className="font-medium text-secundario text-sm truncate">{v.titulo}</p>
+                                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-sutil t-muted">{v.categoria}</span>
+                                                        {v.destacado && (
+                                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+                                                                Destacado
+                                                            </span>
+                                                        )}
+                                                        {!v.activo && (
+                                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+                                                                Oculta
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs t-muted truncate mt-0.5">{v.descripcion || `youtube.com/watch?v=${v.youtubeId}`}</p>
+                                                    <p className="text-[11px] t-muted mt-0.5">Duración: {v.duracion || '—'}</p>
+                                                </div>
+                                                {/* Acciones */}
+                                                <div className="flex gap-1.5">
+                                                    <button
+                                                        onClick={() => editarVideoMedia(v.id, { activo: !v.activo })}
+                                                        title={v.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
+                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                                    >
+                                                        {v.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                    </button>
+                                                    <button onClick={() => abrirEditarVideo(v)} title="Editar"
+                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => eliminarVideoMedia(v.id)}
+                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </>
+                            )}
                             <PaginadorRegistros
                                 pagina={paginaVideosClamp}
                                 totalPaginas={totalPaginasVideos}
@@ -1825,7 +2426,7 @@ const ModuloMedia = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-secundario">Galería de Fotos</h3>
-                        <button onClick={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', orden: 0, activo: true }); setMostrarFormFoto(true); }} className="btn-primario text-sm py-2 px-4">
+                        <button onClick={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', activo: true }); setMostrarFormFoto(true); }} className="btn-primario text-sm py-2 px-4">
                             <Plus className="w-4 h-4" /> Añadir Foto
                         </button>
                     </div>
@@ -1836,47 +2437,94 @@ const ModuloMedia = () => {
                             <p>Aún no hay fotos en la galería.</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {fotosPaginadas.map(f => (
-                                <div key={f.id} className={`card-glass rounded-xl overflow-hidden transition-all ${f.activo ? '' : 'opacity-60'}`}>
-                                    <div className="aspect-video relative">
-                                        <img src={f.urlFoto} alt={f.titulo} className="w-full h-full object-cover" />
-                                        {!f.activo && (
-                                            <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/80 text-white font-semibold">
-                                                Oculta
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="p-3">
-                                        <p className="font-medium text-secundario text-sm truncate">{f.titulo}</p>
-                                        <p className="text-[11px] t-muted mt-0.5">{f.categoria} · Orden {f.orden}</p>
-                                        <div className="flex gap-1.5 mt-2">
-                                            <button
-                                                onClick={() => editarFotoGaleria(f.id, { activo: !f.activo })}
-                                                title={f.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
-                                                className="flex-1 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
-                                            >
-                                                {f.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                            </button>
-                                            <button onClick={() => abrirEditarFoto(f)} title="Editar"
-                                                className="flex-1 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
-                                                <Pencil className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => eliminarFotoGaleria(f.id)}
-                                                className="flex-1 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
+                        <div className="space-y-3">
+                            <BarraFiltrosAdmin
+                                termino={filtroBusquedaFoto}
+                                alCambiarTermino={t => { setFiltroBusquedaFoto(t); setPaginaFotos(1); }}
+                                placeholder="Buscar por título..."
+                                chips={[
+                                    { clave: 'Todos', etiqueta: 'Todos', contador: fotosGaleria.length },
+                                    { clave: 'Activo', etiqueta: 'Visible', contador: fotosGaleria.filter(f => f.activo).length },
+                                    { clave: 'Oculto', etiqueta: 'Oculto', contador: fotosGaleria.filter(f => !f.activo).length },
+                                ]}
+                                filtroActivo={filtroActivoFoto}
+                                alCambiarFiltro={cambiarFiltro(setFiltroActivoFoto)}
+                            />
+
+                            {fotosPaginadas.length === 0 ? (
+                                <div className="card-glass rounded-xl p-10 text-center t-muted">
+                                    No hay fotos que coincidan con los filtros.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {fotosPaginadas.map((f, indice) => {
+                                        const gGlobal = indiceGlobalFoto(f.id);
+                                        return (
+                                            <div key={f.id}
+                                                data-reordenable={indice}
+                                                className={`card-glass rounded-xl overflow-hidden transition-all ${f.activo ? '' : 'opacity-60'} ${
+                                                    arrastreFotos.arrastrando && arrastreFotos.sobre === indice ? 'ring-2 ring-vinotinto/60 border-vinotinto/60' : ''
+                                                }`}>
+                                                <div className="aspect-video relative">
+                                                    <img src={f.urlFoto} alt={f.titulo} className="w-full h-full object-cover" />
+                                                    {!f.activo && (
+                                                        <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/80 text-white font-semibold">
+                                                            Oculta
+                                                        </span>
+                                                    )}
+                                                    <div className="absolute top-2 right-2 flex flex-col items-center gap-1 bg-black/55 backdrop-blur-sm rounded-lg p-1.5">
+                                                        <FlechasOrden
+                                                            puedeSubir={gGlobal > 0}
+                                                            puedeBajar={gGlobal < fotosConOrden.length - 1}
+                                                            alSubir={() => moverFoto(f.id, gGlobal - 1)}
+                                                            alBajar={() => moverFoto(f.id, gGlobal + 1)}
+                                                            className="bg-white/10 hover:bg-white/25 text-white"
+                                                        />
+                                                        <span className="text-[10px] text-white/80 font-mono">#{gGlobal + 1}</span>
+                                                    </div>
+                                                    <button
+                                                        {...arrastreFotos.manejador(indice)}
+                                                        title="Arrastrar para reordenar"
+                                                        className={`absolute bottom-2 right-2 touch-none select-none w-8 h-9 flex items-center justify-center rounded-lg bg-black/55 backdrop-blur-sm text-white/90 hover:text-white cursor-grab active:cursor-grabbing transition-all ${
+                                                            arrastreFotos.arrastrando && arrastreFotos.desde === indice ? 'bg-vinotinto/80' : ''
+                                                        }`}
+                                                    >
+                                                        <GripVertical className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                                <div className="p-3">
+                                                    <p className="font-medium text-secundario text-sm truncate">{f.titulo}</p>
+                                                    <p className="text-[11px] t-muted mt-0.5">{f.categoria}</p>
+                                                    <div className="flex gap-1.5 mt-2">
+                                                        <button
+                                                            onClick={() => editarFotoGaleria(f.id, { activo: !f.activo })}
+                                                            title={f.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
+                                                            className="flex-1 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                                        >
+                                                            {f.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                        </button>
+                                                        <button onClick={() => abrirEditarFoto(f)} title="Editar"
+                                                            className="flex-1 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button onClick={() => eliminarFotoGaleria(f.id)}
+                                                            className="flex-1 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    <div className="col-span-full">
+                                        <PaginadorRegistros
+                                            pagina={paginaFotosClamp}
+                                            totalPaginas={totalPaginasFotos}
+                                            alCambiar={setPaginaFotos}
+                                        />
                                     </div>
                                 </div>
-                            ))}
-                            <div className="col-span-full">
-                                <PaginadorRegistros
-                                    pagina={paginaFotosClamp}
-                                    totalPaginas={totalPaginasFotos}
-                                    alCambiar={setPaginaFotos}
-                                />
-                            </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -1911,18 +2559,22 @@ const ModuloMedia = () => {
                                         {CATEGORIAS_VIDEO.map(c => <option key={c}>{c}</option>)}
                                     </select>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div><label className="label-campo">Duración (ej: 4:35)</label><input className="input-campo" value={formVideo.duracion} onChange={e => setFormVideo(p => ({ ...p, duracion: e.target.value }))} placeholder="4:35" /></div>
-                                    <div><label className="label-campo">Orden</label><input type="number" min={0} className="input-campo" value={formVideo.orden} onChange={e => setFormVideo(p => ({ ...p, orden: Number(e.target.value) || 0 }))} /></div>
+                                    <div className="flex items-end pb-0.5"><button onClick={() => setFormVideo(p => ({ ...p, destacado: !p.destacado }))}
+                                        className={`w-full h-[38px] flex items-center justify-center gap-2 rounded-xl border text-sm transition-all ${
+                                            formVideo.destacado ? 'bg-khaki/15 text-khaki border-khaki/40' : 'borde-subtle t-muted hover:borde-medium'
+                                        }`}>
+                                        <Star className="w-4 h-4" /> Destacado
+                                    </button></div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="videoDestacado" checked={formVideo.destacado} onChange={e => setFormVideo(p => ({ ...p, destacado: e.target.checked }))} className="cursor-pointer" />
-                                    <label htmlFor="videoDestacado" className="text-sm t-muted-high">Destacado en la web</label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="videoVisible" checked={formVideo.activo} onChange={e => setFormVideo(p => ({ ...p, activo: e.target.checked }))} className="cursor-pointer" />
-                                    <label htmlFor="videoVisible" className="text-sm t-muted-high">Visible en la web</label>
-                                </div>
+                                <ToggleCampo
+                                    activo={formVideo.activo}
+                                    alCambiar={() => setFormVideo(p => ({ ...p, activo: !p.activo }))}
+                                    icono={<Eye className="w-4 h-4" />}
+                                    etiqueta="Visible en la web"
+                                    descripcion="Si está apagado, el video se oculta del sitio público"
+                                />
                             </div>
                             <button onClick={guardarVideo} className="btn-primario w-full justify-center">
                                 <Check className="w-4 h-4" /> {editandoVideo ? 'Guardar Cambios' : 'Añadir Video'}
@@ -1955,13 +2607,17 @@ const ModuloMedia = () => {
                                         {CATEGORIAS_FOTO.map(c => <option key={c}>{c}</option>)}
                                     </select>
                                 </div>
-                                <div><label className="label-campo">Texto del enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceTexto} onChange={e => setFormFoto(p => ({ ...p, enlaceTexto: e.target.value }))} placeholder="Ver reseña del concierto" /></div>
-                                <div><label className="label-campo">URL de enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceUrl} onChange={e => setFormFoto(p => ({ ...p, enlaceUrl: e.target.value }))} placeholder="https://..." /></div>
-                                <div><label className="label-campo">Orden</label><input type="number" min={0} className="input-campo" value={formFoto.orden} onChange={e => setFormFoto(p => ({ ...p, orden: Number(e.target.value) || 0 }))} /></div>
-                                <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="fotoVisible" checked={formFoto.activo} onChange={e => setFormFoto(p => ({ ...p, activo: e.target.checked }))} className="cursor-pointer" />
-                                    <label htmlFor="fotoVisible" className="text-sm t-muted-high">Visible en la web</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div><label className="label-campo">Texto del enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceTexto} onChange={e => setFormFoto(p => ({ ...p, enlaceTexto: e.target.value }))} placeholder="Ver reseña del concierto" /></div>
+                                    <div><label className="label-campo">URL de enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceUrl} onChange={e => setFormFoto(p => ({ ...p, enlaceUrl: e.target.value }))} placeholder="https://..." /></div>
                                 </div>
+                                <ToggleCampo
+                                    activo={formFoto.activo}
+                                    alCambiar={() => setFormFoto(p => ({ ...p, activo: !p.activo }))}
+                                    icono={<Eye className="w-4 h-4" />}
+                                    etiqueta="Visible en la web"
+                                    descripcion="Si está apagado, la foto se oculta del sitio público"
+                                />
                             </div>
                             <button onClick={guardarFoto} className="btn-primario w-full justify-center">
                                 <Check className="w-4 h-4" /> {editandoFoto ? 'Guardar Cambios' : 'Añadir Foto'}
@@ -2030,13 +2686,25 @@ const ModuloPartituras = () => {
     const [subiendo, setSubiendo] = useState(false);
     const [errorSubida, setErrorSubida] = useState<string | null>(null);
     const [paginaPartituras, setPaginaPartituras] = useState(1);
+    const [filtroBusquedaPartitura, setFiltroBusquedaPartitura] = useState('');
+    const [filtroDescargable, setFiltroDescargable] = useState('Todos');
+    const [filtroActivoPartitura, setFiltroActivoPartitura] = useState('Todos');
 
-    const totalPaginasPartituras = Math.max(1, Math.ceil(partituras.length / REGISTROS_POR_PAGINA));
+    const partiturasFiltradas = partituras
+        .filter(p => filtroDescargable === 'Todos' || (filtroDescargable === 'Descargable' ? !!p.descargable : !p.descargable))
+        .filter(p => filtroActivoPartitura === 'Todos' || (filtroActivoPartitura === 'Activo' ? p.activo !== false : p.activo === false))
+        .filter(p => !filtroBusquedaPartitura.trim() || normalizarTexto(`${p.titulo} ${p.compositor} ${p.arreglista || ''}`).includes(normalizarTexto(filtroBusquedaPartitura.trim())));
+    const totalPaginasPartituras = Math.max(1, Math.ceil(partiturasFiltradas.length / REGISTROS_POR_PAGINA));
     const paginaPartiturasClamp = Math.min(paginaPartituras, totalPaginasPartituras);
-    const partiturasPaginadas = partituras.slice(
+    const partiturasPaginadas = partiturasFiltradas.slice(
         (paginaPartiturasClamp - 1) * REGISTROS_POR_PAGINA,
         paginaPartiturasClamp * REGISTROS_POR_PAGINA
     );
+
+    const cambiarFiltroPartitura = (set: (v: string) => void) => (clave: string) => {
+        set(clave);
+        setPaginaPartituras(1);
+    };
 
     const abrirCrear = () => {
         setEditando(null);
@@ -2255,11 +2923,43 @@ const ModuloPartituras = () => {
 
             {/* Lista de partituras */}
             <div className="space-y-2">
+                {partituras.length > 0 && (
+                    <>
+                        <BarraFiltrosAdmin
+                            termino={filtroBusquedaPartitura}
+                            alCambiarTermino={t => { setFiltroBusquedaPartitura(t); setPaginaPartituras(1); }}
+                            placeholder="Buscar por título, compositor o arreglista..."
+                            chips={[
+                                { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
+                                { clave: 'Descargable', etiqueta: 'Descargable', contador: partituras.filter(p => p.descargable).length },
+                                { clave: 'No Descargable', etiqueta: 'Solo lectura', contador: partituras.filter(p => !p.descargable).length },
+                            ]}
+                            filtroActivo={filtroDescargable}
+                            alCambiarFiltro={cambiarFiltroPartitura(setFiltroDescargable)}
+                        />
+                        <BarraFiltrosAdmin
+                            termino=""
+                            alCambiarTermino={() => {}}
+                            ocultarBuscador
+                            chips={[
+                                { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
+                                { clave: 'Activo', etiqueta: 'Visible', contador: partituras.filter(p => p.activo !== false).length },
+                                { clave: 'Oculto', etiqueta: 'Oculta', contador: partituras.filter(p => p.activo === false).length },
+                            ]}
+                            filtroActivo={filtroActivoPartitura}
+                            alCambiarFiltro={cambiarFiltroPartitura(setFiltroActivoPartitura)}
+                        />
+                    </>
+                )}
                 {partituras.length === 0 ? (
                     <div className="card-glass rounded-xl p-12 text-center t-muted">
                         <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
                         <p>No hay partituras en la biblioteca.</p>
                         <p className="text-xs mt-1">Haz clic en "Añadir Partitura" para subir tu primer PDF</p>
+                    </div>
+                ) : partiturasPaginadas.length === 0 ? (
+                    <div className="card-glass rounded-xl p-10 text-center t-muted">
+                        No hay partituras que coincidan con los filtros.
                     </div>
                 ) : (
                     partiturasPaginadas.map(p => {
@@ -2503,7 +3203,7 @@ const ModuloPartituras = () => {
                                 </div>
 
                                 {/* Tonalidad, Compás, Páginas */}
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div>
                                         <label className="label-campo">Tonalidad</label>
                                         <input
@@ -2694,6 +3394,7 @@ const ModuloBuzonAudiciones = () => {
     const [paginaAudiciones, setPaginaAudiciones] = useState(1);
     const [filtroEstado, setFiltroEstado] = useState<SolicitudAudicion['estado'] | 'Todas'>('Todas');
     const [confirmandoBorrar, setConfirmandoBorrar] = useState<string | null>(null);
+    const [filtroBusquedaAudicion, setFiltroBusquedaAudicion] = useState('');
     const COLORES_ESTADO: Record<string, string> = {
         'Pendiente': 'text-amber-700 dark:text-amber-400 bg-amber-400/10',
         'Revisada': 'text-blue-700 dark:text-blue-400 bg-blue-400/10',
@@ -2703,9 +3404,9 @@ const ModuloBuzonAudiciones = () => {
     const ESTADOS_FILTRO = ['Todas', 'Pendiente', 'Revisada', 'Aceptada', 'Rechazada'] as const;
 
     const solicitudesInvertidas = [...solicitudesAudicion].reverse();
-    const filtradas = filtroEstado === 'Todas'
-        ? solicitudesInvertidas
-        : solicitudesInvertidas.filter(s => s.estado === filtroEstado);
+    const filtradas = solicitudesInvertidas
+        .filter(s => filtroEstado === 'Todas' || s.estado === filtroEstado)
+        .filter(s => !filtroBusquedaAudicion.trim() || normalizarTexto(`${s.nombre} ${s.email} ${s.tipoVoz || ''}`).includes(normalizarTexto(filtroBusquedaAudicion.trim())));
     const totalPaginasAudiciones = Math.max(1, Math.ceil(filtradas.length / REGISTROS_POR_PAGINA));
     const paginaAudicionesClamp = Math.min(paginaAudiciones, totalPaginasAudiciones);
     const solicitudesPaginadas = filtradas.slice(
@@ -2729,25 +3430,35 @@ const ModuloBuzonAudiciones = () => {
                 <p className="t-muted text-sm">{solicitudesAudicion.filter(s => s.estado === 'Pendiente').length} pendientes de revisión · {solicitudesAudicion.length} en total</p>
             </div>
 
-            {/* Filtro por estado */}
+            {/* Búsqueda + Filtro por estado */}
             {solicitudesAudicion.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap">
-                    {ESTADOS_FILTRO.map(estado => (
-                        <button
-                            key={estado}
-                            onClick={() => { setFiltroEstado(estado); setPaginaAudiciones(1); }}
-                            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                                filtroEstado === estado
-                                    ? 'bg-vinotinto text-white border-vinotinto'
-                                    : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
-                            }`}
-                        >
-                            {estado}
-                            {estado !== 'Todas' && (
-                                <span className="ml-1 opacity-70">({solicitudesAudicion.filter(s => s.estado === estado).length})</span>
-                            )}
-                        </button>
-                    ))}
+                <div className="space-y-3">
+                    <BarraFiltrosAdmin
+                        termino={filtroBusquedaAudicion}
+                        alCambiarTermino={t => { setFiltroBusquedaAudicion(t); setPaginaAudiciones(1); }}
+                        placeholder="Buscar por nombre, email o voz..."
+                        chips={[]}
+                        filtroActivo="Todas"
+                        alCambiarFiltro={() => {}}
+                    />
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {ESTADOS_FILTRO.map(estado => (
+                            <button
+                                key={estado}
+                                onClick={() => { setFiltroEstado(estado); setPaginaAudiciones(1); }}
+                                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                                    filtroEstado === estado
+                                        ? 'bg-vinotinto text-white border-vinotinto'
+                                        : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
+                                }`}
+                            >
+                                {estado}
+                                {estado !== 'Todas' && (
+                                    <span className="ml-1 opacity-70">({solicitudesAudicion.filter(s => s.estado === estado).length})</span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -2827,13 +3538,12 @@ const ModuloBuzonMensajes = () => {
     const [paginaMensajes, setPaginaMensajes] = useState(1);
     const [filtroLeido, setFiltroLeido] = useState<'Todos' | 'No leídos' | 'Leídos'>('Todos');
     const [confirmandoBorrar, setConfirmandoBorrar] = useState<string | null>(null);
+    const [filtroBusquedaMensaje, setFiltroBusquedaMensaje] = useState('');
 
     const mensajesInvertidos = [...mensajesContacto].reverse();
-    const filtrados = filtroLeido === 'Todos'
-        ? mensajesInvertidos
-        : filtroLeido === 'Leídos'
-            ? mensajesInvertidos.filter(m => m.leido)
-            : mensajesInvertidos.filter(m => !m.leido);
+    const filtrados = (mensajesInvertidos
+        .filter(m => filtroLeido === 'Todos' || (filtroLeido === 'Leídos' ? m.leido : !m.leido)))
+        .filter(m => !filtroBusquedaMensaje.trim() || normalizarTexto(`${m.nombre} ${m.email} ${m.asunto || ''}`).includes(normalizarTexto(filtroBusquedaMensaje.trim())));
     const totalPaginasMensajes = Math.max(1, Math.ceil(filtrados.length / REGISTROS_POR_PAGINA));
     const paginaMensajesClamp = Math.min(paginaMensajes, totalPaginasMensajes);
     const mensajesPaginados = filtrados.slice(
@@ -2870,23 +3580,33 @@ const ModuloBuzonMensajes = () => {
                 )}
             </div>
 
-            {/* Filtro por estado de lectura */}
+            {/* Búsqueda + Filtro por estado de lectura */}
             {mensajesContacto.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap">
-                    {(['Todos', 'No leídos', 'Leídos'] as const).map(estado => (
-                        <button
-                            key={estado}
-                            onClick={() => { setFiltroLeido(estado); setPaginaMensajes(1); }}
-                            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                                filtroLeido === estado
-                                    ? 'bg-vinotinto text-white border-vinotinto'
-                                    : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
-                            }`}
-                        >
-                            {estado}
-                            {estado === 'No leídos' && <span className="ml-1 opacity-70">({noLeidos})</span>}
-                        </button>
-                    ))}
+                <div className="space-y-3">
+                    <BarraFiltrosAdmin
+                        termino={filtroBusquedaMensaje}
+                        alCambiarTermino={t => { setFiltroBusquedaMensaje(t); setPaginaMensajes(1); }}
+                        placeholder="Buscar por nombre, email o asunto..."
+                        chips={[]}
+                        filtroActivo="Todos"
+                        alCambiarFiltro={() => {}}
+                    />
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {(['Todos', 'No leídos', 'Leídos'] as const).map(estado => (
+                            <button
+                                key={estado}
+                                onClick={() => { setFiltroLeido(estado); setPaginaMensajes(1); }}
+                                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                                    filtroLeido === estado
+                                        ? 'bg-vinotinto text-white border-vinotinto'
+                                        : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
+                                }`}
+                            >
+                                {estado}
+                                {estado === 'No leídos' && <span className="ml-1 opacity-70">({noLeidos})</span>}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
 
