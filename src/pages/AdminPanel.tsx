@@ -1566,12 +1566,12 @@ const ModuloEventos = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
                     <h2 className="text-2xl font-display font-bold text-secundario mb-1">Eventos</h2>
                     <p className="t-muted text-sm">{eventos.length} eventos · Ordena con las flechas o arrastrando (# = posición)</p>
                 </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
+                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4 shrink-0">
                     <Plus className="w-4 h-4" /> Nuevo Evento
                 </button>
             </div>
@@ -1797,7 +1797,7 @@ const ModuloEventos = () => {
                                             className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
                                             {subiendoImagen ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir imagen
                                         </button>
-                                        <input className="input-campo flex-1" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
+                                        <input className="input-campo flex-1 min-w-0" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
                                         <input
                                             id="input-imagen-evento"
                                             type="file"
@@ -1806,6 +1806,23 @@ const ModuloEventos = () => {
                                             onChange={e => { subirImagen(e.target.files?.[0] ?? null); e.target.value = ''; }}
                                         />
                                     </div>
+                                    {formEvento.imagen && (
+                                        <div className="relative mt-2 rounded-lg overflow-hidden border borde-subtle">
+                                            <button
+                                                onClick={() => setFormEvento(p => ({ ...p, imagen: '' }))}
+                                                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-lg bg-black/60 text-white hover:bg-red-600 transition-all"
+                                                title="Quitar imagen"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                            <img
+                                                src={formEvento.imagen}
+                                                alt="Vista previa"
+                                                className="w-full h-32 object-cover"
+                                                onError={ev => { (ev.target as HTMLImageElement).style.display = 'none'; }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="col-span-full"><label className="label-campo">Repertorio (una obra por línea)</label><textarea rows={5} className="input-campo resize-none font-mono text-xs" value={formEvento.repertorio} onChange={e => setFormEvento(p => ({ ...p, repertorio: e.target.value }))} placeholder={"Parte I:\nAlleluia\nBogoroditse Djevo\n..."} /></div>
 
