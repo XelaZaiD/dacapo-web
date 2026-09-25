@@ -6,12 +6,12 @@
  * ============================================================
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
-import { Play, ChevronLeft, ChevronRight, Video } from 'lucide-react';
+import { Play, Pause, ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import CarruselMovil from '../ui/CarruselMovil';
 import { useApp } from '../../context/AppContext';
-import { VideoMedia } from '../../data/mockData';
+import { VideoMedia, FotoGaleria } from '../../data/mockData';
 
 type TarjetaVideoProps = {
     video: VideoMedia;
@@ -165,31 +165,168 @@ const CarruselVideosDesktop = ({ videos }: { videos: VideoMedia[] }) => {
 };
 
 // ============================================================
+// CARRUSEL DE FOTOS CON REPRODUCCIÓN AUTOMÁTICA
+// Avanza solo (5s), se pausa al pasar el cursor sobre la foto
+// y tiene botón de reproducir/pausar. Solo avanza cuando está
+// visible en pantalla (IntersectionObserver).
+// ============================================================
+const INTERVALO_AUTOPLAY = 5000;
+
+const CarruselFotos = ({ fotos }: { fotos: FotoGaleria[] }) => {
+    const [indice, setIndice] = useState(0);
+    const [automatico, setAutomatico] = useState(true);
+    const [pausadoHover, setPausadoHover] = useState(false);
+    const [visible, setVisible] = useState(false);
+    const reproductorRef = useRef<HTMLDivElement>(null);
+
+    const indiceSeguro = Math.min(indice, Math.max(0, fotos.length - 1));
+    const tieneVarias = fotos.length > 1;
+    const foto = fotos[indiceSeguro];
+
+    // Solo avanza si el carrusel está realmente en pantalla
+    useEffect(() => {
+        const el = reproductorRef.current;
+        if (!el) return;
+        const obs = new IntersectionObserver(
+            ([entrada]) => setVisible(entrada.isIntersecting),
+            { threshold: 0.4 }
+        );
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, []);
+
+    // Avance automático: se reinicia con cada foto (o al pausar)
+    useEffect(() => {
+        if (!automatico || pausadoHover || !visible || !tieneVarias) return;
+        const id = window.setTimeout(() => {
+            setIndice(i => (i >= fotos.length - 1 ? 0 : i + 1));
+        }, INTERVALO_AUTOPLAY);
+        return () => window.clearTimeout(id);
+    }, [automatico, pausadoHover, visible, indice, fotos.length, tieneVarias]);
+
+    const anterior = () => setIndice(i => (i === 0 ? fotos.length - 1 : i - 1));
+    const siguiente = () => setIndice(i => (i === fotos.length - 1 ? 0 : i + 1));
+
+    return (
+        <div>
+            <div className="relative">
+                {/* Foto principal */}
+                <div
+                    ref={reproductorRef}
+                    className="aspect-video rounded-2xl overflow-hidden relative"
+                    onMouseEnter={() => setPausadoHover(true)}
+                    onMouseLeave={() => setPausadoHover(false)}
+                >
+                    <AnimatePresence mode="wait">
+                        <motion.img
+                            key={indiceSeguro}
+                            src={foto.urlFoto}
+                            alt={foto.titulo}
+                            className="w-full h-full object-cover"
+                            initial={{ opacity: 0, x: 50 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -50 }}
+                            transition={{ duration: 0.4 }}
+                        />
+                    </AnimatePresence>
+
+                    {/* Botón de reproducir / pausar */}
+                    {tieneVarias && (
+                        <button
+                            onClick={() => setAutomatico(!automatico)}
+                            aria-label={automatico
+                                ? 'Pausar reproducción automática'
+                                : 'Reproducción automática'}
+                            className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full
+                                       bg-black/50 backdrop-blur-sm border borde-medium
+                                       flex items-center justify-center text-white
+                                       hover:bg-vinotinto transition-all duration-300"
+                        >
+                            {automatico ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                        </button>
+                    )}
+
+                    {/* Descripción de la foto */}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70">
+                        <p className="text-white font-medium">{foto.titulo}</p>
+                        {foto.enlaceUrl && (
+                            <a
+                                href={foto.enlaceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-vinotinto-luz hover:underline mt-1"
+                            >
+                                {foto.enlaceTexto || 'Ver más'}
+                            </a>
+                        )}
+                        <p className="t-muted text-sm">{indiceSeguro + 1} / {fotos.length}</p>
+                    </div>
+                </div>
+
+                {/* Botones de navegación */}
+                <button
+                    onClick={anterior}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
+                         bg-black/50 backdrop-blur-sm border borde-medium
+                         flex items-center justify-center text-white
+                         hover:bg-vinotinto transition-all duration-300"
+                >
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={siguiente}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
+                         bg-black/50 backdrop-blur-sm border borde-medium
+                         flex items-center justify-center text-white
+                         hover:bg-vinotinto transition-all duration-300"
+                >
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+            </div>
+
+            {/* Barra de progreso del autoplay */}
+            {tieneVarias && automatico && !pausadoHover && visible && (
+                <div className="mt-3 h-1 rounded-full bg-white/10 overflow-hidden">
+                    <motion.div
+                        key={indiceSeguro}
+                        className="h-full rounded-full bg-khaki/80"
+                        initial={{ width: '0%' }}
+                        animate={{ width: '100%' }}
+                        transition={{ duration: INTERVALO_AUTOPLAY / 1000, ease: 'linear' }}
+                    />
+                </div>
+            )}
+
+            {/* Miniaturas del carrusel */}
+            <div className="flex gap-3 mt-4 overflow-x-auto sin-scrollbar py-2">
+                {fotos.map((f, i) => (
+                    <button
+                        key={f.id}
+                        onClick={() => setIndice(i)}
+                        className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 ${i === indiceSeguro ? 'border-vinotinto' : 'border-transparent opacity-60 hover:opacity-80'
+                            }`}
+                    >
+                        <img src={f.urlFoto} alt={f.titulo} className="w-full h-full object-cover" />
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// ============================================================
 // COMPONENTE PRINCIPAL: SeccionPresentaciones
 // ============================================================
 const SeccionPresentaciones = () => {
     const { videosMedia, fotosGaleria } = useApp();
     const ref = useRef(null);
     const estaEnPantalla = useInView(ref, { once: true, margin: '-100px' });
-    const [indiceCarrusel, setIndiceCarrusel] = useState(0);
 
     const videosVisibles = videosMedia.filter(v => v.activo);
     const fotosVisibles = fotosGaleria.filter(f => f.activo);
 
     const hayVideos = videosVisibles.length > 0;
     const hayFotos = fotosVisibles.length > 0;
-
-    const indiceSeguro = Math.min(indiceCarrusel, Math.max(0, fotosVisibles.length - 1));
-
-    // Navegar a la foto anterior en el carrusel
-    const anteriorFoto = () => {
-        setIndiceCarrusel(prev => (prev === 0 ? fotosVisibles.length - 1 : prev - 1));
-    };
-
-    // Navegar a la foto siguiente en el carrusel
-    const siguienteFoto = () => {
-        setIndiceCarrusel(prev => (prev === fotosVisibles.length - 1 ? 0 : prev + 1));
-    };
 
     return (
         <section id="presentaciones" className="py-24 bg-fondo-medio relative overflow-hidden">
@@ -258,74 +395,7 @@ const SeccionPresentaciones = () => {
                     >
                         <h3 className="text-xl font-semibold t-muted-high mb-6">Galería de Fotos</h3>
 
-                        {/* Carrusel principal */}
-                        <div className="relative">
-                            {/* Foto principal */}
-                            <div className="aspect-video rounded-2xl overflow-hidden relative">
-                                <AnimatePresence mode="wait">
-                                    <motion.img
-                                        key={indiceSeguro}
-                                        src={fotosVisibles[indiceSeguro].urlFoto}
-                                        alt={fotosVisibles[indiceSeguro].titulo}
-                                        className="w-full h-full object-cover"
-                                        initial={{ opacity: 0, x: 50 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -50 }}
-                                        transition={{ duration: 0.4 }}
-                                    />
-                                </AnimatePresence>
-
-                                {/* Descripción de la foto */}
-                                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70">
-                                    <p className="text-white font-medium">{fotosVisibles[indiceSeguro].titulo}</p>
-                                    {fotosVisibles[indiceSeguro].enlaceUrl && (
-                                        <a
-                                            href={fotosVisibles[indiceSeguro].enlaceUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1 text-xs text-vinotinto-luz hover:underline mt-1"
-                                        >
-                                            {fotosVisibles[indiceSeguro].enlaceTexto || 'Ver más'}
-                                        </a>
-                                    )}
-                                    <p className="t-muted text-sm">{indiceSeguro + 1} / {fotosVisibles.length}</p>
-                                </div>
-                            </div>
-
-                            {/* Botones de navegación */}
-                            <button
-                                onClick={anteriorFoto}
-                                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
-                             bg-black/50 backdrop-blur-sm border borde-medium
-                             flex items-center justify-center text-white
-                             hover:bg-vinotinto transition-all duration-300"
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-                            <button
-                                onClick={siguienteFoto}
-                                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full
-                             bg-black/50 backdrop-blur-sm border borde-medium
-                             flex items-center justify-center text-white
-                             hover:bg-vinotinto transition-all duration-300"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        {/* Miniaturas del carrusel */}
-                        <div className="flex gap-3 mt-4 overflow-x-auto sin-scrollbar py-2">
-                            {fotosVisibles.map((foto, indice) => (
-                                <button
-                                    key={foto.id}
-                                    onClick={() => setIndiceCarrusel(indice)}
-                                    className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 ${indice === indiceSeguro ? 'border-vinotinto' : 'border-transparent opacity-60 hover:opacity-80'
-                                        }`}
-                                >
-                                    <img src={foto.urlFoto} alt={foto.titulo} className="w-full h-full object-cover" />
-                                </button>
-                            ))}
-                        </div>
+                        <CarruselFotos fotos={fotosVisibles} />
                     </motion.div>
                 )}
 
