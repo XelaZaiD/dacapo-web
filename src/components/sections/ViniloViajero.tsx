@@ -8,9 +8,9 @@
  * bordes y al tocar "las paredes" deja un destello de luz.
  *
  * Variantes:
- * - PC:   vinilo grande (260px), velocidad tranquila, opacidad
+ * - PC:   vinilo grande (510px), velocidad tranquila, opacidad
  *         baja para que el contenido de primer plano respire.
- * - Móvil: vinilo pequeño (aprox. 30% del ancho), más lento y
+ * - Móvil: vinilo pequeño (aprox. 58% del ancho), más lento y
  *         con menos brillo para que no domine la pantalla.
  *
  * Detalles:
@@ -52,7 +52,7 @@ const ViniloViajero = () => {
 
         const iniciar = () => {
             const movil = esMovil();
-            const tam = movil ? Math.min(ancho * 0.39, 208) : 340;
+            const tam = movil ? Math.min(ancho * 0.585, 312) : 510;
             disco.style.width = `${tam}px`;
             disco.style.height = `${tam}px`;
 
