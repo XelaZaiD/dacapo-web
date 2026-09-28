@@ -112,7 +112,7 @@ const ReproductorAudio = () => {
 
     if (!pistaActual && !abierto) {
         return (
-            <div className="fixed bottom-4 left-4 z-40">
+            <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 z-40">
                 <motion.button
                     onClick={() => setAbierto(true)}
                     onMouseEnter={() => setHoverVinilo(true)}
@@ -287,7 +287,7 @@ className={`flex-shrink-0 text-[9px] px-2 py-1 rounded-md transition-all ${i ===
             )}
 
             {/* ---- ICONO DE VINILO (siempre visible, esquina inferior izquierda) ---- */}
-            <div className="fixed bottom-4 left-4 z-40">
+            <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 z-40">
                 <motion.button
                     onClick={() => setAbierto(!abierto)}
                     onMouseEnter={() => setHoverVinilo(true)}

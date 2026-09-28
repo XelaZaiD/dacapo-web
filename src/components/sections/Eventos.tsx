@@ -152,8 +152,8 @@ const TarjetaEvento = ({ evento, indice }: { evento: Evento; indice: number }) =
     return (
         <motion.div
             className={`card-glass group rounded-2xl overflow-hidden border transition-all duration-300 ${esFuturo ? 'border-borde-subtle hover:border-vinotinto/40' : 'border-borde-subtle opacity-90'} hover:shadow-xl hover:shadow-vinotinto/10`}
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: Math.min(indice * 0.05, 0.3) }}
         >

@@ -146,13 +146,31 @@
     @apply box-border;
   }
 
+  /* ============================================================
+     MÓVIL: NUNCA DESBORDAR LA PANTALLA EN HORIZONTAL
+     Si el documento se hace más ancho que la pantalla, la página
+     se puede arrastrar de lado y los elementos fijos (reproductor,
+     chat, botones) se salen de la vista porque se anclan al
+     documento, no a lo que se ve. 'clip' recorta sin crear barra
+     de scroll (a diferencia de 'hidden'), así que no rompe los
+     'position: sticky' ni el scroll vertical.
+     ============================================================ */
   html {
     scroll-behavior: smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans antialiased;
+    overflow-x: hidden;
     transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  @supports (overflow-x: clip) {
+    html,
+    body {
+      overflow-x: clip;
+    }
   }
 
   *, *::before, *::after {
