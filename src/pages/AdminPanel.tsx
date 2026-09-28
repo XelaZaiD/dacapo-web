@@ -300,17 +300,41 @@ const EditorTagsEtiquetas = ({ etiquetas, alAgregar, alQuitar, alEditar, placeho
 
     return (
         <div className="w-full">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="relative mb-2">
                 <input
-                    className="input-campo flex-1 min-w-0"
+                    className="input-campo w-full pr-14 md:pr-28"
                     value={borrador}
                     onChange={e => setBorrador(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }}
                     placeholder={placeholder}
                 />
-                <button onClick={agregar} className="btn-ghost text-sm px-3 py-2 shrink-0">
-                    <Plus className="w-4 h-4" /> Añadir
-                </button>
+
+                {/* El hueco del input (pr-14 / pr-28) se reserva siempre, aunque el
+                    botón no esté, para que el texto no salte al aparecer. Mismo patrón
+                    que la barra de filtros de este panel. Solo se anima opacity: framer
+                    escribe transform en línea y pisaría el -translate-y-1/2. */}
+                <AnimatePresence>
+                    {borrador.trim() !== '' && (
+                        <motion.button
+                            type="button"
+                            onClick={agregar}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            aria-label="Añadir"
+                            title="Añadir"
+                            className="absolute right-2 top-1/2 -translate-y-1/2
+                                       h-10 md:h-7 w-10 md:w-auto px-2.5 md:px-3
+                                       flex items-center justify-center gap-1.5 rounded-full cursor-pointer
+                                       bg-fondo-card border borde-medium text-secundario
+                                       hover:text-vinotinto hover:border-vinotinto/40 transition-colors"
+                        >
+                            <Plus className="w-3.5 h-3.5 shrink-0" />
+                            <span className="hidden md:inline text-xs font-medium">Añadir</span>
+                        </motion.button>
+                    )}
+                </AnimatePresence>
             </div>
 
             {etiquetas.length === 0 ? (
@@ -354,7 +378,7 @@ const EditorTagsEtiquetas = ({ etiquetas, alAgregar, alQuitar, alEditar, placeho
                 </div>
             )}
             <p className="text-[11px] t-muted-low mt-1.5">
-                Escribe una frase y presiona Enter para fijarla · Pasa el cursor sobre una etiqueta para editarla (lápiz) o quitarla (X). En el celular ambas siempre están visibles.
+                Escribe una frase y presiona Enter, o toca el +, para fijarla · Pasa el cursor sobre una etiqueta para editarla (lápiz) o quitarla (X). En el celular ambas siempre están visibles.
             </p>
         </div>
     );
@@ -868,7 +892,7 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                         alAgregar={frase => aplicar({ frasesBanner: [...(infoGrupo.frasesBanner || []), frase] })}
                         alQuitar={indice => aplicar({ frasesBanner: (infoGrupo.frasesBanner || []).filter((_, i) => i !== indice) })}
                         alEditar={(indice, valor) => aplicar({ frasesBanner: (infoGrupo.frasesBanner || []).map((f, i) => (i === indice ? valor : f)) })}
-                        placeholder="Escribe una frase o palabra y presiona Enter…"
+                        placeholder="Escribe una frase…"
                     />
                 </div>
             </div>
