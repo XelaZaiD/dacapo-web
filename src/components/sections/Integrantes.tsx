@@ -55,6 +55,11 @@ const INFO_VISTAS: Record<TipoVistaIntegrantes, { etiqueta: string; icono: JSX.E
     mosaico: { etiqueta: 'Mosaico', icono: <Grid3x3 className="w-4 h-4" /> },
 };
 
+type FiltroCuerda = 'Todos' | (typeof CUERDAS_ORDEN)[number];
+
+// Rótulo pequeño que identifica cada campo desplegable
+const ROTULO_CAMPO = 'block text-[10px] uppercase tracking-[0.2em] t-muted-low mb-1.5';
+
 // Iniciales del nombre para mostrar cuando no hay foto o la foto falla
 const inicialesDe = (nombre: string) =>
     nombre.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('');
@@ -322,44 +327,16 @@ const TarjetaCompacta = ({ integrante, alHacerClic }: { integrante: Integrante; 
 };
 
 // ============================================================
-// VISTA: Cuadrícula (filtros por cuerda + carrusel móvil)
+// VISTA: Cuadrícula (carrusel móvil + grid fijo en md+)
 // ============================================================
+// El filtro de cuerda vive en la sección, así que esta vista solo
+// recibe la lista ya filtrada.
 const VistaGrid = ({ integrantes, alAbrir }: { integrantes: Integrante[]; alAbrir: (i: Integrante) => void }) => {
-    const [filtroActivo, setFiltroActivo] = useState<'Todos' | 'Soprano' | 'Contralto' | 'Tenor' | 'Bajo'>('Todos');
-
-    const integrantesFiltrados = filtroActivo === 'Todos'
-        ? integrantes
-        : integrantes.filter(i => i.cuerda === filtroActivo);
-
-    const filtros: Array<'Todos' | 'Soprano' | 'Contralto' | 'Tenor' | 'Bajo'> =
-        ['Todos', 'Soprano', 'Contralto', 'Tenor', 'Bajo'];
-
     return (
-        <div className="space-y-10">
-            {/* Filtros de cuerda */}
-            <motion.div
-                className="flex flex-wrap justify-center gap-3"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-            >
-                {filtros.map(filtro => (
-                    <button
-                        key={filtro}
-                        onClick={() => setFiltroActivo(filtro)}
-                        className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${filtroActivo === filtro
-                            ? 'bg-vinotinto text-white shadow-glow-vinotinto'
-                            : 'bg-sutil t-muted-high hover:bg-sutil-hover hover:text-secundario border borde-subtle'
-                            }`}
-                    >
-                        {filtro === 'Todos' ? `Todos (${integrantes.length})` : pluralCuerda(filtro)}
-                    </button>
-                ))}
-            </motion.div>
-
+        <div>
             {/* Carrusel en móvil; en md+ CarruselMovil regresa al grid fijo (gridDesktop) */}
             <CarruselMovil
-                slides={integrantesFiltrados.map((integrante, indice) => (
+                slides={integrantes.map((integrante, indice) => (
                     <motion.div
                         key={integrante.id}
                         initial={{ opacity: 0, scale: 0.8 }}
@@ -376,12 +353,6 @@ const VistaGrid = ({ integrantes, alAbrir }: { integrantes: Integrante[]; alAbri
                 gridDesktop="md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-4"
                 ariaLabel="Carrusel de integrantes"
             />
-
-            {integrantesFiltrados.length === 0 && (
-                <div className="text-center py-16 t-muted">
-                    No hay integrantes registrados en esta cuerda.
-                </div>
-            )}
         </div>
     );
 };
@@ -555,6 +526,19 @@ const SeccionIntegrantes = () => {
     });
     const [integranteSeleccionado, setIntegranteSeleccionado] = useState<Integrante | null>(null);
 
+    // El filtro de cuerda vive aquí, no dentro de la vista, para que se
+    // recuerde al cambiar de diseño y para que aplique a las cuatro
+    const [filtroActivo, setFiltroActivo] = useState<FiltroCuerda>('Todos');
+
+    // Solo se ofrecen las cuerdas que tienen integrantes, así la fila no sobra.
+    // La cuerda activa siempre se incluye: si el admin le quitó a todos sus
+    // integrantes, el campo necesita seguir teniendo un valor válido.
+    const cuerdasVisibles = CUERDAS_ORDEN.filter(c => c === filtroActivo || integrantes.some(i => i.cuerda === c));
+    const filtrosCuerda: FiltroCuerda[] = ['Todos', ...cuerdasVisibles];
+    const integrantesFiltrados = filtroActivo === 'Todos'
+        ? integrantes
+        : integrantes.filter(i => i.cuerda === filtroActivo);
+
     // Persistir la vista elegida por el visitante en su navegador
     useEffect(() => {
         localStorage.setItem('dacapo_vista_integrantes_usuario', vistaActual);
@@ -572,15 +556,18 @@ const SeccionIntegrantes = () => {
 
     const cuerpoVista = () => {
         switch (vistaEfectiva) {
-            case 'satb': return <VistaSatb integrantes={integrantes} alAbrir={abrirIntegrante} />;
-            case 'lista': return <VistaLista integrantes={integrantes} alAbrir={abrirIntegrante} />;
-            case 'mosaico': return <VistaMosaico integrantes={integrantes} alAbrir={abrirIntegrante} />;
-            default: return <VistaGrid integrantes={integrantes} alAbrir={abrirIntegrante} />;
+            case 'satb': return <VistaSatb integrantes={integrantesFiltrados} alAbrir={abrirIntegrante} />;
+            case 'lista': return <VistaLista integrantes={integrantesFiltrados} alAbrir={abrirIntegrante} />;
+            case 'mosaico': return <VistaMosaico integrantes={integrantesFiltrados} alAbrir={abrirIntegrante} />;
+            default: return <VistaGrid integrantes={integrantesFiltrados} alAbrir={abrirIntegrante} />;
         }
     };
 
     return (
-        <section id="integrantes" className="py-24 bg-fondo-oscuro relative overflow-hidden">
+        // overflow-x-clip en vez de overflow-hidden porque position:sticky no
+        // funciona dentro de un ancestro con overflow:hidden (lo convierte en
+        // contenedor de scroll). clip recorta igual en horizontal sin crearlo.
+        <section id="integrantes" className="py-24 bg-fondo-oscuro relative overflow-x-clip">
             {/* Decoración de fondo */}
             <div className="absolute right-0 top-1/2 -translate-y-1/2 text-[30rem] font-display
                       text-white/[0.02] leading-none select-none pointer-events-none">
@@ -591,7 +578,7 @@ const SeccionIntegrantes = () => {
 
                 {/* Encabezado */}
                 <motion.div
-                    className="text-center mb-12"
+                    className="text-center mb-8 md:mb-12"
                     initial={{ opacity: 0, y: 40 }}
                     animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
                     transition={{ duration: 0.7 }}
@@ -608,27 +595,92 @@ const SeccionIntegrantes = () => {
                     </p>
                 </motion.div>
 
-                {/* Selector de diseño (solo si hay más de uno habilitado) */}
-                {vistasHabilitadas.length > 1 && integrantes.length > 0 && (
+                {/* Barra de controles: diseño + cuerda.
+                    Se pega bajo el navbar al bajar por la lista, así que no lleva
+                    fondo ni línea propios: un bloque opaco ahí parecía una pared con
+                    las fotos cortadas detrás. La legibilidad la aportan los propios
+                    controles, que son sólidos. */}
+                {integrantes.length > 0 && (
                     <motion.div
-                        className="flex flex-wrap justify-center gap-2 mb-10"
+                        className="sticky top-16 md:top-20 z-40 py-2 md:py-3 mb-6 md:mb-10"
                         initial={{ opacity: 0, y: 16 }}
                         animate={estaEnPantalla ? { opacity: 1, y: 0 } : {}}
                         transition={{ duration: 0.4, delay: 0.3 }}
                     >
-                        {vistasHabilitadas.map(v => (
-                            <button
-                                key={v}
-                                onClick={() => setVistaActual(v)}
-                                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-all duration-300 ${vistaEfectiva === v
-                                        ? 'bg-vinotinto text-white shadow-glow-vinotinto'
-                                        : 'bg-sutil t-muted-high hover:bg-sutil-hover hover:text-secundario border borde-subtle'
-                                    }`}
-                            >
-                                {INFO_VISTAS[v].icono}
-                                {INFO_VISTAS[v].etiqueta}
-                            </button>
-                        ))}
+                        {/* MÓVIL: dos campos desplegables, los dos enteros en pantalla.
+                            Son las mismas opciones que las pastillas de abajo, para que
+                            en un teléfono no haya que deslizar nada para verlas. */}
+                        <div className="md:hidden grid grid-cols-2 gap-2">
+                            {vistasHabilitadas.length > 1 && (
+                                <label className="min-w-0 bg-fondo-card rounded-xl border borde-subtle shadow-card p-2">
+                                    <span className={ROTULO_CAMPO}>Diseño</span>
+                                    <select
+                                        value={vistaEfectiva}
+                                        onChange={e => setVistaActual(e.target.value as TipoVistaIntegrantes)}
+                                        className="input-campo text-sm cursor-pointer"
+                                    >
+                                        {vistasHabilitadas.map(v => (
+                                            <option key={v} value={v}>{INFO_VISTAS[v].etiqueta}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                            )}
+
+                            {/* Si el admin solo habilitó un diseño no hay qué elegir,
+                                así que el filtro de cuerda ocupa el ancho completo. */}
+                            <label className={`min-w-0 bg-fondo-card rounded-xl border borde-subtle shadow-card p-2 ${vistasHabilitadas.length > 1 ? '' : 'col-span-2'}`}>
+                                <span className={ROTULO_CAMPO}>Cuerda</span>
+                                <select
+                                    value={filtroActivo}
+                                    onChange={e => setFiltroActivo(e.target.value as FiltroCuerda)}
+                                    className="input-campo text-sm cursor-pointer"
+                                >
+                                    {filtrosCuerda.map(c => (
+                                        <option key={c} value={c}>
+                                            {c === 'Todos' ? `Todos (${integrantes.length})` : pluralCuerda(c)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        </div>
+
+                        {/* ESCRITORIO: las pastillas de siempre.
+                            Los fondos son sólidos (no bg-sutil, que es 3% de blanco)
+                            porque al quedar fijadas las fotos pasarían por detrás. */}
+                        <div className="hidden md:flex flex-col items-center gap-3">
+                            {vistasHabilitadas.length > 1 && (
+                                <div className="flex flex-wrap justify-center gap-2">
+                                    {vistasHabilitadas.map(v => (
+                                        <button
+                                            key={v}
+                                            onClick={() => setVistaActual(v)}
+                                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-all duration-300 ${vistaEfectiva === v
+                                                ? 'bg-vinotinto text-white shadow-glow-vinotinto'
+                                                : 'bg-fondo-card t-muted-high hover:bg-fondo-medio hover:text-secundario border borde-subtle shadow-card'
+                                                }`}
+                                        >
+                                            {INFO_VISTAS[v].icono}
+                                            {INFO_VISTAS[v].etiqueta}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex flex-wrap justify-center gap-3">
+                                {filtrosCuerda.map(c => (
+                                    <button
+                                        key={c}
+                                        onClick={() => setFiltroActivo(c)}
+                                        className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${filtroActivo === c
+                                            ? 'bg-vinotinto text-white shadow-glow-vinotinto'
+                                            : 'bg-fondo-card t-muted-high hover:bg-fondo-medio hover:text-secundario border borde-subtle shadow-card'
+                                            }`}
+                                    >
+                                        {c === 'Todos' ? `Todos (${integrantes.length})` : pluralCuerda(c)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </motion.div>
                 )}
 
@@ -663,6 +715,19 @@ const SeccionIntegrantes = () => {
                         <p className="text-sm t-muted">
                             Todavía no hay integrantes registrados. Nuestras voces están afinando para presentarse.
                         </p>
+                    </div>
+                ) : integrantesFiltrados.length === 0 ? (
+                    <div className="card-glass rounded-xl p-10 text-center max-w-lg mx-auto">
+                        <Music className="w-10 h-10 mx-auto mb-3 t-muted" />
+                        <h3 className="font-display font-bold text-lg text-secundario mb-1">
+                            Aún no hay {pluralCuerda(filtroActivo).toLowerCase()}
+                        </h3>
+                        <p className="text-sm t-muted mb-5">
+                            No hay integrantes registrados en esta cuerda por ahora.
+                        </p>
+                        <button onClick={() => setFiltroActivo('Todos')} className="btn-primario justify-center text-sm">
+                            Ver todos los integrantes
+                        </button>
                     </div>
                 ) : (
                     <motion.div
