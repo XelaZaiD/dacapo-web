@@ -470,7 +470,7 @@ const CampoEnlaceBonito = ({ etiqueta, valor, alGuardar, alLimpiar, icono, place
                         onBlur={guardar}
                         placeholder={placeholder}
                     />
-                    <button onClick={guardar} title="Guardar" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
+                    <button onClick={guardar} title="Guardar" className="w-10 h-10 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
                         <Check className="w-4 h-4" />
                     </button>
                 </div>
@@ -500,11 +500,11 @@ const CampoEnlaceBonito = ({ etiqueta, valor, alGuardar, alLimpiar, icono, place
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
                 {valor.trim() && alLimpiar && (
-                    <button onClick={alLimpiar} title="Quitar" className="w-7 h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-red-500 hover:bg-red-500/10 transition-all">
+                    <button onClick={alLimpiar} title="Quitar" className="w-9 h-9 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-red-500 hover:bg-red-500/10 transition-all">
                         <X className="w-3.5 h-3.5" />
                     </button>
                 )}
-                <button onClick={iniciar} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-vinotinto hover:bg-vinotinto/10 transition-all">
+                <button onClick={iniciar} title="Editar" className="w-9 h-9 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-vinotinto hover:bg-vinotinto/10 transition-all">
                     <Pencil className="w-3.5 h-3.5" />
                 </button>
             </div>
@@ -641,7 +641,7 @@ const CampoEditable = ({ etiqueta, valor, alGuardar, multilinea = false, placeho
                             onKeyDown={e => { if (e.key === 'Escape') cancelar(); }}
                             placeholder={placeholder}
                         />
-                        <button onClick={guardar} title="Guardar" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
+                        <button onClick={guardar} title="Guardar" className="w-10 h-10 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
                             <Check className="w-4 h-4" />
                         </button>
                     </div>
@@ -671,7 +671,7 @@ const CampoEditable = ({ etiqueta, valor, alGuardar, multilinea = false, placeho
             <button
                 onClick={iniciar}
                 title={`Editar ${etiqueta}`}
-                className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-secundario/60 hover:text-vinotinto hover:bg-vinotinto/10 transition-all bg-sutil/60"
+                className="w-10 h-10 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-lg text-secundario/60 hover:text-vinotinto hover:bg-vinotinto/10 transition-all bg-sutil/60"
             >
                 <Pencil className="w-3.5 h-3.5" />
             </button>
@@ -737,6 +737,47 @@ const BotonAgregar = ({ alPulsar, etiqueta }: { alPulsar: () => void; etiqueta: 
         <span className="hidden sm:inline">{etiqueta}</span>
     </button>
 );
+
+// Selector de archivo con el boton nativo oculto. El <input type="file"> por
+// defecto pinta el boton del sistema operativo, con su texto translated ("Choose
+// file", "Elegir archivo"), que en un telefono ocupa la mitad del ancho con la
+// etiqueta del campo y obliga a la tarjeta a crecer. Aqui el input se oculta y
+// el pulso lo dispara un boton propio: solo el icono en movil, texto desde sm.
+const BotonSubirArchivo = ({
+    id, accept, etiqueta, alElegir, ocupado,
+}: {
+    id: string;
+    accept: string;
+    etiqueta: string;
+    alElegir: (archivo: File | null) => void;
+    ocupado?: boolean;
+}) => {
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                disabled={ocupado}
+                title={etiqueta}
+                aria-label={etiqueta}
+                className="btn-ghost justify-center gap-1.5 w-10 h-10 p-0 sm:w-auto sm:h-auto sm:px-3 sm:py-2 sm:text-sm"
+            >
+                {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                <span className="hidden sm:inline">{etiqueta}</span>
+            </button>
+            <input
+                ref={inputRef}
+                id={id}
+                type="file"
+                accept={accept}
+                className="hidden"
+                onChange={e => { alElegir(e.target.files?.[0] ?? null); e.target.value = ''; }}
+            />
+        </>
+    );
+};
 
 const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void }) => {
     const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo, actualizarInfoGrupo, actualizarAsistente } = useApp();
@@ -1424,18 +1465,14 @@ const ModuloIntegrantes = () => {
                                 </div>
                                 <div className="col-span-full"><label className="label-campo">Foto</label>
                                     <div className="flex flex-col sm:flex-row gap-2">
-                                        <button onClick={() => (document.getElementById('input-foto-integrante') as HTMLInputElement)?.click()}
-                                            className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
-                                            {subiendoFoto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir foto
-                                        </button>
-                                        <input className="input-campo flex-1" value={form.foto} onChange={e => setForm(p => ({ ...p, foto: e.target.value }))} placeholder="o pega una URL https://..." />
-                                        <input
+                                        <BotonSubirArchivo
                                             id="input-foto-integrante"
-                                            type="file"
                                             accept="image/*"
-                                            className="hidden"
-                                            onChange={e => { subirFoto(e.target.files?.[0] ?? null); e.target.value = ''; }}
+                                            etiqueta="Subir foto"
+                                            alElegir={f => subirFoto(f)}
+                                            ocupado={subiendoFoto}
                                         />
+                                        <input className="input-campo flex-1" value={form.foto} onChange={e => setForm(p => ({ ...p, foto: e.target.value }))} placeholder="o pega una URL https://..." />
                                     </div>
                                 </div>
                                 <div className="col-span-full"><label className="label-campo">Biografía</label><textarea rows={3} className="input-campo resize-none" value={form.biografia} onChange={e => setForm(p => ({ ...p, biografia: e.target.value }))} placeholder="Mini-biografía..." /></div>
@@ -1889,18 +1926,14 @@ const ModuloEventos = () => {
 
                                 <div className="col-span-full"><label className="label-campo">Imagen promocional</label>
                                     <div className="flex flex-col sm:flex-row gap-2">
-                                        <button onClick={() => (document.getElementById('input-imagen-evento') as HTMLInputElement)?.click()}
-                                            className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
-                                            {subiendoImagen ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir imagen
-                                        </button>
-                                        <input className="input-campo flex-1 min-w-0" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
-                                        <input
+                                        <BotonSubirArchivo
                                             id="input-imagen-evento"
-                                            type="file"
                                             accept="image/*"
-                                            className="hidden"
-                                            onChange={e => { subirImagen(e.target.files?.[0] ?? null); e.target.value = ''; }}
+                                            etiqueta="Subir imagen"
+                                            alElegir={f => subirImagen(f)}
+                                            ocupado={subiendoImagen}
                                         />
+                                        <input className="input-campo flex-1 min-w-0" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
                                     </div>
                                     {formEvento.imagen && (
                                         <div className="relative mt-2 rounded-lg overflow-hidden border borde-subtle">
@@ -2025,8 +2058,7 @@ const ModuloAudio = () => {
         setMostrarFormulario(true);
     };
 
-    const manejarArchivoAudio = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const manejarArchivoAudio = (file: File | null) => {
         if (!file) return;
         setArchivoAudio(file);
 
@@ -2054,8 +2086,7 @@ const ModuloAudio = () => {
         }
     };
 
-    const manejarArchivoPortada = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const manejarArchivoPortada = (file: File | null) => {
         if (file) setArchivoPortada(file);
     };
 
@@ -2316,12 +2347,12 @@ const ModuloAudio = () => {
                                             <Upload className="w-3.5 h-3.5" /> Archivo de Audio (.mp3)
                                         </span>
                                     </label>
-                                    <input
-                                        type="file"
+                                    <BotonSubirArchivo
+                                        id="input-audio-mp3"
                                         accept="audio/mp3,audio/mpeg,.mp3"
-                                        onChange={manejarArchivoAudio}
-                                        disabled={subiendo}
-                                        className="block w-full text-xs t-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-vinotinto/10 file:text-vinotinto hover:file:bg-vinotinto/20 dark:file:bg-khaki/20 dark:file:text-khaki dark:hover:file:bg-khaki/30 cursor-pointer"
+                                        etiqueta="Elegir archivo"
+                                        alElegir={manejarArchivoAudio}
+                                        ocupado={subiendo}
                                     />
                                     {archivoAudio && (
                                         <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono">
@@ -2344,16 +2375,16 @@ const ModuloAudio = () => {
                                     </div>
                                 </div>
 
-                                {/* Portada (Opcional) */}
-                                <div>
-                                    <label className="label-campo">Imagen de Portada (Opcional)</label>
-                                    <input
-                                        type="file"
-                                        accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
-                                        onChange={manejarArchivoPortada}
-                                        disabled={subiendo}
-                                        className="block w-full text-xs t-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sutil file:text-secundario hover:file:bg-sutil-hover cursor-pointer"
-                                    />
+                                    {/* Portada (Opcional) */}
+                                    <div>
+                                        <label className="label-campo">Imagen de Portada (Opcional)</label>
+                                        <BotonSubirArchivo
+                                            id="input-portada-audio"
+                                            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
+                                            etiqueta="Elegir imagen"
+                                            alElegir={manejarArchivoPortada}
+                                            ocupado={subiendo}
+                                        />
                                     {archivoPortada && (
                                         <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1">
                                             ✓ Portada: {archivoPortada.name}
@@ -2999,18 +3030,12 @@ const ModuloMedia = () => {
                                         <div>
                                             <label className="label-campo">Video (.mp4/.webm) *</label>
                                             <div className="flex flex-col sm:flex-row gap-2">
-                                                <button
-                                                    onClick={() => (document.getElementById('input-video-archivo') as HTMLInputElement)?.click()}
-                                                    className="btn-ghost text-sm px-3 py-2 flex-shrink-0"
-                                                >
-                                                    {subiendoVideo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {formVideo.videoArchivo ? 'Reemplazar video' : 'Subir video'}
-                                                </button>
-                                                <input
+                                                <BotonSubirArchivo
                                                     id="input-video-archivo"
-                                                    type="file"
                                                     accept="video/*"
-                                                    className="hidden"
-                                                    onChange={e => { e.target.files?.[0] && subirVideoLocal(e.target.files[0]); e.target.value = ''; }}
+                                                    etiqueta={formVideo.videoArchivo ? 'Reemplazar video' : 'Subir video'}
+                                                    alElegir={f => f && subirVideoLocal(f)}
+                                                    ocupado={subiendoVideo}
                                                 />
                                                 <input className="input-campo flex-1 min-w-0" value={formVideo.videoArchivo} onChange={e => setFormVideo(p => ({ ...p, videoArchivo: e.target.value }))} placeholder="o pega la URL del archivo" />
                                             </div>
@@ -3072,16 +3097,12 @@ const ModuloMedia = () => {
                                 <div><label className="label-campo">Título *</label><input className="input-campo" value={formFoto.titulo} onChange={e => setFormFoto(p => ({ ...p, titulo: e.target.value }))} placeholder="Descripción breve de la foto" /></div>
                                 <div><label className="label-campo">URL de la imagen *</label>
                                     <div className="flex flex-col sm:flex-row gap-2">
-                                        <button onClick={() => (document.getElementById('input-foto-archivo') as HTMLInputElement)?.click()}
-                                            className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
-                                            {subiendoFoto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir imagen
-                                        </button>
-                                        <input
+                                        <BotonSubirArchivo
                                             id="input-foto-archivo"
-                                            type="file"
                                             accept="image/*"
-                                            className="hidden"
-                                            onChange={e => { e.target.files?.[0] && subirImagen(e.target.files[0]); e.target.value = ''; }}
+                                            etiqueta="Subir imagen"
+                                            alElegir={f => f && subirImagen(f)}
+                                            ocupado={subiendoFoto}
                                         />
                                         <input className="input-campo flex-1 min-w-0" value={formFoto.src} onChange={e => setFormFoto(p => ({ ...p, src: e.target.value }))} placeholder="https://..." />
                                     </div>
@@ -3238,8 +3259,7 @@ const ModuloPartituras = () => {
         }));
     };
 
-    const manejarArchivoPdf = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const manejarArchivoPdf = (file: File | null) => {
         if (!file) return;
         setArchivoPdf(file);
         if (!form.titulo || form.titulo.trim() === '') {
@@ -3248,8 +3268,7 @@ const ModuloPartituras = () => {
         }
     };
 
-    const manejarArchivoPortada = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const manejarArchivoPortada = (file: File | null) => {
         if (file) setArchivoPortada(file);
     };
 
@@ -3735,12 +3754,12 @@ const ModuloPartituras = () => {
                                             <FileText className="w-3.5 h-3.5" /> Partitura (PDF) *
                                         </span>
                                     </label>
-                                    <input
-                                        type="file"
+                                    <BotonSubirArchivo
+                                        id="input-partitura-pdf"
                                         accept="application/pdf,.pdf"
-                                        onChange={manejarArchivoPdf}
-                                        disabled={subiendo}
-                                        className="block w-full text-xs t-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-vinotinto/10 file:text-vinotinto hover:file:bg-vinotinto/20 dark:file:bg-khaki/20 dark:file:text-khaki dark:hover:file:bg-khaki/30 cursor-pointer"
+                                        etiqueta="Elegir PDF"
+                                        alElegir={manejarArchivoPdf}
+                                        ocupado={subiendo}
                                     />
                                     {archivoPdf && (
                                         <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono">
@@ -3761,16 +3780,16 @@ const ModuloPartituras = () => {
                                     </div>
                                 </div>
 
-                                {/* Portada */}
-                                <div>
-                                    <label className="label-campo">Imagen de Portada (Opcional)</label>
-                                    <input
-                                        type="file"
-                                        accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
-                                        onChange={manejarArchivoPortada}
-                                        disabled={subiendo}
-                                        className="block w-full text-xs t-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sutil file:text-secundario hover:file:bg-sutil-hover cursor-pointer"
-                                    />
+                                    {/* Portada */}
+                                    <div>
+                                        <label className="label-campo">Imagen de Portada (Opcional)</label>
+                                        <BotonSubirArchivo
+                                            id="input-portada-partitura"
+                                            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
+                                            etiqueta="Elegir imagen"
+                                            alElegir={manejarArchivoPortada}
+                                            ocupado={subiendo}
+                                        />
                                     {archivoPortada && (
                                         <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1">
                                             ✓ Portada: {archivoPortada.name}
