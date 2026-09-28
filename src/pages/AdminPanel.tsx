@@ -1339,7 +1339,7 @@ const ModuloIntegrantes = () => {
                                 return (
                                     <div key={i.id}
                                         data-reordenable={indice}
-                                        className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 transition-all ${
+                                        className={`card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 transition-all ${
                                             arrastreIntegrantes.arrastrando && arrastreIntegrantes.sobre === indice
                                                 ? 'ring-2 ring-vinotinto/60 border-vinotinto/60'
                                                 : ''
@@ -1373,11 +1373,11 @@ const ModuloIntegrantes = () => {
                                                 {i.anioIngreso !== undefined && <span className="text-[11px] t-muted-low">· Desde {i.anioIngreso}</span>}
                                             </div>
                                         </div>
-                                        <div className="flex gap-1.5 flex-wrap justify-end flex-shrink-0">
-                                            <button onClick={() => abrirEditar(i)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+<div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
+                                            <button onClick={() => abrirEditar(i)} className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
                                                 <Pencil className="w-3.5 h-3.5" />
                                             </button>
-                                            <button onClick={() => eliminarIntegrante(i.id)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                            <button onClick={() => eliminarIntegrante(i.id)} className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
@@ -1735,7 +1735,7 @@ const ModuloEventos = () => {
                                 return (
                                     <div key={e.id}
                                         data-reordenable={i}
-                                        className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 transition-all ${
+                                        className={`card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 transition-all ${
                                             arrastreEventos.arrastrando && arrastreEventos.sobre === i
                                                 ? 'ring-2 ring-vinotinto/60 border-vinotinto/60'
                                                 : ''
@@ -1783,21 +1783,20 @@ const ModuloEventos = () => {
                                                 {new Date(e.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {e.lugar} · {e.tipoEntrada}{e.categoria && e.categoria !== 'Concierto' ? ` · ${e.categoria}` : ''}
                                             </p>
                                         </div>
-
-                                        <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                                        <div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
                                             <button onClick={() => editarEvento(e.id, { destacado: !e.destacado })}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${e.destacado ? 'bg-khaki/25 text-amber-700 dark:text-khaki' : 'bg-sutil hover:bg-sutil-hover t-muted'}`}
+                                                className={`flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg transition-all ${e.destacado ? 'bg-khaki/25 text-amber-700 dark:text-khaki' : 'bg-sutil hover:bg-sutil-hover t-muted'}`}
                                                 title={e.destacado ? 'Quitar destacado' : 'Marcar como destacado'}>
                                                 <Star className="w-3.5 h-3.5" />
                                             </button>
-                                            <button onClick={() => editarEvento(e.id, { activo: !e.activo })} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title={e.activo ? 'Ocultar de la web' : 'Mostrar en la web'}>
+                                            <button onClick={() => editarEvento(e.id, { activo: !e.activo })} className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title={e.activo ? 'Ocultar de la web' : 'Mostrar en la web'}>
                                                 {e.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                             </button>
-                                            <button onClick={() => abrirEditar(e)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title="Editar">
+                                            <button onClick={() => abrirEditar(e)} className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title="Editar">
                                                 <Pencil className="w-3.5 h-3.5" />
                                             </button>
                                             <button onClick={() => confirmarEliminar(e)}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${confirmaEliminar === e.id ? 'bg-red-600 text-white' : 'bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400'}`}
+                                                className={`flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg transition-all ${confirmaEliminar === e.id ? 'bg-red-600 text-white' : 'bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400'}`}
                                                 title={confirmaEliminar === e.id ? '¿Seguro? Haz clic de nuevo' : 'Eliminar'}>
                                                 {confirmaEliminar === e.id ? <Check className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
                                             </button>
@@ -2158,7 +2157,7 @@ const ModuloAudio = () => {
                         const estaSonando = pistaEnPreescucha === p.id;
 
                         return (
-                            <div key={p.id} className="card-glass rounded-xl p-4 flex items-center gap-4 hover:border-vinotinto/30 dark:hover:border-khaki/30 transition-all">
+                            <div key={p.id} className="card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4 hover:border-vinotinto/30 dark:hover:border-khaki/30 transition-all">
                                 {/* Botón de preescucha rápida */}
                                 <button
                                     onClick={() => togglePreescucha(p.urlAudio, p.id)}
@@ -2194,18 +2193,18 @@ const ModuloAudio = () => {
                                 </div>
 
                                 {/* Acciones */}
-                                <div className="flex gap-2">
+<div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
                                     <button
                                         onClick={() => abrirEditar(p)}
                                         title="Editar"
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                     >
                                         <Pencil className="w-3.5 h-3.5" />
                                     </button>
 <button
                                         onClick={() => handleEliminar(p.id, p.titulo)}
                                         title="Eliminar"
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -2724,7 +2723,7 @@ const ModuloMedia = () => {
                                         return (
                                             <div key={v.id}
                                                 data-reordenable={indice}
-                                                className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-3 transition-all ${v.activo ? '' : 'opacity-60'} ${
+                                                className={`card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 transition-all ${v.activo ? '' : 'opacity-60'} ${
                                                     arrastreVideos.arrastrando && arrastreVideos.sobre === indice ? 'ring-2 ring-vinotinto/60 border-vinotinto/60' : ''
                                                 }`}>
                                                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
@@ -2778,27 +2777,27 @@ const ModuloMedia = () => {
                                                     <p className="text-[11px] t-muted mt-0.5">Duración: {v.duracion || '—'}</p>
                                                 </div>
                                                 {/* Acciones */}
-                                                <div className="flex gap-1.5">
+                                                <div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
                                                     <button
                                                         onClick={() => editarVideoMedia(v.id, { destacado: !v.destacado })}
                                                         title={v.destacado ? 'Quitar de destacados' : 'Marcar como destacado'}
-                                                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${v.destacado ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario'}`}
+                                                        className={`flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg transition-all ${v.destacado ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario'}`}
                                                     >
                                                         <Star className={`w-3.5 h-3.5 ${v.destacado ? 'fill-amber-400' : ''}`} />
                                                     </button>
                                                     <button
                                                         onClick={() => editarVideoMedia(v.id, { activo: !v.activo })}
                                                         title={v.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
-                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                                     >
                                                         {v.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                                     </button>
                                                     <button onClick={() => abrirEditarVideo(v)} title="Editar"
-                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+                                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
                                                         <Pencil className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button onClick={() => eliminarVideoMedia(v.id)}
-                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
@@ -3429,7 +3428,7 @@ const ModuloPartituras = () => {
                 ) : (
                     partiturasPaginadas.map(p => {
                         return (
-                            <div key={p.id} className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all ${
+                            <div key={p.id} className={`card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4 transition-all ${
                                 p.activo ? 'hover:border-vinotinto/30 dark:hover:border-khaki/30' : 'opacity-60'
                             }`}>
                                 {/* Portada miniatura */}
@@ -3474,12 +3473,15 @@ const ModuloPartituras = () => {
                                     </div>
                                 </div>
 
-                                {/* Acciones */}
-                                <div className="flex gap-1 sm:gap-1.5 flex-wrap justify-end flex-shrink-0">
+                                {/* Acciones. En móvil bajan a su propia fila y estiran a todo
+                                    el ancho: en una sola fila los cuatro botones se comían
+                                    140px y dejaban el texto en 96px, y eso era lo que
+                                    hacía crecer la tarjeta y partir los datos en varias líneas. */}
+                                <div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
                                     <button
                                         onClick={() => editarPartitura(p.id, { descargable: !p.descargable })}
                                         title={p.descargable ? 'Descargable: ON' : 'Descargable: OFF'}
-                                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+                                        className={`flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg transition-all ${
                                             p.descargable
                                                 ? 'bg-khaki text-primario shadow-glow-khaki'
                                                 : 'bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario'
@@ -3490,21 +3492,21 @@ const ModuloPartituras = () => {
                                     <button
                                         onClick={() => editarPartitura(p.id, { activo: !p.activo })}
                                         title={p.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                     >
                                         {p.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                     </button>
                                     <button
                                         onClick={() => abrirEditar(p)}
                                         title="Editar"
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                     >
                                         <Pencil className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                         onClick={() => handleEliminar(p)}
                                         title="Eliminar definitivamente"
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
