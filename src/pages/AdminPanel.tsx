@@ -101,7 +101,11 @@ const normalizarTexto = (texto: string): string =>
 // Barra de filtros reutilizable: buscador + desplegables propios.
 // Sustituye a los <select> nativos, que en movil abren la rueda del sistema
 // operativo, rompen el diseno del sitio y no caben en una rejilla de dos columnas.
-type OpcionFiltro = { clave: string; etiqueta: string; contador: number };
+// `corta` es el texto que se ve en el disparador cerrado. Dentro de una columna
+// de ~150px en un telefono, "Todas las cuerdas" no cabe junto al contador y la
+// flecha, asi que ahi se resume; la lista abierta si muestra la etiqueta entera,
+// que es donde el usuario elige.
+type OpcionFiltro = { clave: string; etiqueta: string; contador: number; corta?: string };
 
 type GrupoFiltros = {
     etiqueta: string;
@@ -131,7 +135,7 @@ const DisparadorDesplegable = ({ etiqueta, opcion, abierto, alAlternar }: {
             className="w-full h-9 px-2.5 flex items-center gap-2 rounded-lg border borde-medium
                        bg-sutil text-secundario hover:border-vinotinto/40 transition-colors cursor-pointer"
         >
-            <span className="truncate flex-1 text-left text-xs">{opcion.etiqueta}</span>
+            <span className="truncate flex-1 text-left text-xs">{opcion.corta ?? opcion.etiqueta}</span>
             <span className="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sutil-hover t-muted-low">
                 {opcion.contador}
             </span>
@@ -1071,10 +1075,16 @@ const ModuloSecciones = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                 {configuracionSecciones.tipoAsistente === 'whatsapp' && (
                     <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-xs text-green-700 dark:text-green-400 font-medium">Número de WhatsApp</span>
-                            <button onClick={() => onNavigate('dashboard')}
-                                className="text-[11px] inline-flex items-center gap-1 text-khaki hover:underline transition-colors">
-                                <Pencil className="w-3 h-3" /> Editar en el Dashboard
+                            <span className="text-xs text-green-700 dark:text-green-400 font-medium min-w-0">Número de WhatsApp</span>
+                            <button
+                                type="button"
+                                onClick={() => onNavigate('dashboard')}
+                                title="Editar en el Dashboard"
+                                aria-label="Editar en el Dashboard"
+                                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg
+                                           t-muted-low hover:text-vinotinto hover:bg-vinotinto/10 transition-all cursor-pointer"
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
                             </button>
                         </div>
                         <div className="flex items-center gap-2 rounded-lg bg-green-500/5 border border-green-500/15 px-3 py-2.5">
@@ -1303,7 +1313,7 @@ const ModuloIntegrantes = () => {
                             {
                                 etiqueta: 'Cuerda',
                                 chips: [
-                                    { clave: 'Todas', etiqueta: 'Todas', contador: integrantes.length },
+                                    { clave: 'Todas', etiqueta: 'Todas las cuerdas', corta: 'Todas', contador: integrantes.length },
                                     ...CUERDAS_INTEGRANTE.map(c => ({ clave: c, etiqueta: c, contador: integrantes.filter(i => i.cuerda === c).length })),
                                 ],
                                 filtroActivo: filtroCuerda,
@@ -1312,7 +1322,7 @@ const ModuloIntegrantes = () => {
                             {
                                 etiqueta: 'Rol',
                                 chips: [
-                                    { clave: 'Todos', etiqueta: 'Todos', contador: integrantes.length },
+                                    { clave: 'Todos', etiqueta: 'Todos los roles', corta: 'Todos', contador: integrantes.length },
                                     { clave: 'Directiva', etiqueta: 'Directiva', contador: integrantes.filter(i => i.esDirectivo).length },
                                     { clave: 'Coro', etiqueta: 'Coro', contador: integrantes.filter(i => !i.esDirectivo).length },
                                 ],
@@ -1634,18 +1644,18 @@ const ModuloEventos = () => {
     const momentoTipo = (e: Evento) => new Date(e.fecha).getTime() <= Date.now() ? 'Pasado' : 'Futuro';
     const categoriasPresentes = [...new Set(eventos.map(e => e.categoria).filter(Boolean))];
     const chipsTipo = [
-        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Todos', etiqueta: 'Todos los tipos', corta: 'Todos', contador: eventos.length },
         { clave: 'Libre', etiqueta: 'Libre', contador: eventos.filter(e => e.tipoEntrada === 'Libre').length },
         { clave: 'Con entrada', etiqueta: 'Con entrada', contador: eventos.filter(e => e.tipoEntrada === 'Con entrada').length },
-        { clave: 'Donación voluntaria', etiqueta: 'Donación', contador: eventos.filter(e => e.tipoEntrada === 'Donación voluntaria').length },
+        { clave: 'Donación voluntaria', etiqueta: 'Donación voluntaria', corta: 'Donación', contador: eventos.filter(e => e.tipoEntrada === 'Donación voluntaria').length },
     ];
     const chipsMomento = [
-        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Todos', etiqueta: 'Todos los momentos', corta: 'Todos', contador: eventos.length },
         { clave: 'Futuros', etiqueta: 'Futuros', contador: eventos.filter(e => momentoTipo(e) === 'Futuro').length },
         { clave: 'Pasados', etiqueta: 'Pasados', contador: eventos.filter(e => momentoTipo(e) === 'Pasado').length },
     ];
     const chipsEstadoEvento = [
-        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Todos', etiqueta: 'Todos los estados', corta: 'Todos', contador: eventos.length },
         { clave: 'Visibles', etiqueta: 'Visibles', contador: eventos.filter(e => e.activo).length },
         { clave: 'Ocultos', etiqueta: 'Ocultos', contador: eventos.filter(e => !e.activo).length },
         { clave: 'Destacados', etiqueta: 'Destacados', contador: eventos.filter(e => e.destacado).length },
@@ -1703,7 +1713,7 @@ const ModuloEventos = () => {
                             ...(categoriasPresentes.length > 0 ? [{
                                 etiqueta: 'Categoría',
                                 chips: [
-                                    { clave: 'Todos', etiqueta: 'Todas', contador: eventos.length },
+                                    { clave: 'Todos', etiqueta: 'Todas las categorías', corta: 'Todas', contador: eventos.length },
                                     ...categoriasPresentes.map(c => ({
                                         clave: c,
                                         etiqueta: c,
@@ -2631,7 +2641,7 @@ const ModuloMedia = () => {
 
     const TabBotones = [
         { id: 'videos' as const, etiqueta: 'Videos', cuenta: videosMedia.length },
-        { id: 'fotos' as const, etiqueta: 'Galería de Fotos', cuenta: fotosGaleria.length },
+        { id: 'fotos' as const, etiqueta: 'Galería', cuenta: fotosGaleria.length },
     ];
 
     return (
@@ -2641,13 +2651,17 @@ const ModuloMedia = () => {
                 descripcion="Administra los videos de YouTube y las fotos de la sección Presentaciones."
             />
 
-            {/* Pestañas: Videos / Fotos */}
-            <div className="flex flex-wrap gap-2">
+            {/* Pestañas: Videos / Fotos. Rejilla de dos columnas a ancho completo: como
+                botones sueltos con wrap, "Galería de Fotos" ocupaba 197px de los 312
+                útiles en un teléfono y las dos pestañas se partían en dos filas
+                desiguales. */}
+            <div className="grid grid-cols-2 gap-2">
                 {TabBotones.map(tab => (
                     <button
                         key={tab.id}
+                        type="button"
                         onClick={() => setSubModulo(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+                        className={`w-full flex items-center justify-center gap-1.5 px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition-all border ${
                             subModulo === tab.id
                                 ? 'bg-vinotinto text-white border-vinotinto shadow-glow-vinotinto'
                                 : 'bg-sutil hover:bg-sutil-hover text-secundario border-transparent'
@@ -2667,9 +2681,10 @@ const ModuloMedia = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-secundario">Videos</h3>
-                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', tipoOrigen: 'youtube', videoArchivo: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
-                            <Plus className="w-4 h-4" /> Añadir Video
-                        </button>
+                        <BotonAgregar
+                            etiqueta="Añadir Video"
+                            alPulsar={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', tipoOrigen: 'youtube', videoArchivo: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true }); setMostrarFormVideo(true); }}
+                        />
                     </div>
 
                     {videosMedia.length === 0 ? (
@@ -2687,7 +2702,7 @@ const ModuloMedia = () => {
                                     {
                                         etiqueta: 'Estado',
                                         chips: [
-                                            { clave: 'Todos', etiqueta: 'Todos', contador: videosMedia.length },
+                                            { clave: 'Todos', etiqueta: 'Todos los estados', corta: 'Todos', contador: videosMedia.length },
                                             { clave: 'Activo', etiqueta: 'Visible', contador: videosMedia.filter(v => v.activo).length },
                                             { clave: 'Oculto', etiqueta: 'Oculto', contador: videosMedia.filter(v => !v.activo).length },
                                         ],
@@ -2697,7 +2712,7 @@ const ModuloMedia = () => {
                                     {
                                         etiqueta: 'Categoría',
                                         chips: [
-                                            { clave: 'Todas', etiqueta: 'Todas', contador: videosMedia.length },
+                                            { clave: 'Todas', etiqueta: 'Todas las categorías', corta: 'Todas', contador: videosMedia.length },
                                             ...CATEGORIAS_VIDEO.map(c => ({ clave: c, etiqueta: c, contador: videosMedia.filter(v => v.categoria === c).length })),
                                         ],
                                         filtroActivo: filtroCategoriaVideo,
@@ -2821,9 +2836,10 @@ const ModuloMedia = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-secundario">Galería de Fotos</h3>
-                        <button onClick={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', activo: true }); setMostrarFormFoto(true); }} className="btn-primario text-sm py-2 px-4">
-                            <Plus className="w-4 h-4" /> Añadir Foto
-                        </button>
+                        <BotonAgregar
+                            etiqueta="Añadir Foto"
+                            alPulsar={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', activo: true }); setMostrarFormFoto(true); }}
+                        />
                     </div>
 
                     {fotosGaleria.length === 0 ? (
@@ -2841,7 +2857,7 @@ const ModuloMedia = () => {
                                     {
                                         etiqueta: 'Estado',
                                         chips: [
-                                            { clave: 'Todos', etiqueta: 'Todos', contador: fotosGaleria.length },
+                                            { clave: 'Todos', etiqueta: 'Todos los estados', corta: 'Todos', contador: fotosGaleria.length },
                                             { clave: 'Activo', etiqueta: 'Visible', contador: fotosGaleria.filter(f => f.activo).length },
                                             { clave: 'Oculto', etiqueta: 'Oculto', contador: fotosGaleria.filter(f => !f.activo).length },
                                         ],
@@ -3389,7 +3405,7 @@ const ModuloPartituras = () => {
                                 {
                                     etiqueta: 'Acceso',
                                     chips: [
-                                        { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
+                                        { clave: 'Todos', etiqueta: 'Todo el acceso', corta: 'Todas', contador: partituras.length },
                                         { clave: 'Descargable', etiqueta: 'Descargable', contador: partituras.filter(p => p.descargable).length },
                                         { clave: 'No Descargable', etiqueta: 'Solo lectura', contador: partituras.filter(p => !p.descargable).length },
                                     ],
@@ -3399,7 +3415,7 @@ const ModuloPartituras = () => {
                                 {
                                     etiqueta: 'Estado',
                                     chips: [
-                                        { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
+                                        { clave: 'Todos', etiqueta: 'Todos los estados', corta: 'Todas', contador: partituras.length },
                                         { clave: 'Activo', etiqueta: 'Visible', contador: partituras.filter(p => p.activo !== false).length },
                                         { clave: 'Oculto', etiqueta: 'Oculta', contador: partituras.filter(p => p.activo === false).length },
                                     ],
@@ -3951,7 +3967,8 @@ const ModuloBuzonAudiciones = () => {
                             etiqueta: 'Estado',
                             chips: ESTADOS_FILTRO.map(estado => ({
                                 clave: estado,
-                                etiqueta: estado,
+                                etiqueta: estado === 'Todas' ? 'Todas las solicitudes' : estado,
+                                corta: estado === 'Todas' ? 'Todas' : undefined,
                                 contador: estado === 'Todas' ? solicitudesAudicion.length : solicitudesAudicion.filter(s => s.estado === estado).length,
                             })),
                             filtroActivo: filtroEstado,
@@ -3979,11 +3996,11 @@ const ModuloBuzonAudiciones = () => {
                         </div>
                     ) : (
                         solicitudesPaginadas.map(s => (
-                            <div key={s.id} className="card-glass rounded-xl p-5 space-y-3">
+                            <div key={s.id} className="card-glass rounded-xl p-3 sm:p-5 space-y-3">
                                 <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <p className="font-medium text-secundario">{s.nombre}</p>
-                                        <p className="text-xs t-muted">{s.email} · {s.telefono || 'Sin teléfono'}</p>
+                                    <div className="min-w-0">
+                                        <p className="font-medium text-secundario truncate">{s.nombre}</p>
+                                        <p className="text-xs t-muted truncate">{s.email} · {s.telefono || 'Sin teléfono'}</p>
                                         <p className="text-xs text-vinotinto-claro mt-1">Voz: {s.tipoVoz || 'Sin especificar'}</p>
                                     </div>
                                     <div className="text-right flex-shrink-0">
@@ -3995,45 +4012,53 @@ const ModuloBuzonAudiciones = () => {
                                 {s.urlAudioPrueba && (
                                     <AudioPruebaSolicitud valor={s.urlAudioPrueba} />
                                 )}
-                                <div className="flex gap-2 flex-wrap items-center">
+
+                                {/* Antes las siete etiquetas vivían en una sola fila con wrap y
+                                    ml-auto: en un teléfono ocupaban tres renglones desiguales y el
+                                    botón de eliminar saltaba a una esquina. Ahora los estados van
+                                    en su rejilla y las acciones de contacto en la siguiente. */}
+                                <div className="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
                                     {(['Pendiente', 'Revisada', 'Aceptada', 'Rechazada'] as const).map(estado => (
                                         <button key={estado} onClick={() => marcarSolicitudRevisada(s.id, estado)}
-                                            className={`text-xs px-3 py-1 rounded-full border transition-all ${s.estado === estado
+                                            className={`text-[11px] sm:text-xs px-1 sm:px-3 py-2 sm:py-1 rounded-full border transition-all truncate ${s.estado === estado
                                                     ? `${COLORES_ESTADO[estado]} border-current`
                                                     : 'borde-subtle t-muted-low hover:borde-medium'
                                                 }`}>
                                             {estado}
                                         </button>
                                     ))}
+                                </div>
+
+                                <div className="grid grid-cols-3 sm:flex sm:flex-wrap sm:items-center gap-1.5 sm:gap-2">
                                     {s.telefono.replace(/[^0-9]/g, '') && (
                                         <a
                                             href={`https://wa.me/${s.telefono.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hola ${s.nombre}, te escribimos por tu solicitud de audición en DaCapo.`)}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-xs px-3 py-1.5 rounded-lg border border-green-600/30 text-green-700 dark:text-green-400 hover:bg-green-500/10 transition-all"
+                                            className="flex items-center justify-center text-[11px] sm:text-xs px-1.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border border-green-600/30 text-green-700 dark:text-green-400 hover:bg-green-500/10 transition-all truncate"
                                             title="Responder por WhatsApp"
                                         >
-                                            <MessageCircle className="w-3 h-3 inline mr-1" /> WhatsApp
+                                            <MessageCircle className="w-3 h-3 shrink-0 sm:mr-1" /> <span className="truncate">WhatsApp</span>
                                         </a>
                                     )}
                                     <a
                                         href={`mailto:${s.email}?subject=${encodeURIComponent('Tu solicitud de audición - DaCapo')}&body=${encodeURIComponent(`Hola ${s.nombre},\n\n`)}`}
-                                        className="text-xs px-3 py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all"
+                                        className="flex items-center justify-center text-[11px] sm:text-xs px-1.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all truncate"
                                         title="Responder por correo"
                                     >
-                                        <Mail className="w-3 h-3 inline mr-1" /> Correo
+                                        <Mail className="w-3 h-3 shrink-0 sm:mr-1" /> <span className="truncate">Correo</span>
                                     </a>
                                     <button
                                         onClick={() => confirmarBorrar(s.id)}
-                                        className={`ml-auto text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                                        className={`flex items-center justify-center text-[11px] sm:text-xs px-1.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border transition-all truncate sm:ml-auto ${
                                             confirmandoBorrar === s.id
                                                 ? 'bg-red-600 text-white border-red-600'
                                                 : 'text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10'
                                         }`}
                                         title={confirmandoBorrar === s.id ? 'Clic de nuevo para confirmar' : 'Eliminar solicitud'}
                                     >
-                                        <Trash2 className="w-3 h-3 inline mr-1" />
-                                        {confirmandoBorrar === s.id ? '¿Confirmar?' : 'Eliminar'}
+                                        <Trash2 className="w-3 h-3 shrink-0 sm:mr-1" />
+                                        <span className="truncate">{confirmandoBorrar === s.id ? '¿Confirmar?' : 'Eliminar'}</span>
                                     </button>
                                 </div>
                             </div>
@@ -4115,7 +4140,7 @@ const ModuloBuzonMensajes = () => {
                         {
                             etiqueta: 'Lectura',
                             chips: [
-                                { clave: 'Todos', etiqueta: 'Todos', contador: mensajesContacto.length },
+                                { clave: 'Todos', etiqueta: 'Todas las lecturas', corta: 'Todos', contador: mensajesContacto.length },
                                 { clave: 'No leídos', etiqueta: 'No leídos', contador: noLeidos },
                                 { clave: 'Leídos', etiqueta: 'Leídos', contador: mensajesContacto.length - noLeidos },
                             ],
@@ -4144,47 +4169,63 @@ const ModuloBuzonMensajes = () => {
                         </div>
                     ) : (
                         mensajesPaginados.map(m => (
-                            <div key={m.id} className={`card-glass rounded-xl p-5 transition-all ${m.leido ? 'borde-subtle' : 'border-vinotinto/30'}`}>
+                            <div key={m.id} className={`card-glass rounded-xl p-3 sm:p-5 transition-all ${m.leido ? 'borde-subtle' : 'border-vinotinto/30'}`}>
                                 <div className="flex items-start justify-between gap-3 mb-3">
-                                    <div>
+                                    <div className="min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <p className="font-medium text-secundario text-sm">{m.nombre}</p>
-                                            {!m.leido && <div className="w-2 h-2 rounded-full bg-vinotinto animate-pulse" />}
+                                            <p className="font-medium text-secundario text-sm truncate">{m.nombre}</p>
+                                            {!m.leido && <div className="w-2 h-2 rounded-full bg-vinotinto animate-pulse flex-shrink-0" />}
                                         </div>
-                                        <p className="text-xs t-muted">{m.email}</p>
+                                        <p className="text-xs t-muted truncate">{m.email}</p>
                                     </div>
                                     <p className="text-xs t-muted-low flex-shrink-0">{new Date(m.fechaEnvio).toLocaleDateString('es-ES')}</p>
                                 </div>
                                 {m.asunto && <p className="text-xs text-khaki mb-2">Asunto: {m.asunto}</p>}
                                 <p className="text-sm t-muted-high bg-sutil rounded-lg p-3">{m.mensaje}</p>
-                                <div className="mt-3 flex items-center gap-2 flex-wrap">
+
+                                {/* La fila única de antes mezclaba responder, marcar y eliminar
+                                    con ml-auto, de modo que en un teléfono el texto largo de
+                                    "Marcar como no leído" forzaba un cuarto renglón. En móvil
+                                    quedan dos rejillas: responder y el par leer/borrar. */}
+                                <div className="mt-3 grid grid-cols-2 sm:flex sm:items-center sm:flex-wrap gap-1.5 sm:gap-2">
                                     <a
                                         href={`mailto:${m.email}?subject=${encodeURIComponent(`RE: ${m.asunto || 'Mensaje desde la web'}`)}&body=${encodeURIComponent(`Hola ${m.nombre},\n\n`)}`}
-                                        className="text-xs px-3 py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all"
+                                        className="flex items-center justify-center text-xs px-2 py-2.5 sm:py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all"
                                         title="Responder por correo"
                                     >
-                                        <Mail className="w-3 h-3 inline mr-1" /> Responder
+                                        <Mail className="w-3.5 h-3.5 shrink-0 sm:mr-1" />
+                                        <span className="truncate sm:ml-1">Responder</span>
                                     </a>
                                     {m.leido ? (
-                                        <button onClick={() => marcarMensajeLeido(m.id, false)} className="text-xs t-muted hover:text-secundario transition-colors flex items-center gap-1">
-                                            <EyeOff className="w-3 h-3" /> Marcar como no leído
+                                        <button
+                                            onClick={() => marcarMensajeLeido(m.id, false)}
+                                            className="flex items-center justify-center text-xs px-2 py-2.5 sm:py-1.5 rounded-lg bg-sutil hover:bg-sutil-hover borde-subtle t-muted hover:text-secundario transition-all"
+                                            title="Marcar como no leído"
+                                        >
+                                            <EyeOff className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="truncate sm:ml-1">No leído</span>
                                         </button>
                                     ) : (
-                                        <button onClick={() => marcarMensajeLeido(m.id)} className="text-xs t-muted hover:text-secundario transition-colors flex items-center gap-1">
-                                            <Check className="w-3 h-3" /> Marcar como leído
+                                        <button
+                                            onClick={() => marcarMensajeLeido(m.id)}
+                                            className="flex items-center justify-center text-xs px-2 py-2.5 sm:py-1.5 rounded-lg bg-sutil hover:bg-sutil-hover borde-subtle t-muted hover:text-secundario transition-all"
+                                            title="Marcar como leído"
+                                        >
+                                            <Check className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="truncate sm:ml-1">Leído</span>
                                         </button>
                                     )}
                                     <button
                                         onClick={() => confirmarBorrar(m.id)}
-                                        className={`ml-auto text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                                        className={`col-span-2 sm:col-span-1 flex items-center justify-center text-xs px-2 py-2.5 sm:py-1.5 rounded-lg border transition-all sm:ml-auto ${
                                             confirmandoBorrar === m.id
                                                 ? 'bg-red-600 text-white border-red-600'
                                                 : 'text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10'
                                         }`}
                                         title={confirmandoBorrar === m.id ? 'Clic de nuevo para confirmar' : 'Eliminar mensaje'}
                                     >
-                                        <Trash2 className="w-3 h-3 inline mr-1" />
-                                        {confirmandoBorrar === m.id ? '¿Confirmar?' : 'Eliminar'}
+                                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                        <span className="truncate sm:ml-1">{confirmandoBorrar === m.id ? '¿Confirmar?' : 'Eliminar'}</span>
                                     </button>
                                 </div>
                             </div>
