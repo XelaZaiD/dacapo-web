@@ -20,7 +20,7 @@ import {
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
     ArrowUp, ArrowDown, Video, Image as ImageIcon,
     Lock, AtSign, ExternalLink, Music2, Star,
-    Search, GripVertical, Ticket, Globe, MapPin, Phone, MessageCircle
+    Search, GripVertical, Ticket, Globe, MapPin, Phone, MessageCircle, ChevronDown
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
@@ -98,121 +98,159 @@ const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
 const normalizarTexto = (texto: string): string =>
     texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-// Barra de filtros reutilizable: buscador + chips con contador
+// Barra de filtros reutilizable: buscador + desplegables propios.
+// Sustituye a los <select> nativos, que en movil abren la rueda del sistema
+// operativo, rompen el diseno del sitio y no caben en una rejilla de dos columnas.
+type OpcionFiltro = { clave: string; etiqueta: string; contador: number };
+
 type GrupoFiltros = {
     etiqueta: string;
-    chips: { clave: string; etiqueta: string; contador: number }[];
+    chips: OpcionFiltro[];
     filtroActivo: string;
     alCambiar: (clave: string) => void;
 };
 
-const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, grupos, alLimpiar, variant = 'chips' }: {
+const ROTULO_FILTRO = 'block text-[10px] uppercase tracking-[0.2em] t-muted-low mb-1.5';
+
+// Disparador del desplegable. La lista no se dibuja aqui sino en la barra, a lo
+// ancho completo de la tarjeta: dentro de una rejilla de dos columnas el campo
+// mide ~150px en un telefono, y una lista flotante anclada se quedaria sin
+// espacio y taparia los filtros vecinos.
+const DisparadorDesplegable = ({ etiqueta, opcion, abierto, alAlternar }: {
+    etiqueta: string;
+    opcion: OpcionFiltro;
+    abierto: boolean;
+    alAlternar: () => void;
+}) => (
+    <div className="min-w-0 sm:flex-1 sm:min-w-[150px]">
+        <span className={ROTULO_FILTRO}>{etiqueta}</span>
+        <button
+            type="button"
+            onClick={alAlternar}
+            aria-expanded={abierto}
+            className="w-full h-9 px-2.5 flex items-center gap-2 rounded-lg border borde-medium
+                       bg-sutil text-secundario hover:border-vinotinto/40 transition-colors cursor-pointer"
+        >
+            <span className="truncate flex-1 text-left text-xs">{opcion.etiqueta}</span>
+            <span className="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sutil-hover t-muted-low">
+                {opcion.contador}
+            </span>
+            <ChevronDown className={`w-3.5 h-3.5 shrink-0 t-muted-low transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
+        </button>
+    </div>
+);
+
+const ListaDesplegable = ({ opciones, valor, alElegir }: {
+    opciones: OpcionFiltro[];
+    valor: string;
+    alElegir: (clave: string) => void;
+}) => (
+    <ul className="rounded-lg border borde-medium bg-fondo-card overflow-hidden">
+        {opciones.map(o => {
+            const activo = o.clave === valor;
+            return (
+                <li key={o.clave} className="border-b borde-subtle last:border-b-0">
+                    <button
+                        type="button"
+                        onClick={() => alElegir(o.clave)}
+                        className={`w-full px-3 py-2.5 flex items-center gap-2 text-sm transition-colors cursor-pointer ${activo ? 'bg-vinotinto/15' : 'hover:bg-sutil'}`}
+                    >
+                        <Check className={`w-3.5 h-3.5 shrink-0 ${activo ? 'text-vinotinto' : 'opacity-0'}`} />
+                        <span className={`truncate flex-1 text-left ${activo ? 'text-secundario font-medium' : 'text-secundario'}`}>
+                            {o.etiqueta}
+                        </span>
+                        <span className="shrink-0 text-[10px] font-mono t-muted-low">{o.contador}</span>
+                    </button>
+                </li>
+            );
+        })}
+    </ul>
+);
+
+const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, grupos, alLimpiar }: {
     termino: string;
     alCambiarTermino: (texto: string) => void;
     placeholder?: string;
     grupos: GrupoFiltros[];
     alLimpiar?: () => void;
-    variant?: 'chips' | 'selects';
 }) => {
+    const [abierto, setAbierto] = useState<number | null>(null);
+    const cajaRef = useRef<HTMLDivElement>(null);
+
     const hayFiltrosActivos = termino !== '' || grupos.some(g => g.filtroActivo !== g.chips[0]?.clave);
 
-    if (variant === 'selects') {
-        return (
-            <div className="card-glass rounded-xl p-3 flex flex-wrap items-center gap-2">
-                <div className="relative flex-1 basis-[200px] min-w-[160px]">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 t-muted-low pointer-events-none" />
-                    <input
-                        value={termino}
-                        onChange={e => alCambiarTermino(e.target.value)}
-                        placeholder={placeholder || 'Buscar...'}
-                        className="input-campo pl-9 pr-9 w-full h-9 text-sm"
-                    />
-                    {termino && (
-                        <button
-                            onClick={() => alCambiarTermino('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
-                            title="Limpiar búsqueda"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
-                    )}
-                </div>
-                {grupos.map(g => (
-                    <label key={g.etiqueta} className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-[10px] uppercase tracking-wide t-muted-low font-semibold hidden sm:inline">{g.etiqueta}:</span>
-                        <select
-                            value={g.filtroActivo}
-                            onChange={e => g.alCambiar(e.target.value)}
-                            className="h-9 text-xs rounded-lg border borde-subtle bg-sutil text-secundario px-2.5 pr-7 cursor-pointer hover:border-vinotinto/40 focus:outline-none focus:border-vinotinto/60 transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2212%22%20height=%2212%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%236b7280%22%20stroke-width=%222.5%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%226%209%2012%2015%2018%209%22/%3E%3C/svg%3E')] bg-no-repeat bg-[right_0.5rem_center]"
-                        >
-                            {g.chips.map(c => (
-                                <option key={c.clave} value={c.clave}>
-                                    {c.etiqueta} ({c.contador})
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                ))}
-                {hayFiltrosActivos && alLimpiar && (
-                    <button onClick={alLimpiar} className="h-9 text-xs px-3 rounded-lg border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-1 flex-shrink-0 ml-auto" title="Quitar todos los filtros">
-                        <X className="w-3 h-3" /> Limpiar
-                    </button>
-                )}
-            </div>
-        );
-    }
+    // Un solo desplegable abierto a la vez, y se cierra al tocar fuera de la barra
+    useEffect(() => {
+        if (abierto === null) return;
+        const cerrar = (e: Event) => {
+            if (cajaRef.current && !cajaRef.current.contains(e.target as Node)) setAbierto(null);
+        };
+        document.addEventListener('mousedown', cerrar);
+        document.addEventListener('touchstart', cerrar);
+        return () => {
+            document.removeEventListener('mousedown', cerrar);
+            document.removeEventListener('touchstart', cerrar);
+        };
+    }, [abierto]);
+
+    const grupoAbierto = abierto !== null ? grupos[abierto] : undefined;
 
     return (
-        <div className="card-glass rounded-xl p-3 space-y-3">
+        <div ref={cajaRef} className="card-glass rounded-xl p-3 space-y-3">
             <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 t-muted-low pointer-events-none" />
                 <input
                     value={termino}
                     onChange={e => alCambiarTermino(e.target.value)}
                     placeholder={placeholder || 'Buscar...'}
-                    className="input-campo pl-9 pr-9 w-full"
+                    className="input-campo pl-9 pr-9 w-full h-9 text-sm"
                 />
                 {termino && (
                     <button
+                        type="button"
                         onClick={() => alCambiarTermino('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
-                        title="Limpiar búsqueda"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
+                        title="Limpiar busqueda"
+                        aria-label="Limpiar busqueda"
                     >
                         <X className="w-3.5 h-3.5" />
                     </button>
                 )}
             </div>
+
             {grupos.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    {grupos.map((g, idx) => (
-                        <div key={idx} className="flex items-center gap-2 flex-wrap">
-                            {idx > 0 && <span className="hidden sm:block w-px h-5 bg-borde-subtle mx-2 flex-shrink-0" />}
-                            <span className="text-[10px] uppercase tracking-wide t-muted-low font-semibold flex-shrink-0">{g.etiqueta}</span>
-                            {g.chips.map(c => {
-                                const activo = g.filtroActivo === c.clave;
-                                return (
-                                    <button
-                                        key={c.clave}
-                                        onClick={() => g.alCambiar(c.clave)}
-                                        className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                                            activo
-                                                ? 'bg-vinotinto text-white border-vinotinto shadow-glow-vinotinto'
-                                                : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
-                                        }`}
-                                    >
-                                        {c.etiqueta}
-                                        <span className={`ml-1 ${activo ? 'text-white/70' : 'opacity-60'}`}>({c.contador})</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    ))}
+                <>
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-end gap-2">
+                        {grupos.map((g, idx) => (
+                            <DisparadorDesplegable
+                                key={g.etiqueta}
+                                etiqueta={g.etiqueta}
+                                opcion={g.chips.find(c => c.clave === g.filtroActivo) ?? g.chips[0]}
+                                abierto={abierto === idx}
+                                alAlternar={() => setAbierto(a => a === idx ? null : idx)}
+                            />
+                        ))}
+                    </div>
+
+                    {grupoAbierto && (
+                        <ListaDesplegable
+                            opciones={grupoAbierto.chips}
+                            valor={grupoAbierto.filtroActivo}
+                            alElegir={clave => { grupoAbierto.alCambiar(clave); setAbierto(null); }}
+                        />
+                    )}
+
                     {hayFiltrosActivos && alLimpiar && (
-                        <button onClick={alLimpiar} className="text-xs px-3 py-1.5 rounded-full border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-1 ml-auto">
+                        <button
+                            type="button"
+                            onClick={alLimpiar}
+                            className="text-xs px-3 py-2 rounded-lg border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-1"
+                            title="Quitar todos los filtros"
+                        >
                             <X className="w-3 h-3" /> Limpiar filtros
                         </button>
                     )}
-                </div>
+                </>
             )}
         </div>
     );
@@ -661,6 +699,41 @@ const ContadorSincronizado = ({ etiqueta, icono, valor, tooltip, modulo, alNaveg
     </button>
 );
 
+// Encabezado único para los módulos del panel. Antes cada módulo montaba el suyo
+// con un envoltorio distinto, y cuatro de ellos comprimían el título contra el
+// botón de acción en pantallas angostas. El título baja a text-xl en móvil para
+// dejarle sitio a la descripción, que es la que más suffería.
+const CabeceraModulo = ({ titulo, descripcion, accion }: {
+    titulo: string;
+    descripcion: ReactNode;
+    accion?: ReactNode;
+}) => (
+    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-display font-bold text-secundario mb-1">{titulo}</h2>
+            <p className="t-muted text-xs sm:text-sm">{descripcion}</p>
+        </div>
+        {accion && <div className="shrink-0">{accion}</div>}
+    </div>
+);
+
+// Botón de "añadir registro" de los módulos. En móvil se queda en un cuadrado de
+// 40px con solo el símbolo, que es lo que pidió el usuario: menos texto, más
+// simbología y mejor objetivo táctil. La etiqueta vuelve a aparecer en sm, que
+// es el único breakpoint que no exige puntero fino.
+const BotonAgregar = ({ alPulsar, etiqueta }: { alPulsar: () => void; etiqueta: string }) => (
+    <button
+        type="button"
+        onClick={alPulsar}
+        title={etiqueta}
+        aria-label={etiqueta}
+        className="btn-primario justify-center gap-1.5 w-10 h-10 p-0 sm:w-auto sm:h-auto sm:px-4 sm:py-2 sm:text-sm"
+    >
+        <Plus className="w-4 h-4" />
+        <span className="hidden sm:inline">{etiqueta}</span>
+    </button>
+);
+
 const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void }) => {
     const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo, actualizarInfoGrupo, actualizarAsistente } = useApp();
     const [subiendoLogo, setSubiendoLogo] = useState(false);
@@ -698,10 +771,10 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-display font-bold text-secundario mb-1">Dashboard</h2>
-                <p className="t-muted text-sm">Resumen general de DaCapo Grupo Vocal</p>
-            </div>
+            <CabeceraModulo
+                titulo="Dashboard"
+                descripcion="Resumen general de DaCapo Grupo Vocal"
+            />
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {stats.map((s, i) => (
@@ -930,10 +1003,10 @@ const ModuloSecciones = ({ onNavigate }: { onNavigate: (modulo: string) => void 
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-display font-bold text-secundario mb-1">Gestor de Secciones</h2>
-                <p className="t-muted text-sm">Activa o desactiva secciones de la página pública en tiempo real</p>
-            </div>
+            <CabeceraModulo
+                titulo="Gestor de Secciones"
+                descripcion="Activa o desactiva secciones de la página pública en tiempo real"
+            />
 
             <div className="space-y-3">
                 {SECCIONES_INFO.map(({ clave, etiqueta, descripcion }) => {
@@ -1158,15 +1231,11 @@ const ModuloIntegrantes = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Integrantes</h2>
-                    <p className="t-muted text-sm">{integrantes.length} integrantes registrados</p>
-                </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
-                    <Plus className="w-4 h-4" /> Añadir
-                </button>
-            </div>
+            <CabeceraModulo
+                titulo="Integrantes"
+                descripcion={`${integrantes.length} integrantes registrados`}
+                accion={<BotonAgregar alPulsar={abrirCrear} etiqueta="Añadir" />}
+            />
 
             {/* Preferencias de la sección Integrantes (diseños públicos) */}
             <div className="card-glass rounded-xl p-5">
@@ -1227,7 +1296,6 @@ const ModuloIntegrantes = () => {
             ) : (
                 <div className="space-y-3">
                     <BarraFiltrosAdmin
-                        variant="selects"
                         termino={filtroBusqueda}
                         alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaIntegrantes(1); }}
                         placeholder="Buscar por nombre o cargo..."
@@ -1590,15 +1658,11 @@ const ModuloEventos = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0">
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Eventos</h2>
-                    <p className="t-muted text-sm">{eventos.length} eventos · Ordena con las flechas o arrastrando (# = posición)</p>
-                </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4 shrink-0">
-                    <Plus className="w-4 h-4" /> Nuevo Evento
-                </button>
-            </div>
+            <CabeceraModulo
+                titulo="Eventos"
+                descripcion={`${eventos.length} eventos · Ordena con las flechas o arrastrando (# = posición)`}
+                accion={<BotonAgregar alPulsar={abrirCrear} etiqueta="Nuevo Evento" />}
+            />
 
             {estadoEventos === 'error' && eventos.length === 0 ? (
                 <div className="card-glass rounded-xl p-8 text-center">
@@ -1614,7 +1678,6 @@ const ModuloEventos = () => {
             ) : (
                 <div className="space-y-3">
                     <BarraFiltrosAdmin
-                        variant="selects"
                         termino={filtroBusqueda}
                         alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaEventos(1); }}
                         placeholder="Buscar por título, lugar u organizador..."
@@ -2064,27 +2127,11 @@ const ModuloAudio = () => {
 
     return (
         <div className="space-y-6">
-            {/* Cabecera */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">
-                        Pistas de Audio (Reproductor)
-                    </h2>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <p className="t-muted text-sm">{pistasAudio.length} pistas en la lista de reproducción</p>
-                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
-                            supabase 
-                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20' 
-                                : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-                        }`}>
-                            {supabase ? '● Supabase Conectado' : '○ Modo Local (Fase 1)'}
-                        </span>
-                    </div>
-                </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
-                    <Plus className="w-4 h-4" /> Añadir Pista
-                </button>
-            </div>
+            <CabeceraModulo
+                titulo="Pistas de Audio (Reproductor)"
+                descripcion={`${pistasAudio.length} pistas en la lista de reproducción`}
+                accion={<BotonAgregar alPulsar={abrirCrear} etiqueta="Añadir Pista" />}
+            />
 
             {/* Lista de pistas */}
             <div className="space-y-2">
@@ -2109,7 +2156,6 @@ const ModuloAudio = () => {
                 ) : (
                     pistasAudioPaginadas.map(p => {
                         const estaSonando = pistaEnPreescucha === p.id;
-                        const esSupabase = p.urlAudio.includes('supabase.co');
 
                         return (
                             <div key={p.id} className="card-glass rounded-xl p-4 flex items-center gap-4 hover:border-vinotinto/30 dark:hover:border-khaki/30 transition-all">
@@ -2141,14 +2187,7 @@ const ModuloAudio = () => {
 
                                 {/* Datos de la pista */}
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <p className="font-medium text-secundario text-sm truncate">{p.titulo}</p>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
-                                            esSupabase ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-black/5 dark:bg-white/5 t-muted'
-                                        }`}>
-                                            {esSupabase ? 'Supabase' : 'Externo'}
-                                        </span>
-                                    </div>
+                                    <p className="font-medium text-secundario text-sm truncate">{p.titulo}</p>
                                     <p className="text-xs t-muted truncate mt-0.5">
                                         {p.compositor} <span className="opacity-40">·</span> <span className="font-mono">{p.duracion}</span>
                                     </p>
@@ -2263,12 +2302,9 @@ const ModuloAudio = () => {
 
                                 {/* Archivo de Audio .mp3 */}
                                 <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
-                                    <label className="label-campo flex items-center justify-between text-vinotinto dark:text-khaki">
+                                    <label className="label-campo text-vinotinto dark:text-khaki">
                                         <span className="flex items-center gap-1.5 font-semibold">
                                             <Upload className="w-3.5 h-3.5" /> Archivo de Audio (.mp3)
-                                        </span>
-                                        <span className="text-[10px] opacity-75 font-normal">
-                                            {supabase ? 'Se subirá a Supabase Storage' : 'Modo local activo'}
                                         </span>
                                     </label>
                                     <input
@@ -2601,12 +2637,10 @@ const ModuloMedia = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Media & Galería</h2>
-                    <p className="t-muted text-sm">Administra los videos de YouTube y las fotos de la sección Presentaciones.</p>
-                </div>
-            </div>
+            <CabeceraModulo
+                titulo="Media & Galería"
+                descripcion="Administra los videos de YouTube y las fotos de la sección Presentaciones."
+            />
 
             {/* Pestañas: Videos / Fotos */}
             <div className="flex flex-wrap gap-2">
@@ -2647,7 +2681,6 @@ const ModuloMedia = () => {
                     ) : (
                         <div className="space-y-3">
                             <BarraFiltrosAdmin
-                                variant="selects"
                                 termino={filtroBusquedaVideo}
                                 alCambiarTermino={t => { setFiltroBusquedaVideo(t); setPaginaVideos(1); }}
                                 placeholder="Buscar por título o descripción..."
@@ -2802,7 +2835,6 @@ const ModuloMedia = () => {
                     ) : (
                         <div className="space-y-3">
                             <BarraFiltrosAdmin
-                                variant="selects"
                                 termino={filtroBusquedaFoto}
                                 alCambiarTermino={t => { setFiltroBusquedaFoto(t); setPaginaFotos(1); }}
                                 placeholder="Buscar por título..."
@@ -3296,27 +3328,11 @@ const ModuloPartituras = () => {
 
     return (
         <div className="space-y-6">
-            {/* Cabecera */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">
-                        Partituras (Biblioteca)
-                    </h2>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <p className="t-muted text-sm">{partituras.length} partituras en el catálogo</p>
-                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
-                            supabase
-                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
-                                : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-                        }`}>
-                            {supabase ? '● Supabase Conectado' : '○ Modo Local (Fase 1)'}
-                        </span>
-                    </div>
-                </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
-                    <Plus className="w-4 h-4" /> Añadir Partitura
-                </button>
-            </div>
+            <CabeceraModulo
+                titulo="Partituras (Biblioteca)"
+                descripcion={`${partituras.length} partituras en el catálogo`}
+                accion={<BotonAgregar alPulsar={abrirCrear} etiqueta="Añadir Partitura" />}
+            />
 
             {/* Preferencias de la Biblioteca (vistas públicas) */}
             <div className="card-glass rounded-xl p-5">
@@ -3412,7 +3428,6 @@ const ModuloPartituras = () => {
                     </div>
                 ) : (
                     partiturasPaginadas.map(p => {
-                        const esSupabase = p.urlPdf?.includes('supabase.co') || false;
                         return (
                             <div key={p.id} className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all ${
                                 p.activo ? 'hover:border-vinotinto/30 dark:hover:border-khaki/30' : 'opacity-60'
@@ -3434,11 +3449,6 @@ const ModuloPartituras = () => {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <p className="font-medium text-secundario text-sm truncate">{p.titulo}</p>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
-                                            esSupabase ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-black/5 dark:bg-white/5 t-muted'
-                                        }`}>
-                                            {esSupabase ? 'Supabase' : 'Externo'}
-                                        </span>
                                         {!p.activo && (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
                                                 Oculta
@@ -3702,12 +3712,9 @@ const ModuloPartituras = () => {
 
                                 {/* Archivo PDF */}
                                 <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
-                                    <label className="label-campo flex items-center justify-between text-vinotinto dark:text-khaki">
+                                    <label className="label-campo text-vinotinto dark:text-khaki">
                                         <span className="flex items-center gap-1.5 font-semibold">
                                             <FileText className="w-3.5 h-3.5" /> Partitura (PDF) *
-                                        </span>
-                                        <span className="text-[10px] opacity-75 font-normal">
-                                            {supabase ? 'Se subirá a Supabase Storage' : 'Modo local activo'}
                                         </span>
                                     </label>
                                     <input
@@ -3926,10 +3933,10 @@ const ModuloBuzonAudiciones = () => {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-display font-bold text-secundario mb-1">Buzón de Audiciones</h2>
-                <p className="t-muted text-sm">{solicitudesAudicion.filter(s => s.estado === 'Pendiente').length} pendientes de revisión · {solicitudesAudicion.length} en total</p>
-            </div>
+            <CabeceraModulo
+                titulo="Buzón de Audiciones"
+                descripcion={`${solicitudesAudicion.filter(s => s.estado === 'Pendiente').length} pendientes de revisión · ${solicitudesAudicion.length} en total`}
+            />
 
             {/* Búsqueda + Filtro por estado */}
             {solicitudesAudicion.length > 0 && (
@@ -4079,17 +4086,22 @@ const ModuloBuzonMensajes = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Buzón de Mensajes</h2>
-                    <p className="t-muted text-sm">{noLeidos} sin leer · {mensajesContacto.length} en total</p>
-                </div>
-                {noLeidos > 0 && (
-                    <button onClick={marcarTodosComoLeidos} className="btn-ghost text-sm px-3 py-2">
-                        <Check className="w-4 h-4" /> Marcar todos como leídos
+            <CabeceraModulo
+                titulo="Buzón de Mensajes"
+                descripcion={`${noLeidos} sin leer · ${mensajesContacto.length} en total`}
+                accion={noLeidos > 0 ? (
+                    <button
+                        type="button"
+                        onClick={marcarTodosComoLeidos}
+                        title="Marcar todos como leídos"
+                        aria-label="Marcar todos como leídos"
+                        className="btn-ghost justify-center gap-1.5 w-10 h-10 p-0 sm:w-auto sm:h-auto sm:px-3 sm:py-2 sm:text-sm border borde-subtle rounded-lg"
+                    >
+                        <Check className="w-4 h-4" />
+                        <span className="hidden sm:inline">Marcar todos como leídos</span>
                     </button>
-                )}
-            </div>
+                ) : undefined}
+            />
 
             {/* Búsqueda + Filtro por estado de lectura */}
             {mensajesContacto.length > 0 && (
@@ -4308,7 +4320,7 @@ const AdminPanel = () => {
             )}
 
             {/* ---- CONTENIDO PRINCIPAL ---- */}
-            <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
+            <div className="flex-1 lg:ml-64 flex flex-col min-h-screen min-w-0">
                 {/* Header móvil */}
                 <div className="lg:hidden flex items-center justify-between p-4 border-b borde-subtle bg-fondo-card">
                     <button onClick={() => setMenuMovilAbierto(true)} className="btn-ghost">
@@ -4330,7 +4342,7 @@ const AdminPanel = () => {
                 </div>
 
                 {/* Contenido del módulo activo */}
-                <main className="flex-1 p-6 max-w-5xl w-full mx-auto">
+                <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-5xl w-full mx-auto min-w-0">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={moduloActivo}
