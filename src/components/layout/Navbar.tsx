@@ -17,13 +17,14 @@
  * ============================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type MouseEvent } from 'react';
 // "motion" de Framer Motion añade animaciones fácilmente
 import { motion, AnimatePresence } from 'framer-motion';
 // Lucide React nos da íconos SVG listos para usar
 import { Menu, X, Moon, Sun, LogIn, LogOut, Shield, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { scrollASeccion } from '../../utils/scroll';
 import ModalAuth from '../ui/ModalAuth';
 import LogoGrupo from '../ui/LogoGrupo';
 
@@ -82,13 +83,26 @@ const Navbar = () => {
         return true;
     });
 
-    // Función para hacer scroll suave al hacer clic en un link
-    const hacerScrollA = (href: string) => {
-        setMenuMovilAbierto(false); // Cierra el menú móvil si está abierto
-        const elemento = document.querySelector(href);
-        if (elemento) {
-            elemento.scrollIntoView({ behavior: 'smooth' });
+    // Cierra los menús al navegar
+    const cerrarMenus = () => {
+        setMenuMovilAbierto(false);
+        setMenuUsuarioAbierto(false);
+    };
+
+    // Navega a una sección (los enlaces son <a href="#seccion">)
+    //
+    // El salto por fragmento del navegador se anula con preventDefault: en el
+    // móvil Chrome cambiaba la URL pero la página no se movía. El scroll lo
+    // animamos nosotros (utils/scroll.ts), que no depende de esa rareza. Luego
+    // se devuelve el '#seccion' a la barra de direcciones con replaceState.
+    const irASeccion = (e: MouseEvent<HTMLAnchorElement>, id: string) => {
+        e.preventDefault();
+
+        if (scrollASeccion(id.replace('#', ''))) {
+            history.replaceState(null, '', id);
         }
+
+        cerrarMenus();
     };
 
     return (
@@ -96,9 +110,14 @@ const Navbar = () => {
             {/* ---- BARRA DE NAVEGACIÓN ---- */}
             {/* "motion.nav" añade animaciones de Framer Motion al elemento nav */}
             <motion.nav
-                className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${navConFondo
-                        ? 'bg-fondo-oscuro/95 backdrop-blur-md border-b borde-subtle shadow-lg'
-                        : 'bg-transparent'
+                className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${menuMovilAbierto
+                        // Con el menú abierto la barra va totalmente opaca, para
+                        // que el panel de abajo no se transparentice
+                        ? 'bg-fondo-oscuro border-b borde-subtle shadow-lg'
+                        : navConFondo
+                            // El 'backdrop-blur' solo en PC: en móvil se omite
+                            ? 'bg-fondo-oscuro/95 border-b borde-subtle shadow-lg md:backdrop-blur-md'
+                            : 'bg-transparent'
                     }`}
                 initial={{ y: -100 }}           // Empieza 100px arriba (oculto)
                 animate={{ y: 0 }}              // Se mueve a su posición normal
@@ -122,14 +141,15 @@ const Navbar = () => {
                         <nav className="hidden md:flex items-center gap-1">
                             {/* Recorremos los items y creamos un botón para cada uno */}
                             {itemsFiltrados.map(item => (
-                                <button
+                                <a
                                     key={item.href}  // "key" es necesaria cuando renderizamos listas en React
-                                    onClick={() => hacerScrollA(item.href)}
+                                    href={item.href}
+                                    onClick={e => irASeccion(e, item.href)}
                                     className="px-3 py-2 text-sm font-medium t-muted-high hover:text-khaki
                              hover:bg-sutil rounded-lg transition-all duration-200"
                                 >
                                     {item.etiqueta}
-                                </button>
+                                </a>
                             ))}
                         </nav>
 
@@ -227,7 +247,12 @@ const Navbar = () => {
                 <AnimatePresence>
                     {menuMovilAbierto && (
                         <motion.div
-                            className="md:hidden bg-fondo-oscuro/98 backdrop-blur-xl border-t borde-subtle"
+                            // Sin 'backdrop-blur' a propósito: el filtro de fondo
+                            // creaba una capa de composición que en Android se
+                            // tragaba los toques de los botones de este panel.
+                            // Con un fondo opaco se ve igual y los toques funcionan.
+                            className="md:hidden bg-fondo-oscuro border-t borde-subtle
+                               max-h-[calc(100dvh-4rem)] overflow-y-auto"
                             initial={{ height: 0, opacity: 0 }}   // Estado inicial (oculto)
                             animate={{ height: 'auto', opacity: 1 }} // Estado visible
                             exit={{ height: 0, opacity: 0 }}       // Estado al desaparecer
@@ -235,14 +260,15 @@ const Navbar = () => {
                         >
                             <div className="contenedor py-4 flex flex-col gap-1">
                                 {itemsFiltrados.map(item => (
-                                    <button
+                                    <a
                                         key={item.href}
-                                        onClick={() => hacerScrollA(item.href)}
-                                        className="text-left px-4 py-3 t-muted-high hover:text-khaki
-                               hover:bg-sutil rounded-lg transition-all duration-200"
+                                        href={item.href}
+                                        onClick={e => irASeccion(e, item.href)}
+                                        className="block text-left px-4 py-3 t-muted-high hover:text-khaki
+                                   hover:bg-sutil rounded-lg transition-all duration-200"
                                     >
                                         {item.etiqueta}
-                                    </button>
+                                    </a>
                                 ))}
                                 {/* En móvil también mostramos el botón de login */}
                                 {!estaLogueado && (

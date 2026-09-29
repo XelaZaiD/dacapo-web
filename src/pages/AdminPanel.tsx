@@ -11,7 +11,7 @@
 import { useRef, useState, useEffect, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import {
     LayoutDashboard, Users, BookOpen, Calendar, Music,
     Settings, LogOut, ChevronLeft, ChevronRight, Eye, EyeOff,
@@ -20,7 +20,7 @@ import {
     Sun, Moon, FileText, LayoutGrid, List, Rows2, Grid3x3, Download,
     ArrowUp, ArrowDown, Video, Image as ImageIcon,
     Lock, AtSign, ExternalLink, Music2, Star,
-    Search, GripVertical, Ticket, Globe, MapPin, Phone, MessageCircle
+    Search, GripVertical, Ticket, Globe, MapPin, Phone, MessageCircle, ChevronDown
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Integrante, Evento, PistaAudio, Partitura, VideoMedia, FotoGaleria, InfoGrupo, SolicitudAudicion, VistasBiblioteca, VistasIntegrantes, CUERDAS_PARTITURA, CUERDAS_INTEGRANTE, DIFICULTADES_PARTITURA, ESTILOS_PARTITURA, EPOCAS_PARTITURA, CATEGORIAS_VIDEO, CATEGORIAS_FOTO } from '../data/mockData';
@@ -47,33 +47,49 @@ const MODULOS = [
 // ============================================================
 const REGISTROS_POR_PAGINA = 10;
 
+// Devuelve la lista de páginas a mostrar, con null en los huecos que se
+// sustituyen por elipsis. Antes se renderizaban todas: con 400 integrantes eran
+// 40 botones en dos filas que empujaban el contenido hacia abajo y dejaban el
+// resto de la fila wasted. Ahora siempre son 7 elementos como máximo.
+const paginasVisibles = (pagina: number, total: number): (number | null)[] => {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (pagina <= 4) return [1, 2, 3, 4, 5, null, total];
+    if (pagina >= total - 3) return [1, null, total - 4, total - 3, total - 2, total - 1, total];
+    return [1, null, pagina - 1, pagina, pagina + 1, null, total];
+};
+
 const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
     pagina: number;
     totalPaginas: number;
     alCambiar: (pagina: number) => void;
 }) => {
     if (totalPaginas <= 1) return null;
-    const paginas = Array.from({ length: totalPaginas }, (_, i) => i + 1);
+    const paginas = paginasVisibles(pagina, totalPaginas);
+    const boton = 'w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-all';
+    const inactivo = 'bg-sutil hover:bg-sutil-hover text-secundario';
 
     return (
         <div className="flex items-center justify-center gap-1 flex-wrap py-4">
             <button
                 onClick={() => alCambiar(Math.max(1, pagina - 1))}
                 disabled={pagina <= 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover text-secundario disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className={`${boton} ${inactivo} disabled:opacity-30 disabled:cursor-not-allowed`}
                 title="Página anterior"
+                aria-label="Página anterior"
             >
                 <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            {paginas.map(p => (
+            {paginas.map((p, i) => p === null ? (
+                <span key={`hueco-${i}`} className="w-6 h-8 sm:w-5 flex items-center justify-center text-secundario select-none" aria-hidden="true">
+                    &hellip;
+                </span>
+            ) : (
                 <button
                     key={p}
                     onClick={() => alCambiar(p)}
-                    className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
-                        p === pagina
-                            ? 'bg-vinotinto text-white shadow-glow-vinotinto'
-                            : 'bg-sutil hover:bg-sutil-hover text-secundario'
-                    }`}
+                    aria-current={p === pagina ? 'page' : undefined}
+                    aria-label={`Página ${p}`}
+                    className={p === pagina ? `${boton} bg-vinotinto text-white shadow-glow-vinotinto` : `${boton} ${inactivo}`}
                 >
                     {p}
                 </button>
@@ -81,8 +97,9 @@ const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
             <button
                 onClick={() => alCambiar(Math.min(totalPaginas, pagina + 1))}
                 disabled={pagina >= totalPaginas}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover text-secundario disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className={`${boton} ${inactivo} disabled:opacity-30 disabled:cursor-not-allowed`}
                 title="Página siguiente"
+                aria-label="Página siguiente"
             >
                 <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -98,121 +115,163 @@ const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
 const normalizarTexto = (texto: string): string =>
     texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-// Barra de filtros reutilizable: buscador + chips con contador
+// Barra de filtros reutilizable: buscador + desplegables propios.
+// Sustituye a los <select> nativos, que en movil abren la rueda del sistema
+// operativo, rompen el diseno del sitio y no caben en una rejilla de dos columnas.
+// `corta` es el texto que se ve en el disparador cerrado. Dentro de una columna
+// de ~150px en un telefono, "Todas las cuerdas" no cabe junto al contador y la
+// flecha, asi que ahi se resume; la lista abierta si muestra la etiqueta entera,
+// que es donde el usuario elige.
+type OpcionFiltro = { clave: string; etiqueta: string; contador: number; corta?: string };
+
 type GrupoFiltros = {
     etiqueta: string;
-    chips: { clave: string; etiqueta: string; contador: number }[];
+    chips: OpcionFiltro[];
     filtroActivo: string;
     alCambiar: (clave: string) => void;
 };
 
-const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, grupos, alLimpiar, variant = 'chips' }: {
+const ROTULO_FILTRO = 'block text-[10px] uppercase tracking-[0.2em] t-muted-low mb-1.5';
+
+// Disparador del desplegable. La lista no se dibuja aqui sino en la barra, a lo
+// ancho completo de la tarjeta: dentro de una rejilla de dos columnas el campo
+// mide ~150px en un telefono, y una lista flotante anclada se quedaria sin
+// espacio y taparia los filtros vecinos.
+const DisparadorDesplegable = ({ etiqueta, opcion, abierto, alAlternar }: {
+    etiqueta: string;
+    opcion: OpcionFiltro;
+    abierto: boolean;
+    alAlternar: () => void;
+}) => (
+    <div className="min-w-0 sm:flex-1 sm:min-w-[150px]">
+        <span className={ROTULO_FILTRO}>{etiqueta}</span>
+        <button
+            type="button"
+            onClick={alAlternar}
+            aria-expanded={abierto}
+            className="w-full h-9 px-2.5 flex items-center gap-2 rounded-lg border borde-medium
+                       bg-sutil text-secundario hover:border-vinotinto/40 transition-colors cursor-pointer"
+        >
+            <span className="truncate flex-1 text-left text-xs">{opcion.corta ?? opcion.etiqueta}</span>
+            <span className="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sutil-hover t-muted-low">
+                {opcion.contador}
+            </span>
+            <ChevronDown className={`w-3.5 h-3.5 shrink-0 t-muted-low transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} />
+        </button>
+    </div>
+);
+
+const ListaDesplegable = ({ opciones, valor, alElegir }: {
+    opciones: OpcionFiltro[];
+    valor: string;
+    alElegir: (clave: string) => void;
+}) => (
+    <ul className="rounded-lg border borde-medium bg-fondo-card overflow-hidden">
+        {opciones.map(o => {
+            const activo = o.clave === valor;
+            return (
+                <li key={o.clave} className="border-b borde-subtle last:border-b-0">
+                    <button
+                        type="button"
+                        onClick={() => alElegir(o.clave)}
+                        className={`w-full px-3 py-2.5 flex items-center gap-2 text-sm transition-colors cursor-pointer ${activo ? 'bg-vinotinto/15' : 'hover:bg-sutil'}`}
+                    >
+                        <Check className={`w-3.5 h-3.5 shrink-0 ${activo ? 'text-vinotinto' : 'opacity-0'}`} />
+                        <span className={`truncate flex-1 text-left ${activo ? 'text-secundario font-medium' : 'text-secundario'}`}>
+                            {o.etiqueta}
+                        </span>
+                        <span className="shrink-0 text-[10px] font-mono t-muted-low">{o.contador}</span>
+                    </button>
+                </li>
+            );
+        })}
+    </ul>
+);
+
+const BarraFiltrosAdmin = ({ termino, alCambiarTermino, placeholder, grupos, alLimpiar }: {
     termino: string;
     alCambiarTermino: (texto: string) => void;
     placeholder?: string;
     grupos: GrupoFiltros[];
     alLimpiar?: () => void;
-    variant?: 'chips' | 'selects';
 }) => {
+    const [abierto, setAbierto] = useState<number | null>(null);
+    const cajaRef = useRef<HTMLDivElement>(null);
+
     const hayFiltrosActivos = termino !== '' || grupos.some(g => g.filtroActivo !== g.chips[0]?.clave);
 
-    if (variant === 'selects') {
-        return (
-            <div className="card-glass rounded-xl p-3 flex flex-wrap items-center gap-2">
-                <div className="relative flex-1 basis-[200px] min-w-[160px]">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 t-muted-low pointer-events-none" />
-                    <input
-                        value={termino}
-                        onChange={e => alCambiarTermino(e.target.value)}
-                        placeholder={placeholder || 'Buscar...'}
-                        className="input-campo pl-9 pr-9 w-full h-9 text-sm"
-                    />
-                    {termino && (
-                        <button
-                            onClick={() => alCambiarTermino('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
-                            title="Limpiar búsqueda"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
-                    )}
-                </div>
-                {grupos.map(g => (
-                    <label key={g.etiqueta} className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-[10px] uppercase tracking-wide t-muted-low font-semibold hidden sm:inline">{g.etiqueta}:</span>
-                        <select
-                            value={g.filtroActivo}
-                            onChange={e => g.alCambiar(e.target.value)}
-                            className="h-9 text-xs rounded-lg border borde-subtle bg-sutil text-secundario px-2.5 pr-7 cursor-pointer hover:border-vinotinto/40 focus:outline-none focus:border-vinotinto/60 transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2212%22%20height=%2212%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%236b7280%22%20stroke-width=%222.5%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%226%209%2012%2015%2018%209%22/%3E%3C/svg%3E')] bg-no-repeat bg-[right_0.5rem_center]"
-                        >
-                            {g.chips.map(c => (
-                                <option key={c.clave} value={c.clave}>
-                                    {c.etiqueta} ({c.contador})
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                ))}
-                {hayFiltrosActivos && alLimpiar && (
-                    <button onClick={alLimpiar} className="h-9 text-xs px-3 rounded-lg border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-1 flex-shrink-0 ml-auto" title="Quitar todos los filtros">
-                        <X className="w-3 h-3" /> Limpiar
-                    </button>
-                )}
-            </div>
-        );
-    }
+    // Un solo desplegable abierto a la vez, y se cierra al tocar fuera de la barra
+    useEffect(() => {
+        if (abierto === null) return;
+        const cerrar = (e: Event) => {
+            if (cajaRef.current && !cajaRef.current.contains(e.target as Node)) setAbierto(null);
+        };
+        document.addEventListener('mousedown', cerrar);
+        document.addEventListener('touchstart', cerrar);
+        return () => {
+            document.removeEventListener('mousedown', cerrar);
+            document.removeEventListener('touchstart', cerrar);
+        };
+    }, [abierto]);
+
+    const grupoAbierto = abierto !== null ? grupos[abierto] : undefined;
 
     return (
-        <div className="card-glass rounded-xl p-3 space-y-3">
+        <div ref={cajaRef} className="card-glass rounded-xl p-3 space-y-3">
             <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 t-muted-low pointer-events-none" />
                 <input
                     value={termino}
                     onChange={e => alCambiarTermino(e.target.value)}
                     placeholder={placeholder || 'Buscar...'}
-                    className="input-campo pl-9 pr-9 w-full"
+                    className="input-campo pl-9 pr-9 w-full h-9 text-sm"
                 />
                 {termino && (
                     <button
+                        type="button"
                         onClick={() => alCambiarTermino('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
-                        title="Limpiar búsqueda"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full bg-sutil hover:bg-sutil-hover t-muted transition-all"
+                        title="Limpiar busqueda"
+                        aria-label="Limpiar busqueda"
                     >
                         <X className="w-3.5 h-3.5" />
                     </button>
                 )}
             </div>
+
             {grupos.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    {grupos.map((g, idx) => (
-                        <div key={idx} className="flex items-center gap-2 flex-wrap">
-                            {idx > 0 && <span className="hidden sm:block w-px h-5 bg-borde-subtle mx-2 flex-shrink-0" />}
-                            <span className="text-[10px] uppercase tracking-wide t-muted-low font-semibold flex-shrink-0">{g.etiqueta}</span>
-                            {g.chips.map(c => {
-                                const activo = g.filtroActivo === c.clave;
-                                return (
-                                    <button
-                                        key={c.clave}
-                                        onClick={() => g.alCambiar(c.clave)}
-                                        className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                                            activo
-                                                ? 'bg-vinotinto text-white border-vinotinto shadow-glow-vinotinto'
-                                                : 'borde-subtle t-muted-low hover:borde-medium hover:text-secundario'
-                                        }`}
-                                    >
-                                        {c.etiqueta}
-                                        <span className={`ml-1 ${activo ? 'text-white/70' : 'opacity-60'}`}>({c.contador})</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    ))}
+                <>
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-end gap-2">
+                        {grupos.map((g, idx) => (
+                            <DisparadorDesplegable
+                                key={g.etiqueta}
+                                etiqueta={g.etiqueta}
+                                opcion={g.chips.find(c => c.clave === g.filtroActivo) ?? g.chips[0]}
+                                abierto={abierto === idx}
+                                alAlternar={() => setAbierto(a => a === idx ? null : idx)}
+                            />
+                        ))}
+                    </div>
+
+                    {grupoAbierto && (
+                        <ListaDesplegable
+                            opciones={grupoAbierto.chips}
+                            valor={grupoAbierto.filtroActivo}
+                            alElegir={clave => { grupoAbierto.alCambiar(clave); setAbierto(null); }}
+                        />
+                    )}
+
                     {hayFiltrosActivos && alLimpiar && (
-                        <button onClick={alLimpiar} className="text-xs px-3 py-1.5 rounded-full border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-1 ml-auto">
+                        <button
+                            type="button"
+                            onClick={alLimpiar}
+                            className="text-xs px-3 py-2 rounded-lg border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-1"
+                            title="Quitar todos los filtros"
+                        >
                             <X className="w-3 h-3" /> Limpiar filtros
                         </button>
                     )}
-                </div>
+                </>
             )}
         </div>
     );
@@ -247,6 +306,12 @@ const FlechasOrden = ({ puedeSubir, puedeBajar, alSubir, alBajar, className = 'b
 );
 
 // Tarjeta con toggle-switch (para destacado / agotado / visible, etc.)
+//
+// El w-full es lo que evita que la tarjeta desborde. Un <button> sin ancho se
+// dimensiona a su contenido, y como la descripcion lleva texto largo en una
+// sola linea, en movil la tarjeta crecia mas que el modal y el cuerpo de la
+// hoja se convertia en un scroller horizontal. Todos los campos de texto se
+// salvaban porque .input-campo si lleva w-full; aqui faltaba ese w-full.
 const ToggleCampo = ({ activo, alCambiar, icono, etiqueta, descripcion, colorActivo = 'bg-vinotinto' }: {
     activo: boolean;
     alCambiar: () => void;
@@ -258,19 +323,25 @@ const ToggleCampo = ({ activo, alCambiar, icono, etiqueta, descripcion, colorAct
     <button
         type="button"
         onClick={alCambiar}
-        className={`flex items-center gap-3 rounded-xl p-3 border transition-all text-left ${
+        className={`w-full min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all text-left ${
             activo
                 ? 'bg-vinotinto/5 dark:bg-khaki/5 border-vinotinto/30 dark:border-khaki/30'
                 : 'bg-sutil border-borde-subtle'
         }`}
     >
-        <span className={`${activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`}>{icono}</span>
+        {/* flex-shrink-0 en icono y switch: el algoritmo flex reduce los hijos
+            con ancho definido cuando falta espacio, y el switch se deformaba por
+            debajo de sus 44px. */}
+        <span className={`flex-shrink-0 ${activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`}>{icono}</span>
         <span className="flex-1 min-w-0">
-            <span className="block text-sm font-medium text-secundario">{etiqueta}</span>
-            {descripcion && <span className="block text-[11px] t-muted truncate">{descripcion}</span>}
+            <span className="block text-sm font-medium text-secundario break-words">{etiqueta}</span>
+            {/* break-words y no truncate: la descripcion salta de linea en vez de
+                recortarse. Con "Visible en la web" en movil el texto se perdia a
+                media frase, y la tarjeta gana una linea de alto a cambio. */}
+            {descripcion && <span className="block text-[11px] t-muted break-words">{descripcion}</span>}
         </span>
         <span
-            className={`toggle-switch ${activo ? colorActivo : 'bg-sutil-hover'}`}
+            className={`toggle-switch flex-shrink-0 ${activo ? colorActivo : 'bg-sutil-hover'}`}
             role="switch"
             aria-checked={activo}
         >
@@ -300,17 +371,41 @@ const EditorTagsEtiquetas = ({ etiquetas, alAgregar, alQuitar, alEditar, placeho
 
     return (
         <div className="w-full">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="relative mb-2">
                 <input
-                    className="input-campo flex-1 min-w-0"
+                    className="input-campo w-full pr-14 md:pr-28"
                     value={borrador}
                     onChange={e => setBorrador(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }}
                     placeholder={placeholder}
                 />
-                <button onClick={agregar} className="btn-ghost text-sm px-3 py-2 shrink-0">
-                    <Plus className="w-4 h-4" /> Añadir
-                </button>
+
+                {/* El hueco del input (pr-14 / pr-28) se reserva siempre, aunque el
+                    botón no esté, para que el texto no salte al aparecer. Mismo patrón
+                    que la barra de filtros de este panel. Solo se anima opacity: framer
+                    escribe transform en línea y pisaría el -translate-y-1/2. */}
+                <AnimatePresence>
+                    {borrador.trim() !== '' && (
+                        <motion.button
+                            type="button"
+                            onClick={agregar}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            aria-label="Añadir"
+                            title="Añadir"
+                            className="absolute right-2 top-1/2 -translate-y-1/2
+                                       h-10 md:h-7 w-10 md:w-auto px-2.5 md:px-3
+                                       flex items-center justify-center gap-1.5 rounded-full cursor-pointer
+                                       bg-fondo-card border borde-medium text-secundario
+                                       hover:text-vinotinto hover:border-vinotinto/40 transition-colors"
+                        >
+                            <Plus className="w-3.5 h-3.5 shrink-0" />
+                            <span className="hidden md:inline text-xs font-medium">Añadir</span>
+                        </motion.button>
+                    )}
+                </AnimatePresence>
             </div>
 
             {etiquetas.length === 0 ? (
@@ -354,7 +449,7 @@ const EditorTagsEtiquetas = ({ etiquetas, alAgregar, alQuitar, alEditar, placeho
                 </div>
             )}
             <p className="text-[11px] t-muted-low mt-1.5">
-                Escribe una frase y presiona Enter para fijarla · Pasa el cursor sobre una etiqueta para editarla (lápiz) o quitarla (X). En el celular ambas siempre están visibles.
+                Escribe una frase y presiona Enter, o toca el +, para fijarla · Pasa el cursor sobre una etiqueta para editarla (lápiz) o quitarla (X). En el celular ambas siempre están visibles.
             </p>
         </div>
     );
@@ -404,7 +499,7 @@ const CampoEnlaceBonito = ({ etiqueta, valor, alGuardar, alLimpiar, icono, place
                         onBlur={guardar}
                         placeholder={placeholder}
                     />
-                    <button onClick={guardar} title="Guardar" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
+                    <button onClick={guardar} title="Guardar" className="w-10 h-10 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
                         <Check className="w-4 h-4" />
                     </button>
                 </div>
@@ -434,11 +529,11 @@ const CampoEnlaceBonito = ({ etiqueta, valor, alGuardar, alLimpiar, icono, place
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
                 {valor.trim() && alLimpiar && (
-                    <button onClick={alLimpiar} title="Quitar" className="w-7 h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-red-500 hover:bg-red-500/10 transition-all">
+                    <button onClick={alLimpiar} title="Quitar" className="w-9 h-9 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-red-500 hover:bg-red-500/10 transition-all">
                         <X className="w-3.5 h-3.5" />
                     </button>
                 )}
-                <button onClick={iniciar} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-vinotinto hover:bg-vinotinto/10 transition-all">
+                <button onClick={iniciar} title="Editar" className="w-9 h-9 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg t-muted-low hover:text-vinotinto hover:bg-vinotinto/10 transition-all">
                     <Pencil className="w-3.5 h-3.5" />
                 </button>
             </div>
@@ -575,7 +670,7 @@ const CampoEditable = ({ etiqueta, valor, alGuardar, multilinea = false, placeho
                             onKeyDown={e => { if (e.key === 'Escape') cancelar(); }}
                             placeholder={placeholder}
                         />
-                        <button onClick={guardar} title="Guardar" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
+                        <button onClick={guardar} title="Guardar" className="w-10 h-10 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-lg bg-vinotinto text-white hover:bg-vinotinto-claro transition-all">
                             <Check className="w-4 h-4" />
                         </button>
                     </div>
@@ -605,7 +700,7 @@ const CampoEditable = ({ etiqueta, valor, alGuardar, multilinea = false, placeho
             <button
                 onClick={iniciar}
                 title={`Editar ${etiqueta}`}
-                className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-secundario/60 hover:text-vinotinto hover:bg-vinotinto/10 transition-all bg-sutil/60"
+                className="w-10 h-10 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-lg text-secundario/60 hover:text-vinotinto hover:bg-vinotinto/10 transition-all bg-sutil/60"
             >
                 <Pencil className="w-3.5 h-3.5" />
             </button>
@@ -636,6 +731,267 @@ const ContadorSincronizado = ({ etiqueta, icono, valor, tooltip, modulo, alNaveg
         <p className="text-[11px] t-muted-low mt-1">Automático · ver módulo</p>
     </button>
 );
+
+// Encabezado único para los módulos del panel. Antes cada módulo montaba el suyo
+// con un envoltorio distinto, y cuatro de ellos comprimían el título contra el
+// botón de acción en pantallas angostas. El título baja a text-xl en móvil para
+// dejarle sitio a la descripción, que es la que más sufría.
+//
+// Estructura: título y acción comparten fila, con la acción pegada al borde
+// derecho, y la descripción debajo a ancho completo. Así los nueve módulos
+// quedan alineados entre sí y el botón nunca salta de sitio al cambiar de
+// módulo. Es el mismo criterio que usan las cabeceras de las apps.
+const CabeceraModulo = ({ titulo, descripcion, accion }: {
+    titulo: string;
+    descripcion: ReactNode;
+    accion?: ReactNode;
+}) => (
+    <div className="space-y-2 sm:space-y-1">
+        <div className="flex items-start justify-between gap-3">
+            <h2 className="min-w-0 text-xl sm:text-2xl font-display font-bold text-secundario">{titulo}</h2>
+            {accion && <div className="shrink-0 -mt-1 sm:mt-0">{accion}</div>}
+        </div>
+        <p className="t-muted text-xs sm:text-sm">{descripcion}</p>
+    </div>
+);
+
+// Botón de "añadir registro" de los módulos. En móvil se queda en un cuadrado de
+// 40px con solo el símbolo, que es lo que pidió el usuario: menos texto, más
+// simbología y mejor objetivo táctil. La etiqueta vuelve a aparecer en sm, que
+// es el único breakpoint que no exige puntero fino.
+const BotonAgregar = ({ alPulsar, etiqueta }: { alPulsar: () => void; etiqueta: string }) => (
+    <button
+        type="button"
+        onClick={alPulsar}
+        title={etiqueta}
+        aria-label={etiqueta}
+        className="btn-primario justify-center gap-1.5 w-10 h-10 p-0 sm:w-auto sm:h-auto sm:px-4 sm:py-2 sm:text-sm"
+    >
+        <Plus className="w-4 h-4" />
+        <span className="hidden sm:inline">{etiqueta}</span>
+    </button>
+);
+
+// Selector de archivo con el boton nativo oculto. El <input type="file"> por
+// defecto pinta el boton del sistema operativo, con su texto translated ("Choose
+// file", "Elegir archivo"), que en un telefono ocupa la mitad del ancho con la
+// etiqueta del campo y obliga a la tarjeta a crecer. Aqui el input se oculta y
+// el pulso lo dispara un boton propio: solo el icono en movil, texto desde sm.
+const BotonSubirArchivo = ({
+    id, accept, etiqueta, alElegir, ocupado,
+}: {
+    id: string;
+    accept: string;
+    etiqueta: string;
+    alElegir: (archivo: File | null) => void;
+    ocupado?: boolean;
+}) => {
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                disabled={ocupado}
+                title={etiqueta}
+                aria-label={etiqueta}
+                className="btn-ghost justify-center gap-1.5 w-10 h-10 p-0 sm:w-auto sm:h-auto sm:px-3 sm:py-2 sm:text-sm"
+            >
+                {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                <span className="hidden sm:inline">{etiqueta}</span>
+            </button>
+            <input
+                ref={inputRef}
+                id={id}
+                type="file"
+                accept={accept}
+                className="hidden"
+                onChange={e => { alElegir(e.target.files?.[0] ?? null); e.target.value = ''; }}
+            />
+        </>
+    );
+};
+
+// ============================================================
+// HOJA INFERIOR (BOTTOM SHEET) PARA LOS FORMULARIOS
+// ============================================================
+// Sustituye a los seis overlays que cada modulo montaba a mano. En movil la hoja
+// se ancla abajo y ocupa el ancho completo, como en las apps nativas; desde 640px
+// vuelve a ser el dialogo centrado de siempre, con el boton de guardar dentro
+// del flujo. El corte es en sm a proposito: es el unico breakpoint sin
+// (pointer: fine), asi que un movil en horizontal recibe la hoja en vez de un
+// dialogo estrecho, y una tableta en vertical, que tiene 768px, recibe el
+// dialogo, que es lo que le cabe bien.
+//
+// Lo que corrige de raiz el scroll horizontal que se veía en los formularios:
+//   - Un solo nivel de scroll. Audio y Partituras tenian el overlay scroller con
+//     el panel scroller dentro, dos contenedores anidados.
+//   - Cabecera y pie fijos: el boton Guardar estaba al final del scroll, y en un
+//     formulario de Partituras habia que bajar del todo para poder confirmar.
+//   - El titulo lleva min-w-0 + truncate. "Anadir Nueva Partitura" es el mas
+//     largo de los seis y empujaba al boton de cerrar.
+//
+// El arrastre se inicia desde la cabecera con useDragControls y no desde el
+// panel entero: si el panel entero fuera draggable, el gesto se comeria el
+// scroll del contenido en el mismo dedo.
+const ModalHoja = ({
+    abierto, alCerrar, titulo, ancho = 'max-w-md', bloqueado = false, pie, children,
+}: {
+    abierto: boolean;
+    alCerrar: () => void;
+    titulo: string;
+    ancho?: string;
+    bloqueado?: boolean;
+    pie?: ReactNode;
+    children: ReactNode;
+}) => {
+    const controlesArrastre = useDragControls();
+    const desplazamientoY = useMotionValue(0);
+    // El velo se aclara conforme baja la hoja: es lo que hace que el gesto se
+    // lea como "soltar para cerrar" en vez de como un arrastre sin sentido.
+    const opacidadVelo = useTransform(desplazamientoY, [0, 220], [1, 0]);
+
+    // En iOS el fondo se desplaza detras de la hoja si no se bloquea a mano.
+    useEffect(() => {
+        if (!abierto) return;
+        // Si un arrastre quedara interrumpido a mitad, al reabrir la hoja se
+        // encontraria desplazada. Se reinicia siempre al abrir.
+        desplazamientoY.set(0);
+        const previo = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = previo; };
+    }, [abierto]);
+
+    // Escape cierra, igual que en escritorio, siempre que no haya una subida en
+    // curso. El overlay no captura el teclado cuando esta abierto.
+    useEffect(() => {
+        if (!abierto || bloqueado) return;
+        const alPulsar = (e: KeyboardEvent) => { if (e.key === 'Escape') alCerrar(); };
+        document.addEventListener('keydown', alPulsar);
+        return () => document.removeEventListener('keydown', alPulsar);
+    }, [abierto, bloqueado, alCerrar]);
+
+    // El arrastre se dispara desde la cabecera, pero no desde el boton de cerrar:
+    // sin este filtro, pulsar la X tambien arrancaba el gesto.
+    const iniciarArrastre = (e: React.PointerEvent) => {
+        if (bloqueado) return;
+        if ((e.target as HTMLElement).closest('button')) return;
+        controlesArrastre.start(e);
+    };
+
+    const cerrarSiSeSuelta = (_: unknown, info: PanInfo) => {
+        if (bloqueado) return;
+        if (desplazamientoY.get() > 100 || info.velocity.y > 500) alCerrar();
+    };
+
+    return createPortal(
+        <AnimatePresence>
+            {abierto && (
+                <motion.div
+                    className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                >
+                    <motion.div
+                        className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm"
+                        style={{ opacity: opacidadVelo }}
+                        onClick={bloqueado ? undefined : alCerrar}
+                    />
+
+                    {/* Dos capas a proposito. La exterior lleva la animacion de
+                        entrada y salida; la interior lleva el arrastre. Si el
+                        arrastre viviera en la misma capa que `animate={{ y: 0 }}`,
+                        ambos pelearian por la misma propiedad y el gesto se
+                        perderia. Ademas el contenedor NO lleva touch-none: eso
+                        impediria el scroll del formulario con el dedo. */}
+                    <motion.div
+                        className="relative w-full flex justify-center z-10"
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%', transition: { duration: 0.2 } }}
+                        transition={{ type: 'spring', damping: 32, stiffness: 340 }}
+                    >
+                        <motion.div
+                            className={`card-modal w-full ${ancho} flex flex-col
+                                        rounded-t-3xl sm:rounded-2xl
+                                        max-h-[92dvh] sm:max-h-[90dvh]
+                                        shadow-2xl`}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={titulo}
+                            initial={{ opacity: 0.6 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0.6 }}
+                            style={{ y: desplazamientoY }}
+                            drag="y"
+                            dragListener={false}
+                            dragControls={controlesArrastre}
+                            dragConstraints={{ top: 0 }}
+                            dragElastic={{ top: 0, bottom: 0.4 }}
+                            dragSnapToOrigin
+                            onDragEnd={cerrarSiSeSuelta}
+                        >
+                            {/* Handle: afordancia visual de hoja inferior. */}
+                            <div className="shrink-0 flex justify-center pt-2.5 pb-1 sm:hidden" aria-hidden="true">
+                                <span className="w-10 h-1 rounded-full bg-sutil-hover" />
+                            </div>
+
+                            {/* Cabecera fija. min-w-0 + truncate en el titulo y gap
+                                contra el boton: los dos faltaban y el titulo largo
+                                desplazaba al boton de cerrar fuera de la caja.
+                                touch-none va aqui y no en el panel: el gesto de
+                                arrastre no puede competir con el scroll del cuerpo. */}
+                            <div
+                                className="shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 pt-3 sm:pt-4 pb-3 border-b borde-subtle touch-none sm:touch-auto"
+                                onPointerDown={iniciarArrastre}
+                            >
+                                <h3 className="min-w-0 flex-1 font-display font-bold text-lg text-secundario truncate">
+                                    {titulo}
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={alCerrar}
+                                    disabled={bloqueado}
+                                    aria-label="Cerrar"
+                                    className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg t-muted hover:text-vinotinto hover:bg-vinotinto/10 transition-all disabled:opacity-40"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Unico nivel de scroll. overscroll-contain evita que el
+                                arrastre final se siga transmitiendo a la pagina.
+                                El overflow-x-hidden no es cosmetico: al declarar
+                                overflow-y sin declarar el eje X, CSS hace que este
+                                computa a 'auto', y entonces el scroller interno se
+                                convertia en el contenedor de scroll horizontal. El
+                                recorte de 'body' no alcanzaba porque el portal vive
+                                en body pero el desborde ocurre aqui dentro. Con esto,
+                                un desborde futuro se recorta en vez de generar una
+                                barra horizontal dentro del modal. */}
+                            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 sm:px-6 py-4 space-y-4">
+                                {children}
+                            </div>
+
+                            {/* Pie fijo solo en movil. En escritorio vuelve a ser el
+                                boton dentro del flujo, como estaba. */}
+                            {pie && (
+                                <div className="shrink-0 px-4 sm:hidden pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-fondo-card border-t borde-subtle">
+                                    {pie}
+                                </div>
+                            )}
+                            {pie && <div className="hidden sm:block pt-1">{pie}</div>}
+                        </motion.div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>,
+        document.body
+    );
+};
 
 const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void }) => {
     const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo, actualizarInfoGrupo, actualizarAsistente } = useApp();
@@ -674,48 +1030,53 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-display font-bold text-secundario mb-1">Dashboard</h2>
-                <p className="t-muted text-sm">Resumen general de DaCapo Grupo Vocal</p>
-            </div>
+            <CabeceraModulo
+                titulo="Dashboard"
+                descripcion="Resumen general de DaCapo Grupo Vocal"
+            />
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {stats.map((s, i) => (
                     <button key={i} onClick={() => onNavigate(s.modulo)}
-                        className="card-glass rounded-xl p-5 text-left w-full
+                        className="card-glass rounded-xl p-4 sm:p-5 text-left w-full min-w-0
                             hover:border-vinotinto/50 hover:shadow-glow-vinotinto
                             transition-all duration-300 cursor-pointer group relative"
                     >
                         {s.alerta && (
                             <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-ping" />
                         )}
-                        <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs t-muted uppercase tracking-wider">{s.etiqueta}</p>
-                            <ChevronRight className="w-3 h-3 text-black/20 dark:text-white/20 group-hover:text-vinotinto-claro 
+                        {/* min-w-0 + truncate en la etiqueta y shrink-0 en el
+                            chevron: con dos columnas en un teléfono la etiqueta
+                            "SOLICITUDES PENDIENTES" no cabía y se partia en
+                            varias líneas, lo que descuadraba la altura de las
+                            cuatro tarjetas. */}
+                        <div className="flex items-center justify-between gap-1 mb-2">
+                            <p className="min-w-0 text-[11px] sm:text-xs t-muted uppercase tracking-wider truncate">{s.etiqueta}</p>
+                            <ChevronRight className="w-3 h-3 shrink-0 text-black/20 dark:text-white/20 group-hover:text-vinotinto-claro
                                 group-hover:translate-x-0.5 transition-all" />
                         </div>
-                        <p className={`text-4xl font-display font-bold ${s.color}`}>{s.valor}</p>
+                        <p className={`text-3xl sm:text-4xl font-display font-bold ${s.color}`}>{s.valor}</p>
                     </button>
                 ))}
             </div>
 
             {/* Tarjeta de mensajes no leídos */}
             <button onClick={() => onNavigate('mensajes')}
-                className="card-glass rounded-xl p-5 text-left w-full
+                className="card-glass rounded-xl p-4 sm:p-5 text-left w-full min-w-0
                     hover:border-vinotinto/50 hover:shadow-glow-vinotinto
                     transition-all duration-300 cursor-pointer group relative"
             >
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-vinotinto-claro" />
-                        <h3 className="font-semibold text-secundario">Buzón de Mensajes</h3>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Mail className="w-4 h-4 shrink-0 text-vinotinto-claro" />
+                        <h3 className="min-w-0 font-semibold text-secundario truncate">Buzón de Mensajes</h3>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-black/20 dark:text-white/20 group-hover:text-vinotinto-claro 
+                    <ChevronRight className="w-4 h-4 shrink-0 text-black/20 dark:text-white/20 group-hover:text-vinotinto-claro
                         group-hover:translate-x-0.5 transition-all" />
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-baseline gap-2 min-w-0">
                     <p className="text-3xl font-display font-bold text-blue-700 dark:text-blue-400">{mensajesNoLeidos}</p>
-                    <span className="text-sm t-muted">mensajes sin leer</span>
+                    <span className="min-w-0 text-sm t-muted truncate">mensajes sin leer</span>
                 </div>
                 {mensajesNoLeidos > 0 && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping" />
@@ -723,10 +1084,10 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
             </button>
 
             {/* Información del Grupo (edición en línea) */}
-            <div className="card-glass rounded-xl p-6 space-y-6">
-                <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-secundario">Información del Grupo</h3>
-                    <p className="text-[11px] t-muted-low">Pulsa el lápiz para editar en el sitio · Enter guarda</p>
+            <div className="card-glass rounded-xl p-4 sm:p-6 space-y-6">
+                <div className="flex items-center justify-between gap-3">
+                    <h3 className="min-w-0 font-semibold text-secundario">Información del Grupo</h3>
+                    <p className="shrink-0 text-[11px] t-muted-low">Pulsa el lápiz para editar en el sitio · Enter guarda</p>
                 </div>
 
                 {/* Identidad + logo */}
@@ -868,7 +1229,7 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                         alAgregar={frase => aplicar({ frasesBanner: [...(infoGrupo.frasesBanner || []), frase] })}
                         alQuitar={indice => aplicar({ frasesBanner: (infoGrupo.frasesBanner || []).filter((_, i) => i !== indice) })}
                         alEditar={(indice, valor) => aplicar({ frasesBanner: (infoGrupo.frasesBanner || []).map((f, i) => (i === indice ? valor : f)) })}
-                        placeholder="Escribe una frase o palabra y presiona Enter…"
+                        placeholder="Escribe una frase…"
                     />
                 </div>
             </div>
@@ -906,10 +1267,10 @@ const ModuloSecciones = ({ onNavigate }: { onNavigate: (modulo: string) => void 
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-display font-bold text-secundario mb-1">Gestor de Secciones</h2>
-                <p className="t-muted text-sm">Activa o desactiva secciones de la página pública en tiempo real</p>
-            </div>
+            <CabeceraModulo
+                titulo="Gestor de Secciones"
+                descripcion="Activa o desactiva secciones de la página pública en tiempo real"
+            />
 
             <div className="space-y-3">
                 {SECCIONES_INFO.map(({ clave, etiqueta, descripcion }) => {
@@ -957,13 +1318,16 @@ const ModuloSecciones = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                                         : 'bg-sutil borde-subtle t-muted-high hover:bg-sutil-hover hover:text-secundario'
                                     }`}
                             >
-                                <span className="text-xl">{opcion.icono}</span>
-                                <div className="flex-1">
+                                <span className="text-xl shrink-0">{opcion.icono}</span>
+                                {/* min-w-0: sin esto, flex-1 no puede encogerse por
+                                    debajo del contenido y la descripción larga de
+                                    una opción rompía la tarjeta en móvil. */}
+                                <div className="flex-1 min-w-0">
                                     <p className={`font-medium text-sm ${activo ? 'text-secundario' : ''}`}>{opcion.label}</p>
                                     <p className="text-xs t-muted">{opcion.desc}</p>
                                 </div>
                                 {activo && (
-                                    <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                                    <div className="w-5 h-5 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center">
                                         <span className="text-[10px] text-white">✓</span>
                                     </div>
                                 )}
@@ -974,10 +1338,16 @@ const ModuloSecciones = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                 {configuracionSecciones.tipoAsistente === 'whatsapp' && (
                     <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-xs text-green-700 dark:text-green-400 font-medium">Número de WhatsApp</span>
-                            <button onClick={() => onNavigate('dashboard')}
-                                className="text-[11px] inline-flex items-center gap-1 text-khaki hover:underline transition-colors">
-                                <Pencil className="w-3 h-3" /> Editar en el Dashboard
+                            <span className="text-xs text-green-700 dark:text-green-400 font-medium min-w-0">Número de WhatsApp</span>
+                            <button
+                                type="button"
+                                onClick={() => onNavigate('dashboard')}
+                                title="Editar en el Dashboard"
+                                aria-label="Editar en el Dashboard"
+                                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg
+                                           t-muted-low hover:text-vinotinto hover:bg-vinotinto/10 transition-all cursor-pointer"
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
                             </button>
                         </div>
                         <div className="flex items-center gap-2 rounded-lg bg-green-500/5 border border-green-500/15 px-3 py-2.5">
@@ -1134,15 +1504,11 @@ const ModuloIntegrantes = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Integrantes</h2>
-                    <p className="t-muted text-sm">{integrantes.length} integrantes registrados</p>
-                </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
-                    <Plus className="w-4 h-4" /> Añadir
-                </button>
-            </div>
+            <CabeceraModulo
+                titulo="Integrantes"
+                descripcion={`${integrantes.length} integrantes registrados`}
+                accion={<BotonAgregar alPulsar={abrirCrear} etiqueta="Añadir" />}
+            />
 
             {/* Preferencias de la sección Integrantes (diseños públicos) */}
             <div className="card-glass rounded-xl p-5">
@@ -1203,7 +1569,6 @@ const ModuloIntegrantes = () => {
             ) : (
                 <div className="space-y-3">
                     <BarraFiltrosAdmin
-                        variant="selects"
                         termino={filtroBusqueda}
                         alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaIntegrantes(1); }}
                         placeholder="Buscar por nombre o cargo..."
@@ -1211,7 +1576,7 @@ const ModuloIntegrantes = () => {
                             {
                                 etiqueta: 'Cuerda',
                                 chips: [
-                                    { clave: 'Todas', etiqueta: 'Todas', contador: integrantes.length },
+                                    { clave: 'Todas', etiqueta: 'Todas las cuerdas', corta: 'Todas', contador: integrantes.length },
                                     ...CUERDAS_INTEGRANTE.map(c => ({ clave: c, etiqueta: c, contador: integrantes.filter(i => i.cuerda === c).length })),
                                 ],
                                 filtroActivo: filtroCuerda,
@@ -1220,7 +1585,7 @@ const ModuloIntegrantes = () => {
                             {
                                 etiqueta: 'Rol',
                                 chips: [
-                                    { clave: 'Todos', etiqueta: 'Todos', contador: integrantes.length },
+                                    { clave: 'Todos', etiqueta: 'Todos los roles', corta: 'Todos', contador: integrantes.length },
                                     { clave: 'Directiva', etiqueta: 'Directiva', contador: integrantes.filter(i => i.esDirectivo).length },
                                     { clave: 'Coro', etiqueta: 'Coro', contador: integrantes.filter(i => !i.esDirectivo).length },
                                 ],
@@ -1247,7 +1612,7 @@ const ModuloIntegrantes = () => {
                                 return (
                                     <div key={i.id}
                                         data-reordenable={indice}
-                                        className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 transition-all ${
+                                        className={`card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 transition-all ${
                                             arrastreIntegrantes.arrastrando && arrastreIntegrantes.sobre === indice
                                                 ? 'ring-2 ring-vinotinto/60 border-vinotinto/60'
                                                 : ''
@@ -1281,11 +1646,11 @@ const ModuloIntegrantes = () => {
                                                 {i.anioIngreso !== undefined && <span className="text-[11px] t-muted-low">· Desde {i.anioIngreso}</span>}
                                             </div>
                                         </div>
-                                        <div className="flex gap-1.5 flex-wrap justify-end flex-shrink-0">
-                                            <button onClick={() => abrirEditar(i)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+<div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
+                                            <button onClick={() => abrirEditar(i)} className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
                                                 <Pencil className="w-3.5 h-3.5" />
                                             </button>
-                                            <button onClick={() => eliminarIntegrante(i.id)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                            <button onClick={() => eliminarIntegrante(i.id)} className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
@@ -1303,62 +1668,53 @@ const ModuloIntegrantes = () => {
             )}
 
             {/* Formulario modal */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormulario && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormulario(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">{editando ? 'Editar' : 'Añadir'} Integrante</h3>
-                                <button onClick={() => setMostrarFormulario(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
-                            </div>
-                            <div className="grid grid-cols-1 gap-3">
-                                <div className="col-span-full"><label className="label-campo">Nombre *</label><input className="input-campo" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre completo" /></div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Cuerda</label><select className="input-campo" value={form.cuerda} onChange={e => setForm(p => ({ ...p, cuerda: e.target.value as Integrante['cuerda'] }))}>
-                                        {CUERDAS_INTEGRANTE.map(c => <option key={c}>{c}</option>)}
-                                    </select></div>
-                                    <div><label className="label-campo">Rango Vocal</label><input className="input-campo" value={form.rangoVocal} onChange={e => setForm(p => ({ ...p, rangoVocal: e.target.value }))} placeholder="C4 - G5" /></div>
-                                </div>
-                                <div className="col-span-full"><label className="label-campo">Foto</label>
-                                    <div className="flex flex-col sm:flex-row gap-2">
-                                        <button onClick={() => (document.getElementById('input-foto-integrante') as HTMLInputElement)?.click()}
-                                            className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
-                                            {subiendoFoto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir foto
-                                        </button>
-                                        <input className="input-campo flex-1" value={form.foto} onChange={e => setForm(p => ({ ...p, foto: e.target.value }))} placeholder="o pega una URL https://..." />
-                                        <input
-                                            id="input-foto-integrante"
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={e => { subirFoto(e.target.files?.[0] ?? null); e.target.value = ''; }}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="col-span-full"><label className="label-campo">Biografía</label><textarea rows={3} className="input-campo resize-none" value={form.biografia} onChange={e => setForm(p => ({ ...p, biografia: e.target.value }))} placeholder="Mini-biografía..." /></div>
-                                <div className="col-span-full">
-                                    <ToggleCampo
-                                        activo={form.esDirectivo}
-                                        alCambiar={() => setForm(p => ({ ...p, esDirectivo: !p.esDirectivo }))}
-                                        icono={<Users className="w-4 h-4" />}
-                                        etiqueta="Es miembro directivo"
-                                        descripcion="Aparece en la sección de directiva"
-                                    />
-                                </div>
-                                {form.esDirectivo && <div className="col-span-full"><label className="label-campo">Cargo</label><input className="input-campo" value={form.cargo} onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))} placeholder="Ej: Presidenta" /></div>}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Año de ingreso</label><input type="number" min={1900} max={2100} className="input-campo" value={form.anioIngreso} onChange={e => setForm(p => ({ ...p, anioIngreso: e.target.value.replace(/[^0-9]/g, '') }))} placeholder="2019" /></div>
-                                    <div><label className="label-campo">Instagram</label><input className="input-campo" value={form.urlInstagram} onChange={e => setForm(p => ({ ...p, urlInstagram: e.target.value }))} placeholder="https://instagram.com/..." /></div>
-                                </div>
-                            </div>
-                            <button onClick={guardar} className="btn-primario w-full justify-center">
-                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Integrante'}
-                            </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
+            <ModalHoja
+                abierto={mostrarFormulario}
+                alCerrar={() => setMostrarFormulario(false)}
+                titulo={`${editando ? 'Editar' : 'Añadir'} Integrante`}
+                pie={
+                    <button onClick={guardar} className="btn-primario w-full justify-center">
+                        <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Integrante'}
+                    </button>
+                }
+            >
+                <div className="grid grid-cols-1 gap-3">
+                    <div className="col-span-full"><label className="label-campo">Nombre *</label><input className="input-campo" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre completo" /></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="label-campo">Cuerda</label><select className="input-campo" value={form.cuerda} onChange={e => setForm(p => ({ ...p, cuerda: e.target.value as Integrante['cuerda'] }))}>
+                            {CUERDAS_INTEGRANTE.map(c => <option key={c}>{c}</option>)}
+                        </select></div>
+                        <div className="min-w-0"><label className="label-campo">Rango Vocal</label><input className="input-campo" value={form.rangoVocal} onChange={e => setForm(p => ({ ...p, rangoVocal: e.target.value }))} placeholder="C4 - G5" /></div>
+                    </div>
+                    <div className="col-span-full"><label className="label-campo">Foto</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <BotonSubirArchivo
+                                id="input-foto-integrante"
+                                accept="image/*"
+                                etiqueta="Subir foto"
+                                alElegir={f => subirFoto(f)}
+                                ocupado={subiendoFoto}
+                            />
+                            <input className="input-campo flex-1 min-w-0" value={form.foto} onChange={e => setForm(p => ({ ...p, foto: e.target.value }))} placeholder="o pega una URL https://..." />
+                        </div>
+                    </div>
+                    <div className="col-span-full"><label className="label-campo">Biografía</label><textarea rows={3} className="input-campo resize-none" value={form.biografia} onChange={e => setForm(p => ({ ...p, biografia: e.target.value }))} placeholder="Mini-biografía..." /></div>
+                    <div className="col-span-full">
+                        <ToggleCampo
+                            activo={form.esDirectivo}
+                            alCambiar={() => setForm(p => ({ ...p, esDirectivo: !p.esDirectivo }))}
+                            icono={<Users className="w-4 h-4" />}
+                            etiqueta="Es miembro directivo"
+                            descripcion="Aparece en la sección de directiva"
+                        />
+                    </div>
+                    {form.esDirectivo && <div className="col-span-full"><label className="label-campo">Cargo</label><input className="input-campo" value={form.cargo} onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))} placeholder="Ej: Presidenta" /></div>}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="label-campo">Año de ingreso</label><input type="number" min={1900} max={2100} className="input-campo" value={form.anioIngreso} onChange={e => setForm(p => ({ ...p, anioIngreso: e.target.value.replace(/[^0-9]/g, '') }))} placeholder="2019" /></div>
+                        <div className="min-w-0"><label className="label-campo">Instagram</label><input className="input-campo" value={form.urlInstagram} onChange={e => setForm(p => ({ ...p, urlInstagram: e.target.value }))} placeholder="https://instagram.com/..." /></div>
+                    </div>
+                </div>
+            </ModalHoja>
 
             {/* Aviso flotante (subida de foto / errores) */}
             <AvisoTemporal
@@ -1542,18 +1898,18 @@ const ModuloEventos = () => {
     const momentoTipo = (e: Evento) => new Date(e.fecha).getTime() <= Date.now() ? 'Pasado' : 'Futuro';
     const categoriasPresentes = [...new Set(eventos.map(e => e.categoria).filter(Boolean))];
     const chipsTipo = [
-        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Todos', etiqueta: 'Todos los tipos', corta: 'Todos', contador: eventos.length },
         { clave: 'Libre', etiqueta: 'Libre', contador: eventos.filter(e => e.tipoEntrada === 'Libre').length },
         { clave: 'Con entrada', etiqueta: 'Con entrada', contador: eventos.filter(e => e.tipoEntrada === 'Con entrada').length },
-        { clave: 'Donación voluntaria', etiqueta: 'Donación', contador: eventos.filter(e => e.tipoEntrada === 'Donación voluntaria').length },
+        { clave: 'Donación voluntaria', etiqueta: 'Donación voluntaria', corta: 'Donación', contador: eventos.filter(e => e.tipoEntrada === 'Donación voluntaria').length },
     ];
     const chipsMomento = [
-        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Todos', etiqueta: 'Todos los momentos', corta: 'Todos', contador: eventos.length },
         { clave: 'Futuros', etiqueta: 'Futuros', contador: eventos.filter(e => momentoTipo(e) === 'Futuro').length },
         { clave: 'Pasados', etiqueta: 'Pasados', contador: eventos.filter(e => momentoTipo(e) === 'Pasado').length },
     ];
     const chipsEstadoEvento = [
-        { clave: 'Todos', etiqueta: 'Todos', contador: eventos.length },
+        { clave: 'Todos', etiqueta: 'Todos los estados', corta: 'Todos', contador: eventos.length },
         { clave: 'Visibles', etiqueta: 'Visibles', contador: eventos.filter(e => e.activo).length },
         { clave: 'Ocultos', etiqueta: 'Ocultos', contador: eventos.filter(e => !e.activo).length },
         { clave: 'Destacados', etiqueta: 'Destacados', contador: eventos.filter(e => e.destacado).length },
@@ -1566,15 +1922,11 @@ const ModuloEventos = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0">
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Eventos</h2>
-                    <p className="t-muted text-sm">{eventos.length} eventos · Ordena con las flechas o arrastrando (# = posición)</p>
-                </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4 shrink-0">
-                    <Plus className="w-4 h-4" /> Nuevo Evento
-                </button>
-            </div>
+            <CabeceraModulo
+                titulo="Eventos"
+                descripcion={`${eventos.length} eventos · Ordena con las flechas o arrastrando (# = posición)`}
+                accion={<BotonAgregar alPulsar={abrirCrear} etiqueta="Nuevo Evento" />}
+            />
 
             {estadoEventos === 'error' && eventos.length === 0 ? (
                 <div className="card-glass rounded-xl p-8 text-center">
@@ -1590,7 +1942,6 @@ const ModuloEventos = () => {
             ) : (
                 <div className="space-y-3">
                     <BarraFiltrosAdmin
-                        variant="selects"
                         termino={filtroBusqueda}
                         alCambiarTermino={t => { setFiltroBusqueda(t); setPaginaEventos(1); }}
                         placeholder="Buscar por título, lugar u organizador..."
@@ -1616,7 +1967,7 @@ const ModuloEventos = () => {
                             ...(categoriasPresentes.length > 0 ? [{
                                 etiqueta: 'Categoría',
                                 chips: [
-                                    { clave: 'Todos', etiqueta: 'Todas', contador: eventos.length },
+                                    { clave: 'Todos', etiqueta: 'Todas las categorías', corta: 'Todas', contador: eventos.length },
                                     ...categoriasPresentes.map(c => ({
                                         clave: c,
                                         etiqueta: c,
@@ -1648,7 +1999,7 @@ const ModuloEventos = () => {
                                 return (
                                     <div key={e.id}
                                         data-reordenable={i}
-                                        className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 transition-all ${
+                                        className={`card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 transition-all ${
                                             arrastreEventos.arrastrando && arrastreEventos.sobre === i
                                                 ? 'ring-2 ring-vinotinto/60 border-vinotinto/60'
                                                 : ''
@@ -1696,21 +2047,20 @@ const ModuloEventos = () => {
                                                 {new Date(e.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {e.lugar} · {e.tipoEntrada}{e.categoria && e.categoria !== 'Concierto' ? ` · ${e.categoria}` : ''}
                                             </p>
                                         </div>
-
-                                        <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                                        <div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
                                             <button onClick={() => editarEvento(e.id, { destacado: !e.destacado })}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${e.destacado ? 'bg-khaki/25 text-amber-700 dark:text-khaki' : 'bg-sutil hover:bg-sutil-hover t-muted'}`}
+                                                className={`flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg transition-all ${e.destacado ? 'bg-khaki/25 text-amber-700 dark:text-khaki' : 'bg-sutil hover:bg-sutil-hover t-muted'}`}
                                                 title={e.destacado ? 'Quitar destacado' : 'Marcar como destacado'}>
                                                 <Star className="w-3.5 h-3.5" />
                                             </button>
-                                            <button onClick={() => editarEvento(e.id, { activo: !e.activo })} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title={e.activo ? 'Ocultar de la web' : 'Mostrar en la web'}>
+                                            <button onClick={() => editarEvento(e.id, { activo: !e.activo })} className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title={e.activo ? 'Ocultar de la web' : 'Mostrar en la web'}>
                                                 {e.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                             </button>
-                                            <button onClick={() => abrirEditar(e)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title="Editar">
+                                            <button onClick={() => abrirEditar(e)} className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all" title="Editar">
                                                 <Pencil className="w-3.5 h-3.5" />
                                             </button>
                                             <button onClick={() => confirmarEliminar(e)}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${confirmaEliminar === e.id ? 'bg-red-600 text-white' : 'bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400'}`}
+                                                className={`flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg transition-all ${confirmaEliminar === e.id ? 'bg-red-600 text-white' : 'bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400'}`}
                                                 title={confirmaEliminar === e.id ? '¿Seguro? Haz clic de nuevo' : 'Eliminar'}>
                                                 {confirmaEliminar === e.id ? <Check className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
                                             </button>
@@ -1728,130 +2078,122 @@ const ModuloEventos = () => {
                 </div>
             )}
 
-            {createPortal(<AnimatePresence>
-                {mostrarForm && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarForm(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-xl p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">{editando ? 'Editar' : 'Nuevo'} Evento</h3>
-                                <button onClick={() => setMostrarForm(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
+            <ModalHoja
+                abierto={mostrarForm}
+                alCerrar={() => setMostrarForm(false)}
+                titulo={`${editando ? 'Editar' : 'Nuevo'} Evento`}
+                ancho="max-w-xl"
+                pie={
+                    <button onClick={guardar} className="btn-primario w-full justify-center">
+                        <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Guardar Evento'}
+                    </button>
+                }
+            >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="col-span-full"><label className="label-campo">Título *</label><input className="input-campo" value={formEvento.titulo} onChange={e => setFormEvento(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del concierto" /></div>
+                    <div className="col-span-full"><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formEvento.descripcion} onChange={e => setFormEvento(p => ({ ...p, descripcion: e.target.value }))} /></div>
+                    <div className="col-span-full"><label className="label-campo">Fecha y Hora *</label><input type="datetime-local" className="input-campo" value={formEvento.fecha} onChange={e => setFormEvento(p => ({ ...p, fecha: e.target.value }))} /></div>
+                    <div className="min-w-0"><label className="label-campo">Lugar</label><input className="input-campo" value={formEvento.lugar} onChange={e => setFormEvento(p => ({ ...p, lugar: e.target.value }))} placeholder="Teatro / Iglesia / Sala" /></div>
+                    <div className="min-w-0"><label className="label-campo">Dirección</label><input className="input-campo" value={formEvento.direccion} onChange={e => setFormEvento(p => ({ ...p, direccion: e.target.value }))} /></div>
+                    <div className="min-w-0"><label className="label-campo">Categoría</label>
+                        <select className="input-campo" value={formEvento.categoria} onChange={e => setFormEvento(p => ({ ...p, categoria: e.target.value }))}>
+                            {CATEGORIAS_EVENTO.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="min-w-0"><label className="label-campo">Organizador</label><input className="input-campo" value={formEvento.organizador} onChange={e => setFormEvento(p => ({ ...p, organizador: e.target.value }))} /></div>
+                    <div className="min-w-0"><label className="label-campo">Duración (minutos)</label><input type="number" min={15} step={15} className="input-campo" value={formEvento.duracionMin} onChange={e => setFormEvento(p => ({ ...p, duracionMin: Number(e.target.value) || 120 }))} /></div>
+                    <div className="min-w-0"><label className="label-campo">URL Mapa</label><input className="input-campo" value={formEvento.urlMapa} onChange={e => setFormEvento(p => ({ ...p, urlMapa: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
+                    <div className="col-span-full"><label className="label-campo">Tipo de Entrada</label>
+                        <select className="input-campo" value={formEvento.tipoEntrada} onChange={e => cambiarTipoEntrada(e.target.value as Evento['tipoEntrada'])}>
+                            {['Libre', 'Con entrada', 'Donación voluntaria'].map(t => <option key={t}>{t}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Bloque dinámico según tipo de entrada */}
+                    {mostrarBloqueEntradas && (
+                        <div className="col-span-full border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-3">
+                            <p className="label-campo flex items-center gap-1.5 font-semibold text-vinotinto dark:text-khaki">
+                                <Ticket className="w-3.5 h-3.5" /> {esEntrada ? 'Entradas' : 'Donaciones'}
+                            </p>
+                            {esEntrada && (
+                                <div>
+                                    <label className="label-campo">Precio / Bono</label>
+                                    <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 10" />
+                                </div>
+                            )}
+                            {esDonacion && (
+                                <div>
+                                    <label className="label-campo">Aporte sugerido</label>
+                                    <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 5 / aporte libre" />
+                                </div>
+                            )}
+                            <div>
+                                <label className="label-campo">{esEntrada ? 'URL del sitio de venta' : 'Link de donación'}</label>
+                                <input className="input-campo" value={formEvento.urlEntradas} onChange={e => setFormEvento(p => ({ ...p, urlEntradas: e.target.value }))} placeholder="https://..." />
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="col-span-full"><label className="label-campo">Título *</label><input className="input-campo" value={formEvento.titulo} onChange={e => setFormEvento(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del concierto" /></div>
-                                <div className="col-span-full"><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formEvento.descripcion} onChange={e => setFormEvento(p => ({ ...p, descripcion: e.target.value }))} /></div>
-                                <div className="col-span-full"><label className="label-campo">Fecha y Hora *</label><input type="datetime-local" className="input-campo" value={formEvento.fecha} onChange={e => setFormEvento(p => ({ ...p, fecha: e.target.value }))} /></div>
-                                <div><label className="label-campo">Lugar</label><input className="input-campo" value={formEvento.lugar} onChange={e => setFormEvento(p => ({ ...p, lugar: e.target.value }))} placeholder="Teatro / Iglesia / Sala" /></div>
-                                <div><label className="label-campo">Dirección</label><input className="input-campo" value={formEvento.direccion} onChange={e => setFormEvento(p => ({ ...p, direccion: e.target.value }))} /></div>
-                                <div><label className="label-campo">Categoría</label>
-                                    <select className="input-campo" value={formEvento.categoria} onChange={e => setFormEvento(p => ({ ...p, categoria: e.target.value }))}>
-                                        {CATEGORIAS_EVENTO.map(c => <option key={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div><label className="label-campo">Organizador</label><input className="input-campo" value={formEvento.organizador} onChange={e => setFormEvento(p => ({ ...p, organizador: e.target.value }))} /></div>
-                                <div><label className="label-campo">Duración (minutos)</label><input type="number" min={15} step={15} className="input-campo" value={formEvento.duracionMin} onChange={e => setFormEvento(p => ({ ...p, duracionMin: Number(e.target.value) || 120 }))} /></div>
-                                <div><label className="label-campo">URL Mapa</label><input className="input-campo" value={formEvento.urlMapa} onChange={e => setFormEvento(p => ({ ...p, urlMapa: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
-                                <div className="col-span-full"><label className="label-campo">Tipo de Entrada</label>
-                                    <select className="input-campo" value={formEvento.tipoEntrada} onChange={e => cambiarTipoEntrada(e.target.value as Evento['tipoEntrada'])}>
-                                        {['Libre', 'Con entrada', 'Donación voluntaria'].map(t => <option key={t}>{t}</option>)}
-                                    </select>
-                                </div>
+                            {esEntrada && (
+                                <ToggleCampo
+                                    activo={formEvento.agotado}
+                                    alCambiar={() => setFormEvento(p => ({ ...p, agotado: !p.agotado }))}
+                                    icono={<Ticket className="w-4 h-4" />}
+                                    etiqueta="Entradas agotadas"
+                                    descripcion="Mostrar el aviso de agotado en la web"
+                                />
+                            )}
+                        </div>
+                    )}
 
-                                {/* Bloque dinámico según tipo de entrada */}
-                                {mostrarBloqueEntradas && (
-                                    <div className="col-span-full border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-3">
-                                        <p className="label-campo flex items-center gap-1.5 font-semibold text-vinotinto dark:text-khaki">
-                                            <Ticket className="w-3.5 h-3.5" /> {esEntrada ? 'Entradas' : 'Donaciones'}
-                                        </p>
-                                        {esEntrada && (
-                                            <div>
-                                                <label className="label-campo">Precio / Bono</label>
-                                                <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 10" />
-                                            </div>
-                                        )}
-                                        {esDonacion && (
-                                            <div>
-                                                <label className="label-campo">Aporte sugerido</label>
-                                                <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 5 / aporte libre" />
-                                            </div>
-                                        )}
-                                        <div>
-                                            <label className="label-campo">{esEntrada ? 'URL del sitio de venta' : 'Link de donación'}</label>
-                                            <input className="input-campo" value={formEvento.urlEntradas} onChange={e => setFormEvento(p => ({ ...p, urlEntradas: e.target.value }))} placeholder="https://..." />
-                                        </div>
-                                        {esEntrada && (
-                                            <ToggleCampo
-                                                activo={formEvento.agotado}
-                                                alCambiar={() => setFormEvento(p => ({ ...p, agotado: !p.agotado }))}
-                                                icono={<Ticket className="w-4 h-4" />}
-                                                etiqueta="Entradas agotadas"
-                                                descripcion="Mostrar el aviso de agotado en la web"
-                                            />
-                                        )}
-                                    </div>
-                                )}
-
-                                <div className="col-span-full"><label className="label-campo">Imagen promocional</label>
-                                    <div className="flex flex-col sm:flex-row gap-2">
-                                        <button onClick={() => (document.getElementById('input-imagen-evento') as HTMLInputElement)?.click()}
-                                            className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
-                                            {subiendoImagen ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir imagen
-                                        </button>
-                                        <input className="input-campo flex-1 min-w-0" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
-                                        <input
-                                            id="input-imagen-evento"
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={e => { subirImagen(e.target.files?.[0] ?? null); e.target.value = ''; }}
-                                        />
-                                    </div>
-                                    {formEvento.imagen && (
-                                        <div className="relative mt-2 rounded-lg overflow-hidden border borde-subtle">
-                                            <button
-                                                onClick={() => setFormEvento(p => ({ ...p, imagen: '' }))}
-                                                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-lg bg-black/60 text-white hover:bg-red-600 transition-all"
-                                                title="Quitar imagen"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                            <img
-                                                src={formEvento.imagen}
-                                                alt="Vista previa"
-                                                className="w-full h-32 object-cover"
-                                                onError={ev => { (ev.target as HTMLImageElement).style.display = 'none'; }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="col-span-full"><label className="label-campo">Repertorio (una obra por línea)</label><textarea rows={5} className="input-campo resize-none font-mono text-xs" value={formEvento.repertorio} onChange={e => setFormEvento(p => ({ ...p, repertorio: e.target.value }))} placeholder={"Parte I:\nAlleluia\nBogoroditse Djevo\n..."} /></div>
-
-                                {/* Publicación con toggles rediseñados */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 col-span-full">
-                                    <ToggleCampo
-                                        activo={formEvento.destacado}
-                                        alCambiar={() => setFormEvento(p => ({ ...p, destacado: !p.destacado }))}
-                                        icono={<Star className="w-4 h-4" />}
-                                        etiqueta="Destacado en la web"
-                                        descripcion="Se muestra en tarjeta grande con imagen"
-                                        colorActivo="bg-khaki"
-                                    />
-                                    <ToggleCampo
-                                        activo={formEvento.activo}
-                                        alCambiar={() => setFormEvento(p => ({ ...p, activo: !p.activo }))}
-                                        icono={formEvento.activo ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                                        etiqueta="Visible en la web"
-                                        descripcion={formEvento.activo ? 'Este evento se muestra al público' : 'Oculto temporalmente'}
-                                    />
-                                </div>
+                    <div className="col-span-full"><label className="label-campo">Imagen promocional</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <BotonSubirArchivo
+                                id="input-imagen-evento"
+                                accept="image/*"
+                                etiqueta="Subir imagen"
+                                alElegir={f => subirImagen(f)}
+                                ocupado={subiendoImagen}
+                            />
+                            <input className="input-campo flex-1 min-w-0" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
+                        </div>
+                        {formEvento.imagen && (
+                            <div className="relative mt-2 rounded-lg overflow-hidden border borde-subtle">
+                                <button
+                                    onClick={() => setFormEvento(p => ({ ...p, imagen: '' }))}
+                                    className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-lg bg-black/60 text-white hover:bg-red-600 transition-all"
+                                    title="Quitar imagen"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                                <img
+                                    src={formEvento.imagen}
+                                    alt="Vista previa"
+                                    className="w-full h-32 object-cover"
+                                    onError={ev => { (ev.target as HTMLImageElement).style.display = 'none'; }}
+                                />
                             </div>
-                            <button onClick={guardar} className="btn-primario w-full justify-center">
-                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Guardar Evento'}
-                            </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
+                        )}
+                    </div>
+                    <div className="col-span-full"><label className="label-campo">Repertorio (una obra por línea)</label><textarea rows={5} className="input-campo resize-none font-mono text-xs" value={formEvento.repertorio} onChange={e => setFormEvento(p => ({ ...p, repertorio: e.target.value }))} placeholder={"Parte I:\nAlleluia\nBogoroditse Djevo\n..."} /></div>
+
+                    {/* Publicación con toggles rediseñados */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 col-span-full">
+                        <ToggleCampo
+                            activo={formEvento.destacado}
+                            alCambiar={() => setFormEvento(p => ({ ...p, destacado: !p.destacado }))}
+                            icono={<Star className="w-4 h-4" />}
+                            etiqueta="Destacado en la web"
+                            descripcion="Se muestra en tarjeta grande con imagen"
+                            colorActivo="bg-khaki"
+                        />
+                        <ToggleCampo
+                            activo={formEvento.activo}
+                            alCambiar={() => setFormEvento(p => ({ ...p, activo: !p.activo }))}
+                            icono={formEvento.activo ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                            etiqueta="Visible en la web"
+                            descripcion={formEvento.activo ? 'Este evento se muestra al público' : 'Oculto temporalmente'}
+                        />
+                    </div>
+                </div>
+            </ModalHoja>
 
             <AvisoTemporal
                 visibilidad={!!aviso}
@@ -1929,8 +2271,7 @@ const ModuloAudio = () => {
         setMostrarFormulario(true);
     };
 
-    const manejarArchivoAudio = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const manejarArchivoAudio = (file: File | null) => {
         if (!file) return;
         setArchivoAudio(file);
 
@@ -1958,8 +2299,7 @@ const ModuloAudio = () => {
         }
     };
 
-    const manejarArchivoPortada = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const manejarArchivoPortada = (file: File | null) => {
         if (file) setArchivoPortada(file);
     };
 
@@ -2040,27 +2380,11 @@ const ModuloAudio = () => {
 
     return (
         <div className="space-y-6">
-            {/* Cabecera */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">
-                        Pistas de Audio (Reproductor)
-                    </h2>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <p className="t-muted text-sm">{pistasAudio.length} pistas en la lista de reproducción</p>
-                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
-                            supabase 
-                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20' 
-                                : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-                        }`}>
-                            {supabase ? '● Supabase Conectado' : '○ Modo Local (Fase 1)'}
-                        </span>
-                    </div>
-                </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
-                    <Plus className="w-4 h-4" /> Añadir Pista
-                </button>
-            </div>
+            <CabeceraModulo
+                titulo="Pistas de Audio (Reproductor)"
+                descripcion={`${pistasAudio.length} pistas en la lista de reproducción`}
+                accion={<BotonAgregar alPulsar={abrirCrear} etiqueta="Añadir Pista" />}
+            />
 
             {/* Lista de pistas */}
             <div className="space-y-2">
@@ -2085,10 +2409,9 @@ const ModuloAudio = () => {
                 ) : (
                     pistasAudioPaginadas.map(p => {
                         const estaSonando = pistaEnPreescucha === p.id;
-                        const esSupabase = p.urlAudio.includes('supabase.co');
 
                         return (
-                            <div key={p.id} className="card-glass rounded-xl p-4 flex items-center gap-4 hover:border-vinotinto/30 dark:hover:border-khaki/30 transition-all">
+                            <div key={p.id} className="card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4 hover:border-vinotinto/30 dark:hover:border-khaki/30 transition-all">
                                 {/* Botón de preescucha rápida */}
                                 <button
                                     onClick={() => togglePreescucha(p.urlAudio, p.id)}
@@ -2117,32 +2440,25 @@ const ModuloAudio = () => {
 
                                 {/* Datos de la pista */}
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <p className="font-medium text-secundario text-sm truncate">{p.titulo}</p>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
-                                            esSupabase ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-black/5 dark:bg-white/5 t-muted'
-                                        }`}>
-                                            {esSupabase ? 'Supabase' : 'Externo'}
-                                        </span>
-                                    </div>
+                                    <p className="font-medium text-secundario text-sm truncate">{p.titulo}</p>
                                     <p className="text-xs t-muted truncate mt-0.5">
                                         {p.compositor} <span className="opacity-40">·</span> <span className="font-mono">{p.duracion}</span>
                                     </p>
                                 </div>
 
                                 {/* Acciones */}
-                                <div className="flex gap-2">
+<div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
                                     <button
                                         onClick={() => abrirEditar(p)}
                                         title="Editar"
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                     >
                                         <Pencil className="w-3.5 h-3.5" />
                                     </button>
 <button
                                         onClick={() => handleEliminar(p.id, p.titulo)}
                                         title="Eliminar"
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -2159,167 +2475,140 @@ const ModuloAudio = () => {
             </div>
 
             {/* Formulario modal */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormulario && (
-                    <motion.div
-                        className="fixed inset-0 z-[70] flex overflow-y-auto p-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => !subiendo && setMostrarFormulario(false)}
+            <ModalHoja
+                abierto={mostrarFormulario}
+                alCerrar={() => !subiendo && setMostrarFormulario(false)}
+                titulo={editando ? 'Editar Pista' : 'Añadir Nueva Pista'}
+                ancho="max-w-lg"
+                bloqueado={subiendo}
+                pie={
+                    <button
+                        onClick={guardar}
+                        disabled={subiendo}
+                        className="btn-primario w-full justify-center py-2.5"
                     >
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-
-                        <motion.div
-                            className="relative card-modal w-full max-w-lg p-6 z-10 space-y-4 m-auto max-h-[calc(100vh-2rem)] overflow-y-auto"
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {/* Encabezado modal */}
-                            <div className="flex items-center justify-between border-b borde-subtle pb-3">
-                                <h3 className="font-display font-bold text-lg text-secundario">
-                                    {editando ? 'Editar Pista' : 'Añadir Nueva Pista'}
-                                </h3>
-                                <button
-                                    onClick={() => !subiendo && setMostrarFormulario(false)}
-                                    disabled={subiendo}
-                                    className="btn-ghost"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Alerta de error si existe */}
-                            {errorSubida && (
-                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                    <span>{errorSubida}</span>
-                                </div>
-                            )}
-
-                            {/* Campos del formulario */}
-                            <div className="space-y-3">
-                                {/* Título */}
-                                <div>
-                                    <label className="label-campo">Título de la Obra *</label>
-                                    <input
-                                        className="input-campo"
-                                        value={form.titulo}
-                                        onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
-                                        placeholder="Ej: Ave Verum Corpus"
-                                        disabled={subiendo}
-                                    />
-                                </div>
-
-                                {/* Compositor y Duración */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="label-campo">Compositor / Arreglista</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.compositor}
-                                            onChange={e => setForm(p => ({ ...p, compositor: e.target.value }))}
-                                            placeholder="Ej: W. A. Mozart"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Duración (mm:ss)</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.duracion}
-                                            onChange={e => setForm(p => ({ ...p, duracion: e.target.value }))}
-                                            placeholder="Ej: 3:24"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Archivo de Audio .mp3 */}
-                                <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
-                                    <label className="label-campo flex items-center justify-between text-vinotinto dark:text-khaki">
-                                        <span className="flex items-center gap-1.5 font-semibold">
-                                            <Upload className="w-3.5 h-3.5" /> Archivo de Audio (.mp3)
-                                        </span>
-                                        <span className="text-[10px] opacity-75 font-normal">
-                                            {supabase ? 'Se subirá a Supabase Storage' : 'Modo local activo'}
-                                        </span>
-                                    </label>
-                                    <input
-                                        type="file"
-                                        accept="audio/mp3,audio/mpeg,.mp3"
-                                        onChange={manejarArchivoAudio}
-                                        disabled={subiendo}
-                                        className="block w-full text-xs t-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-vinotinto/10 file:text-vinotinto hover:file:bg-vinotinto/20 dark:file:bg-khaki/20 dark:file:text-khaki dark:hover:file:bg-khaki/30 cursor-pointer"
-                                    />
-                                    {archivoAudio && (
-                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono">
-                                            ✓ Seleccionado: {archivoAudio.name} ({(archivoAudio.size / (1024 * 1024)).toFixed(2)} MB)
-                                        </p>
-                                    )}
-
-                                    {/* Alternativa: URL directa */}
-                                    <div className="pt-2 border-t border-vinotinto/10 dark:border-khaki/10">
-                                        <label className="text-[11px] t-muted block mb-1">
-                                            O pega una URL directa de audio (opcional si ya seleccionaste archivo):
-                                        </label>
-                                        <input
-                                            className="input-campo text-xs py-1.5"
-                                            value={form.urlAudio}
-                                            onChange={e => setForm(p => ({ ...p, urlAudio: e.target.value }))}
-                                            placeholder="https://..."
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Portada (Opcional) */}
-                                <div>
-                                    <label className="label-campo">Imagen de Portada (Opcional)</label>
-                                    <input
-                                        type="file"
-                                        accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
-                                        onChange={manejarArchivoPortada}
-                                        disabled={subiendo}
-                                        className="block w-full text-xs t-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sutil file:text-secundario hover:file:bg-sutil-hover cursor-pointer"
-                                    />
-                                    {archivoPortada && (
-                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1">
-                                            ✓ Portada: {archivoPortada.name}
-                                        </p>
-                                    )}
-                                    <input
-                                        className="input-campo text-xs mt-1.5"
-                                        value={form.portada}
-                                        onChange={e => setForm(p => ({ ...p, portada: e.target.value }))}
-                                        placeholder="O pega una URL de imagen: https://..."
-                                        disabled={subiendo}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Botón de guardado */}
-                            <button
-                                onClick={guardar}
-                                disabled={subiendo}
-                                className="btn-primario w-full justify-center py-2.5 mt-2"
-                            >
-                                {subiendo ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Storage...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Pista'}
-                                    </>
-                                )}
-                            </button>
-                        </motion.div>
-                    </motion.div>
+                        {subiendo ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Storage...
+                            </>
+                        ) : (
+                            <>
+                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Pista'}
+                            </>
+                        )}
+                    </button>
+                }
+            >
+                {/* Alerta de error si existe */}
+                {errorSubida && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{errorSubida}</span>
+                    </div>
                 )}
-            </AnimatePresence>, document.body)}
+
+                {/* Campos del formulario */}
+                <div className="space-y-3">
+                    {/* Título */}
+                    <div>
+                        <label className="label-campo">Título de la Obra *</label>
+                        <input
+                            className="input-campo"
+                            value={form.titulo}
+                            onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
+                            placeholder="Ej: Ave Verum Corpus"
+                            disabled={subiendo}
+                        />
+                    </div>
+
+                    {/* Compositor y Duración */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0">
+                            <label className="label-campo">Compositor / Arreglista</label>
+                            <input
+                                className="input-campo"
+                                value={form.compositor}
+                                onChange={e => setForm(p => ({ ...p, compositor: e.target.value }))}
+                                placeholder="Ej: W. A. Mozart"
+                                disabled={subiendo}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Duración (mm:ss)</label>
+                            <input
+                                className="input-campo"
+                                value={form.duracion}
+                                onChange={e => setForm(p => ({ ...p, duracion: e.target.value }))}
+                                placeholder="Ej: 3:24"
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Archivo de Audio .mp3 */}
+                    <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
+                        <label className="label-campo text-vinotinto dark:text-khaki">
+                            <span className="flex items-center gap-1.5 font-semibold">
+                                <Upload className="w-3.5 h-3.5" /> Archivo de Audio (.mp3)
+                            </span>
+                        </label>
+                        <BotonSubirArchivo
+                            id="input-audio-mp3"
+                            accept="audio/mp3,audio/mpeg,.mp3"
+                            etiqueta="Elegir archivo"
+                            alElegir={manejarArchivoAudio}
+                            ocupado={subiendo}
+                        />
+                        {/* break-all: los nombres de archivo no tienen espacios donde
+                            cortar, y sin esto la palabra larga empuja el contenedor
+                            y aparece el scroll horizontal. */}
+                        {archivoAudio && (
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono break-all">
+                                ✓ Seleccionado: {archivoAudio.name}
+                                <span className="whitespace-nowrap"> ({(archivoAudio.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                            </p>
+                        )}
+
+                        {/* Alternativa: URL directa */}
+                        <div className="pt-2 border-t border-vinotinto/10 dark:border-khaki/10">
+                            <label className="text-[11px] t-muted block mb-1">
+                                O pega una URL directa de audio (opcional si ya seleccionaste archivo):
+                            </label>
+                            <input
+                                className="input-campo text-xs py-1.5"
+                                value={form.urlAudio}
+                                onChange={e => setForm(p => ({ ...p, urlAudio: e.target.value }))}
+                                placeholder="https://..."
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Portada (Opcional) */}
+                    <div>
+                        <label className="label-campo">Imagen de Portada (Opcional)</label>
+                        <BotonSubirArchivo
+                            id="input-portada-audio"
+                            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
+                            etiqueta="Elegir imagen"
+                            alElegir={manejarArchivoPortada}
+                            ocupado={subiendo}
+                        />
+                        {archivoPortada && (
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1 break-all">
+                                ✓ Portada: {archivoPortada.name}
+                            </p>
+                        )}
+                        <input
+                            className="input-campo text-xs mt-1.5"
+                            value={form.portada}
+                            onChange={e => setForm(p => ({ ...p, portada: e.target.value }))}
+                            placeholder="O pega una URL de imagen: https://..."
+                            disabled={subiendo}
+                        />
+                    </div>
+                </div>
+            </ModalHoja>
         </div>
     );
 };
@@ -2572,25 +2861,27 @@ const ModuloMedia = () => {
 
     const TabBotones = [
         { id: 'videos' as const, etiqueta: 'Videos', cuenta: videosMedia.length },
-        { id: 'fotos' as const, etiqueta: 'Galería de Fotos', cuenta: fotosGaleria.length },
+        { id: 'fotos' as const, etiqueta: 'Galería', cuenta: fotosGaleria.length },
     ];
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Media & Galería</h2>
-                    <p className="t-muted text-sm">Administra los videos de YouTube y las fotos de la sección Presentaciones.</p>
-                </div>
-            </div>
+            <CabeceraModulo
+                titulo="Media & Galería"
+                descripcion="Administra los videos de YouTube y las fotos de la sección Presentaciones."
+            />
 
-            {/* Pestañas: Videos / Fotos */}
-            <div className="flex flex-wrap gap-2">
+            {/* Pestañas: Videos / Fotos. Rejilla de dos columnas a ancho completo: como
+                botones sueltos con wrap, "Galería de Fotos" ocupaba 197px de los 312
+                útiles en un teléfono y las dos pestañas se partían en dos filas
+                desiguales. */}
+            <div className="grid grid-cols-2 gap-2">
                 {TabBotones.map(tab => (
                     <button
                         key={tab.id}
+                        type="button"
                         onClick={() => setSubModulo(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+                        className={`w-full flex items-center justify-center gap-1.5 px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-2 rounded-xl text-sm font-medium transition-all border ${
                             subModulo === tab.id
                                 ? 'bg-vinotinto text-white border-vinotinto shadow-glow-vinotinto'
                                 : 'bg-sutil hover:bg-sutil-hover text-secundario border-transparent'
@@ -2610,9 +2901,10 @@ const ModuloMedia = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-secundario">Videos</h3>
-                        <button onClick={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', tipoOrigen: 'youtube', videoArchivo: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true }); setMostrarFormVideo(true); }} className="btn-primario text-sm py-2 px-4">
-                            <Plus className="w-4 h-4" /> Añadir Video
-                        </button>
+                        <BotonAgregar
+                            etiqueta="Añadir Video"
+                            alPulsar={() => { setEditandoVideo(null); setFormVideo({ titulo: '', descripcion: '', urlYoutube: '', tipoOrigen: 'youtube', videoArchivo: '', categoria: CATEGORIAS_VIDEO[0], destacado: false, duracion: '', activo: true }); setMostrarFormVideo(true); }}
+                        />
                     </div>
 
                     {videosMedia.length === 0 ? (
@@ -2623,7 +2915,6 @@ const ModuloMedia = () => {
                     ) : (
                         <div className="space-y-3">
                             <BarraFiltrosAdmin
-                                variant="selects"
                                 termino={filtroBusquedaVideo}
                                 alCambiarTermino={t => { setFiltroBusquedaVideo(t); setPaginaVideos(1); }}
                                 placeholder="Buscar por título o descripción..."
@@ -2631,7 +2922,7 @@ const ModuloMedia = () => {
                                     {
                                         etiqueta: 'Estado',
                                         chips: [
-                                            { clave: 'Todos', etiqueta: 'Todos', contador: videosMedia.length },
+                                            { clave: 'Todos', etiqueta: 'Todos los estados', corta: 'Todos', contador: videosMedia.length },
                                             { clave: 'Activo', etiqueta: 'Visible', contador: videosMedia.filter(v => v.activo).length },
                                             { clave: 'Oculto', etiqueta: 'Oculto', contador: videosMedia.filter(v => !v.activo).length },
                                         ],
@@ -2641,7 +2932,7 @@ const ModuloMedia = () => {
                                     {
                                         etiqueta: 'Categoría',
                                         chips: [
-                                            { clave: 'Todas', etiqueta: 'Todas', contador: videosMedia.length },
+                                            { clave: 'Todas', etiqueta: 'Todas las categorías', corta: 'Todas', contador: videosMedia.length },
                                             ...CATEGORIAS_VIDEO.map(c => ({ clave: c, etiqueta: c, contador: videosMedia.filter(v => v.categoria === c).length })),
                                         ],
                                         filtroActivo: filtroCategoriaVideo,
@@ -2667,7 +2958,7 @@ const ModuloMedia = () => {
                                         return (
                                             <div key={v.id}
                                                 data-reordenable={indice}
-                                                className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-3 transition-all ${v.activo ? '' : 'opacity-60'} ${
+                                                className={`card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 transition-all ${v.activo ? '' : 'opacity-60'} ${
                                                     arrastreVideos.arrastrando && arrastreVideos.sobre === indice ? 'ring-2 ring-vinotinto/60 border-vinotinto/60' : ''
                                                 }`}>
                                                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
@@ -2690,8 +2981,10 @@ const ModuloMedia = () => {
                                                 </button>
                                                 {/* Miniatura */}
                                                 {v.tipoOrigen === 'archivo' ? (
-                                                    <div className="w-12 h-8 sm:w-20 sm:h-12 rounded-lg bg-black flex items-center justify-center flex-shrink-0 border border-black/10 dark:border-white/5">
-                                                        <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/80" />
+                                                    // fondo-medio en vez de negro: en modo día el
+                                                    // negro recortaba contra el resto de tarjetas.
+                                                    <div className="w-12 h-8 sm:w-20 sm:h-12 rounded-lg bg-fondo-medio flex items-center justify-center flex-shrink-0 border border-black/10 dark:border-white/5">
+                                                        <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 t-muted" />
                                                     </div>
                                                 ) : (
                                                     <img
@@ -2721,27 +3014,27 @@ const ModuloMedia = () => {
                                                     <p className="text-[11px] t-muted mt-0.5">Duración: {v.duracion || '—'}</p>
                                                 </div>
                                                 {/* Acciones */}
-                                                <div className="flex gap-1.5">
+                                                <div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
                                                     <button
                                                         onClick={() => editarVideoMedia(v.id, { destacado: !v.destacado })}
                                                         title={v.destacado ? 'Quitar de destacados' : 'Marcar como destacado'}
-                                                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${v.destacado ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario'}`}
+                                                        className={`flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg transition-all ${v.destacado ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario'}`}
                                                     >
                                                         <Star className={`w-3.5 h-3.5 ${v.destacado ? 'fill-amber-400' : ''}`} />
                                                     </button>
                                                     <button
                                                         onClick={() => editarVideoMedia(v.id, { activo: !v.activo })}
                                                         title={v.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
-                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                                     >
                                                         {v.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                                     </button>
                                                     <button onClick={() => abrirEditarVideo(v)} title="Editar"
-                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
+                                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all">
                                                         <Pencil className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button onClick={() => eliminarVideoMedia(v.id)}
-                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
+                                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all">
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
@@ -2765,9 +3058,10 @@ const ModuloMedia = () => {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-secundario">Galería de Fotos</h3>
-                        <button onClick={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', activo: true }); setMostrarFormFoto(true); }} className="btn-primario text-sm py-2 px-4">
-                            <Plus className="w-4 h-4" /> Añadir Foto
-                        </button>
+                        <BotonAgregar
+                            etiqueta="Añadir Foto"
+                            alPulsar={() => { setEditandoFoto(null); setFormFoto({ titulo: '', src: '', categoria: CATEGORIAS_FOTO[0], enlaceTexto: '', enlaceUrl: '', activo: true }); setMostrarFormFoto(true); }}
+                        />
                     </div>
 
                     {fotosGaleria.length === 0 ? (
@@ -2778,7 +3072,6 @@ const ModuloMedia = () => {
                     ) : (
                         <div className="space-y-3">
                             <BarraFiltrosAdmin
-                                variant="selects"
                                 termino={filtroBusquedaFoto}
                                 alCambiarTermino={t => { setFiltroBusquedaFoto(t); setPaginaFotos(1); }}
                                 placeholder="Buscar por título..."
@@ -2786,7 +3079,7 @@ const ModuloMedia = () => {
                                     {
                                         etiqueta: 'Estado',
                                         chips: [
-                                            { clave: 'Todos', etiqueta: 'Todos', contador: fotosGaleria.length },
+                                            { clave: 'Todos', etiqueta: 'Todos los estados', corta: 'Todos', contador: fotosGaleria.length },
                                             { clave: 'Activo', etiqueta: 'Visible', contador: fotosGaleria.filter(f => f.activo).length },
                                             { clave: 'Oculto', etiqueta: 'Oculto', contador: fotosGaleria.filter(f => !f.activo).length },
                                         ],
@@ -2881,169 +3174,151 @@ const ModuloMedia = () => {
             )}
 
             {/* ---- FORMULARIO: Video ---- */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormVideo && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormVideo(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">{editandoVideo ? 'Editar' : 'Añadir'} Video</h3>
-                                <button onClick={() => setMostrarFormVideo(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
-                            </div>
-                            <div className="space-y-3">
-                                <div><label className="label-campo">Título *</label><input className="input-campo" value={formVideo.titulo} onChange={e => setFormVideo(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del video" /></div>
-                                <div>
-                                    <label className="label-campo">Origen del video</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'youtube' }))}
-                                            className={`h-9 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'youtube' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
-                                        >
-                                            YouTube
-                                        </button>
-                                        <button
-                                            onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'archivo' }))}
-                                            className={`h-9 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'archivo' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
-                                        >
-                                            Archivo propio
-                                        </button>
-                                    </div>
-                                </div>
-                                {formVideo.tipoOrigen === 'youtube' ? (
-                                    <>
-                                        <div><label className="label-campo">URL o ID de YouTube *</label><input className="input-campo" value={formVideo.urlYoutube} onChange={e => setFormVideo(p => ({ ...p, urlYoutube: e.target.value }))} placeholder="https://www.youtube.com/watch?v=..." /></div>
-                                        {extraerYoutubeId(formVideo.urlYoutube) && (
-                                            <div className="rounded-lg overflow-hidden border borde-subtle">
-                                                <img
-                                                    src={`https://img.youtube.com/vi/${extraerYoutubeId(formVideo.urlYoutube)}/mqdefault.jpg`}
-                                                    alt="Vista previa"
-                                                    className="w-full h-28 object-cover"
-                                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                                />
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    <>
-                                        <div>
-                                            <label className="label-campo">Video (.mp4/.webm) *</label>
-                                            <div className="flex flex-col sm:flex-row gap-2">
-                                                <button
-                                                    onClick={() => (document.getElementById('input-video-archivo') as HTMLInputElement)?.click()}
-                                                    className="btn-ghost text-sm px-3 py-2 flex-shrink-0"
-                                                >
-                                                    {subiendoVideo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {formVideo.videoArchivo ? 'Reemplazar video' : 'Subir video'}
-                                                </button>
-                                                <input
-                                                    id="input-video-archivo"
-                                                    type="file"
-                                                    accept="video/*"
-                                                    className="hidden"
-                                                    onChange={e => { e.target.files?.[0] && subirVideoLocal(e.target.files[0]); e.target.value = ''; }}
-                                                />
-                                                <input className="input-campo flex-1 min-w-0" value={formVideo.videoArchivo} onChange={e => setFormVideo(p => ({ ...p, videoArchivo: e.target.value }))} placeholder="o pega la URL del archivo" />
-                                            </div>
-                                            {formVideo.videoArchivo && (
-                                                <video
-                                                    key={formVideo.videoArchivo}
-                                                    src={formVideo.videoArchivo}
-                                                    preload="metadata"
-                                                    controls
-                                                    className="mt-2 w-full h-32 object-cover rounded-lg border borde-subtle bg-black"
-                                                />
-                                            )}
-                                        </div>
-                                        <p className="text-[11px] t-muted-low -mt-1">La duración se detecta automáticamente al subir el archivo.</p>
-                                    </>
-                                )}
-                                <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formVideo.descripcion} onChange={e => setFormVideo(p => ({ ...p, descripcion: e.target.value }))} placeholder="Lugar, fecha, evento..." /></div>
-                                <div><label className="label-campo">Categoría</label>
-                                    <select className="input-campo" value={formVideo.categoria} onChange={e => setFormVideo(p => ({ ...p, categoria: e.target.value }))}>
-                                        {CATEGORIAS_VIDEO.map(c => <option key={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Duración (ej: 4:35)</label><input className="input-campo" value={formVideo.duracion} onChange={e => setFormVideo(p => ({ ...p, duracion: e.target.value }))} placeholder="4:35" /></div>
-                                    <div className="flex items-end pb-0.5"><button onClick={() => setFormVideo(p => ({ ...p, destacado: !p.destacado }))}
-                                        className={`w-full h-[38px] flex items-center justify-center gap-2 rounded-xl border text-sm transition-all ${
-                                            formVideo.destacado ? 'bg-khaki/15 text-khaki border-khaki/40' : 'borde-subtle t-muted hover:borde-medium'
-                                        }`}>
-                                        <Star className="w-4 h-4" /> Destacado
-                                    </button></div>
-                                </div>
-                                <ToggleCampo
-                                    activo={formVideo.activo}
-                                    alCambiar={() => setFormVideo(p => ({ ...p, activo: !p.activo }))}
-                                    icono={<Eye className="w-4 h-4" />}
-                                    etiqueta="Visible en la web"
-                                    descripcion="Si está apagado, el video se oculta del sitio público"
-                                />
-                            </div>
-                            <button onClick={guardarVideo} className="btn-primario w-full justify-center">
-                                <Check className="w-4 h-4" /> {editandoVideo ? 'Guardar Cambios' : 'Añadir Video'}
+            <ModalHoja
+                abierto={mostrarFormVideo}
+                alCerrar={() => setMostrarFormVideo(false)}
+                titulo={`${editandoVideo ? 'Editar' : 'Añadir'} Video`}
+                pie={
+                    <button onClick={guardarVideo} className="btn-primario w-full justify-center">
+                        <Check className="w-4 h-4" /> {editandoVideo ? 'Guardar Cambios' : 'Añadir Video'}
+                    </button>
+                }
+            >
+                <div className="space-y-3">
+                    <div><label className="label-campo">Título *</label><input className="input-campo" value={formVideo.titulo} onChange={e => setFormVideo(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del video" /></div>
+                    <div>
+                        <label className="label-campo">Origen del video</label>
+                        {/* min-w-0 + truncate: a 2 columnas en movil cada celda ronda
+                            136px, y "Archivo propio" se partia en dos lineas. */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'youtube' }))}
+                                className={`h-9 min-w-0 px-2 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'youtube' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
+                            >
+                                <span className="block truncate">YouTube</span>
                             </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
+                            <button
+                                onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'archivo' }))}
+                                className={`h-9 min-w-0 px-2 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'archivo' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
+                            >
+                                <span className="block truncate">Archivo propio</span>
+                            </button>
+                        </div>
+                    </div>
+                    {formVideo.tipoOrigen === 'youtube' ? (
+                        <>
+                            <div><label className="label-campo">URL o ID de YouTube *</label><input className="input-campo" value={formVideo.urlYoutube} onChange={e => setFormVideo(p => ({ ...p, urlYoutube: e.target.value }))} placeholder="https://www.youtube.com/watch?v=..." /></div>
+                            {extraerYoutubeId(formVideo.urlYoutube) && (
+                                <div className="rounded-lg overflow-hidden border borde-subtle">
+                                    <img
+                                        src={`https://img.youtube.com/vi/${extraerYoutubeId(formVideo.urlYoutube)}/mqdefault.jpg`}
+                                        alt="Vista previa"
+                                        className="w-full h-28 object-cover"
+                                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <div>
+                                <label className="label-campo">Video (.mp4/.webm) *</label>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <BotonSubirArchivo
+                                        id="input-video-archivo"
+                                        accept="video/*"
+                                        etiqueta={formVideo.videoArchivo ? 'Reemplazar video' : 'Subir video'}
+                                        alElegir={f => f && subirVideoLocal(f)}
+                                        ocupado={subiendoVideo}
+                                    />
+                                    <input className="input-campo flex-1 min-w-0" value={formVideo.videoArchivo} onChange={e => setFormVideo(p => ({ ...p, videoArchivo: e.target.value }))} placeholder="o pega la URL del archivo" />
+                                </div>
+                                {formVideo.videoArchivo && (
+                                    <video
+                                        key={formVideo.videoArchivo}
+                                        src={formVideo.videoArchivo}
+                                        preload="metadata"
+                                        controls
+                                        className="mt-2 w-full h-32 object-cover rounded-lg border borde-subtle bg-transparent"
+                                    />
+                                )}
+                            </div>
+                            <p className="text-[11px] t-muted-low -mt-1">La duración se detecta automáticamente al subir el archivo.</p>
+                        </>
+                    )}
+                    <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formVideo.descripcion} onChange={e => setFormVideo(p => ({ ...p, descripcion: e.target.value }))} placeholder="Lugar, fecha, evento..." /></div>
+                    <div><label className="label-campo">Categoría</label>
+                        <select className="input-campo" value={formVideo.categoria} onChange={e => setFormVideo(p => ({ ...p, categoria: e.target.value }))}>
+                            {CATEGORIAS_VIDEO.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="label-campo">Duración (ej: 4:35)</label><input className="input-campo" value={formVideo.duracion} onChange={e => setFormVideo(p => ({ ...p, duracion: e.target.value }))} placeholder="4:35" /></div>
+                        <div className="min-w-0 flex items-end pb-0.5"><button onClick={() => setFormVideo(p => ({ ...p, destacado: !p.destacado }))}
+                            className={`w-full h-[38px] flex items-center justify-center gap-2 rounded-xl border text-sm transition-all ${
+                                formVideo.destacado ? 'bg-khaki/15 text-khaki border-khaki/40' : 'borde-subtle t-muted hover:borde-medium'
+                            }`}>
+                            <Star className="w-4 h-4" /> Destacado
+                        </button></div>
+                    </div>
+                    <ToggleCampo
+                        activo={formVideo.activo}
+                        alCambiar={() => setFormVideo(p => ({ ...p, activo: !p.activo }))}
+                        icono={<Eye className="w-4 h-4" />}
+                        etiqueta="Visible en la web"
+                        descripcion="Si está apagado, el video se oculta del sitio público"
+                    />
+                </div>
+            </ModalHoja>
 
             {/* ---- FORMULARIO: Foto ---- */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormFoto && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormFoto(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">{editandoFoto ? 'Editar' : 'Añadir'} Foto</h3>
-                                <button onClick={() => setMostrarFormFoto(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
-                            </div>
-                            <div className="space-y-3">
-                                <div><label className="label-campo">Título *</label><input className="input-campo" value={formFoto.titulo} onChange={e => setFormFoto(p => ({ ...p, titulo: e.target.value }))} placeholder="Descripción breve de la foto" /></div>
-                                <div><label className="label-campo">URL de la imagen *</label>
-                                    <div className="flex flex-col sm:flex-row gap-2">
-                                        <button onClick={() => (document.getElementById('input-foto-archivo') as HTMLInputElement)?.click()}
-                                            className="btn-ghost text-sm px-3 py-2 flex-shrink-0">
-                                            {subiendoFoto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Subir imagen
-                                        </button>
-                                        <input
-                                            id="input-foto-archivo"
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={e => { e.target.files?.[0] && subirImagen(e.target.files[0]); e.target.value = ''; }}
-                                        />
-                                        <input className="input-campo flex-1 min-w-0" value={formFoto.src} onChange={e => setFormFoto(p => ({ ...p, src: e.target.value }))} placeholder="https://..." />
-                                    </div>
-                                </div>
-                                {formFoto.src && (
-                                    <div className="rounded-lg overflow-hidden border borde-subtle">
-                                        <img src={formFoto.src} alt="Vista previa" className="w-full h-28 object-cover" />
-                                    </div>
-                                )}
-                                <div><label className="label-campo">Categoría</label>
-                                    <select className="input-campo" value={formFoto.categoria} onChange={e => setFormFoto(p => ({ ...p, categoria: e.target.value }))}>
-                                        {CATEGORIAS_FOTO.map(c => <option key={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Texto del enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceTexto} onChange={e => setFormFoto(p => ({ ...p, enlaceTexto: e.target.value }))} placeholder="Ver reseña del concierto" /></div>
-                                    <div><label className="label-campo">URL de enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceUrl} onChange={e => setFormFoto(p => ({ ...p, enlaceUrl: e.target.value }))} placeholder="https://..." /></div>
-                                </div>
-                                <ToggleCampo
-                                    activo={formFoto.activo}
-                                    alCambiar={() => setFormFoto(p => ({ ...p, activo: !p.activo }))}
-                                    icono={<Eye className="w-4 h-4" />}
-                                    etiqueta="Visible en la web"
-                                    descripcion="Si está apagado, la foto se oculta del sitio público"
-                                />
-                            </div>
-                            <button onClick={guardarFoto} className="btn-primario w-full justify-center">
-                                <Check className="w-4 h-4" /> {editandoFoto ? 'Guardar Cambios' : 'Añadir Foto'}
-                            </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
+            <ModalHoja
+                abierto={mostrarFormFoto}
+                alCerrar={() => setMostrarFormFoto(false)}
+                titulo={`${editandoFoto ? 'Editar' : 'Añadir'} Foto`}
+                pie={
+                    <button onClick={guardarFoto} className="btn-primario w-full justify-center">
+                        <Check className="w-4 h-4" /> {editandoFoto ? 'Guardar Cambios' : 'Añadir Foto'}
+                    </button>
+                }
+            >
+                <div className="space-y-3">
+                    <div><label className="label-campo">Título *</label><input className="input-campo" value={formFoto.titulo} onChange={e => setFormFoto(p => ({ ...p, titulo: e.target.value }))} placeholder="Descripción breve de la foto" /></div>
+                    <div><label className="label-campo">URL de la imagen *</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <BotonSubirArchivo
+                                id="input-foto-archivo"
+                                accept="image/*"
+                                etiqueta="Subir imagen"
+                                alElegir={f => f && subirImagen(f)}
+                                ocupado={subiendoFoto}
+                            />
+                            <input className="input-campo flex-1 min-w-0" value={formFoto.src} onChange={e => setFormFoto(p => ({ ...p, src: e.target.value }))} placeholder="https://..." />
+                        </div>
+                    </div>
+                    {formFoto.src && (
+                        <div className="rounded-lg overflow-hidden border borde-subtle">
+                            <img src={formFoto.src} alt="Vista previa" className="w-full h-28 object-cover" />
+                        </div>
+                    )}
+                    <div><label className="label-campo">Categoría</label>
+                        <select className="input-campo" value={formFoto.categoria} onChange={e => setFormFoto(p => ({ ...p, categoria: e.target.value }))}>
+                            {CATEGORIAS_FOTO.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="label-campo">Texto del enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceTexto} onChange={e => setFormFoto(p => ({ ...p, enlaceTexto: e.target.value }))} placeholder="Ver reseña del concierto" /></div>
+                        <div className="min-w-0"><label className="label-campo">URL de enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceUrl} onChange={e => setFormFoto(p => ({ ...p, enlaceUrl: e.target.value }))} placeholder="https://..." /></div>
+                    </div>
+                    <ToggleCampo
+                        activo={formFoto.activo}
+                        alCambiar={() => setFormFoto(p => ({ ...p, activo: !p.activo }))}
+                        icono={<Eye className="w-4 h-4" />}
+                        etiqueta="Visible en la web"
+                        descripcion="Si está apagado, la foto se oculta del sitio público"
+                    />
+                </div>
+            </ModalHoja>
         </div>
     );
 };
@@ -3167,8 +3442,7 @@ const ModuloPartituras = () => {
         }));
     };
 
-    const manejarArchivoPdf = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const manejarArchivoPdf = (file: File | null) => {
         if (!file) return;
         setArchivoPdf(file);
         if (!form.titulo || form.titulo.trim() === '') {
@@ -3177,8 +3451,7 @@ const ModuloPartituras = () => {
         }
     };
 
-    const manejarArchivoPortada = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const manejarArchivoPortada = (file: File | null) => {
         if (file) setArchivoPortada(file);
     };
 
@@ -3272,27 +3545,11 @@ const ModuloPartituras = () => {
 
     return (
         <div className="space-y-6">
-            {/* Cabecera */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">
-                        Partituras (Biblioteca)
-                    </h2>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <p className="t-muted text-sm">{partituras.length} partituras en el catálogo</p>
-                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
-                            supabase
-                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
-                                : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-                        }`}>
-                            {supabase ? '● Supabase Conectado' : '○ Modo Local (Fase 1)'}
-                        </span>
-                    </div>
-                </div>
-                <button onClick={abrirCrear} className="btn-primario text-sm py-2 px-4">
-                    <Plus className="w-4 h-4" /> Añadir Partitura
-                </button>
-            </div>
+            <CabeceraModulo
+                titulo="Partituras (Biblioteca)"
+                descripcion={`${partituras.length} partituras en el catálogo`}
+                accion={<BotonAgregar alPulsar={abrirCrear} etiqueta="Añadir Partitura" />}
+            />
 
             {/* Preferencias de la Biblioteca (vistas públicas) */}
             <div className="card-glass rounded-xl p-5">
@@ -3350,7 +3607,7 @@ const ModuloPartituras = () => {
                                 {
                                     etiqueta: 'Acceso',
                                     chips: [
-                                        { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
+                                        { clave: 'Todos', etiqueta: 'Todo el acceso', corta: 'Todas', contador: partituras.length },
                                         { clave: 'Descargable', etiqueta: 'Descargable', contador: partituras.filter(p => p.descargable).length },
                                         { clave: 'No Descargable', etiqueta: 'Solo lectura', contador: partituras.filter(p => !p.descargable).length },
                                     ],
@@ -3360,7 +3617,7 @@ const ModuloPartituras = () => {
                                 {
                                     etiqueta: 'Estado',
                                     chips: [
-                                        { clave: 'Todos', etiqueta: 'Todas', contador: partituras.length },
+                                        { clave: 'Todos', etiqueta: 'Todos los estados', corta: 'Todas', contador: partituras.length },
                                         { clave: 'Activo', etiqueta: 'Visible', contador: partituras.filter(p => p.activo !== false).length },
                                         { clave: 'Oculto', etiqueta: 'Oculta', contador: partituras.filter(p => p.activo === false).length },
                                     ],
@@ -3388,9 +3645,8 @@ const ModuloPartituras = () => {
                     </div>
                 ) : (
                     partiturasPaginadas.map(p => {
-                        const esSupabase = p.urlPdf?.includes('supabase.co') || false;
                         return (
-                            <div key={p.id} className={`card-glass rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all ${
+                            <div key={p.id} className={`card-glass rounded-xl p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4 transition-all ${
                                 p.activo ? 'hover:border-vinotinto/30 dark:hover:border-khaki/30' : 'opacity-60'
                             }`}>
                                 {/* Portada miniatura */}
@@ -3410,11 +3666,6 @@ const ModuloPartituras = () => {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <p className="font-medium text-secundario text-sm truncate">{p.titulo}</p>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
-                                            esSupabase ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-black/5 dark:bg-white/5 t-muted'
-                                        }`}>
-                                            {esSupabase ? 'Supabase' : 'Externo'}
-                                        </span>
                                         {!p.activo && (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
                                                 Oculta
@@ -3440,12 +3691,15 @@ const ModuloPartituras = () => {
                                     </div>
                                 </div>
 
-                                {/* Acciones */}
-                                <div className="flex gap-1 sm:gap-1.5 flex-wrap justify-end flex-shrink-0">
+                                {/* Acciones. En móvil bajan a su propia fila y estiran a todo
+                                    el ancho: en una sola fila los cuatro botones se comían
+                                    140px y dejaban el texto en 96px, y eso era lo que
+                                    hacía crecer la tarjeta y partir los datos en varias líneas. */}
+                                <div className="w-full md:w-auto flex gap-1.5 flex-shrink-0">
                                     <button
                                         onClick={() => editarPartitura(p.id, { descargable: !p.descargable })}
                                         title={p.descargable ? 'Descargable: ON' : 'Descargable: OFF'}
-                                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+                                        className={`flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg transition-all ${
                                             p.descargable
                                                 ? 'bg-khaki text-primario shadow-glow-khaki'
                                                 : 'bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario'
@@ -3456,21 +3710,21 @@ const ModuloPartituras = () => {
                                     <button
                                         onClick={() => editarPartitura(p.id, { activo: !p.activo })}
                                         title={p.activo ? 'Ocultar de la web' : 'Mostrar en la web'}
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                     >
                                         {p.activo ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                     </button>
                                     <button
                                         onClick={() => abrirEditar(p)}
                                         title="Editar"
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover t-muted hover:text-secundario transition-all"
                                     >
                                         <Pencil className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                         onClick={() => handleEliminar(p)}
                                         title="Eliminar definitivamente"
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
+                                        className="flex-1 md:flex-none h-9 md:h-8 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-all"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -3487,326 +3741,301 @@ const ModuloPartituras = () => {
             </div>
 
             {/* Formulario modal */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormulario && (
-                    <motion.div
-                        className="fixed inset-0 z-[70] flex overflow-y-auto p-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => !subiendo && setMostrarFormulario(false)}
+            <ModalHoja
+                abierto={mostrarFormulario}
+                alCerrar={() => !subiendo && setMostrarFormulario(false)}
+                titulo={editando ? 'Editar Partitura' : 'Añadir Nueva Partitura'}
+                ancho="max-w-2xl"
+                bloqueado={subiendo}
+                pie={
+                    <button
+                        onClick={guardar}
+                        disabled={subiendo}
+                        className="btn-primario w-full justify-center py-2.5"
                     >
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-
-                        <motion.div
-                            className="relative card-modal w-full max-w-2xl p-6 z-10 space-y-4 m-auto max-h-[calc(100vh-2rem)] overflow-y-auto"
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {/* Encabezado modal */}
-                            <div className="flex items-center justify-between border-b borde-subtle pb-3">
-                                <h3 className="font-display font-bold text-lg text-secundario">
-                                    {editando ? 'Editar Partitura' : 'Añadir Nueva Partitura'}
-                                </h3>
-                                <button
-                                    onClick={() => !subiendo && setMostrarFormulario(false)}
-                                    disabled={subiendo}
-                                    className="btn-ghost"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Alerta de error */}
-                            {errorSubida && (
-                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                    <span>{errorSubida}</span>
-                                </div>
-                            )}
-
-                            {/* Campos del formulario */}
-                            <div className="space-y-3">
-                                {/* Título y Compositor */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="label-campo">Título de la Obra *</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.titulo}
-                                            onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
-                                            placeholder="Ej: Ave Verum Corpus"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Compositor *</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.compositor}
-                                            onChange={e => setForm(p => ({ ...p, compositor: e.target.value }))}
-                                            placeholder="Ej: W. A. Mozart"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Arreglista */}
-                                <div>
-                                    <label className="label-campo">Arreglista (Opcional)</label>
-                                    <input
-                                        className="input-campo"
-                                        value={form.arreglista}
-                                        onChange={e => setForm(p => ({ ...p, arreglista: e.target.value }))}
-                                        placeholder="Ej: Carlos López"
-                                        disabled={subiendo}
-                                    />
-                                </div>
-
-                                {/* Cuerdas */}
-                                <div>
-                                    <label className="label-campo">Cuerdas que la cantan *</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {CUERDAS_PARTITURA.map(c => {
-                                            const seleccionada = form.cuerdas.includes(c);
-                                            return (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => toggleCuerda(c)}
-                                                    disabled={subiendo}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                                                        seleccionada
-                                                            ? 'bg-vinotinto/15 text-vinotinto dark:text-khaki border-vinotinto/40 dark:border-khaki/40'
-                                                            : 'bg-sutil t-muted border-borde-subtle hover:border-vinotinto/40'
-                                                    }`}
-                                                >
-                                                    {seleccionada ? '✓ ' : ''}{c}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Dificultad, Estilo, Época */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                        <label className="label-campo">Dificultad</label>
-                                        <select
-                                            className="input-campo"
-                                            value={form.dificultad}
-                                            onChange={e => setForm(p => ({ ...p, dificultad: e.target.value }))}
-                                            disabled={subiendo}
-                                        >
-                                            {DIFICULTADES_PARTITURA.map(d => <option key={d}>{d}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Estilo</label>
-                                        <select
-                                            className="input-campo"
-                                            value={form.estilo}
-                                            onChange={e => setForm(p => ({ ...p, estilo: e.target.value }))}
-                                            disabled={subiendo}
-                                        >
-                                            {ESTILOS_PARTITURA.map(e => <option key={e}>{e}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Época</label>
-                                        <select
-                                            className="input-campo"
-                                            value={form.epoca}
-                                            onChange={e => setForm(p => ({ ...p, epoca: e.target.value }))}
-                                            disabled={subiendo}
-                                        >
-                                            {EPOCAS_PARTITURA.map(ep => <option key={ep}>{ep}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Tonalidad, Compás, Páginas */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                        <label className="label-campo">Tonalidad</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.tonalidad}
-                                            onChange={e => setForm(p => ({ ...p, tonalidad: e.target.value }))}
-                                            placeholder="Sol mayor"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Compás</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.compas}
-                                            onChange={e => setForm(p => ({ ...p, compas: e.target.value }))}
-                                            placeholder="4/4"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Páginas</label>
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            className="input-campo"
-                                            value={form.paginas}
-                                            onChange={e => setForm(p => ({ ...p, paginas: e.target.value }))}
-                                            placeholder="4"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Descripción */}
-                                <div>
-                                    <label className="label-campo">Descripción</label>
-                                    <textarea
-                                        rows={2}
-                                        className="input-campo resize-none"
-                                        value={form.descripcion}
-                                        onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))}
-                                        placeholder="Breve descripción de la obra o anotaciones de ensayo..."
-                                        disabled={subiendo}
-                                    />
-                                </div>
-
-                                {/* Archivo PDF */}
-                                <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
-                                    <label className="label-campo flex items-center justify-between text-vinotinto dark:text-khaki">
-                                        <span className="flex items-center gap-1.5 font-semibold">
-                                            <FileText className="w-3.5 h-3.5" /> Partitura (PDF) *
-                                        </span>
-                                        <span className="text-[10px] opacity-75 font-normal">
-                                            {supabase ? 'Se subirá a Supabase Storage' : 'Modo local activo'}
-                                        </span>
-                                    </label>
-                                    <input
-                                        type="file"
-                                        accept="application/pdf,.pdf"
-                                        onChange={manejarArchivoPdf}
-                                        disabled={subiendo}
-                                        className="block w-full text-xs t-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-vinotinto/10 file:text-vinotinto hover:file:bg-vinotinto/20 dark:file:bg-khaki/20 dark:file:text-khaki dark:hover:file:bg-khaki/30 cursor-pointer"
-                                    />
-                                    {archivoPdf && (
-                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono">
-                                            ✓ Seleccionado: {archivoPdf.name} ({(archivoPdf.size / (1024 * 1024)).toFixed(2)} MB)
-                                        </p>
-                                    )}
-                                    <div className="pt-2 border-t border-vinotinto/10 dark:border-khaki/10">
-                                        <label className="text-[11px] t-muted block mb-1">
-                                            O pega una URL directa del PDF (opcional si ya seleccionaste archivo):
-                                        </label>
-                                        <input
-                                            className="input-campo text-xs py-1.5"
-                                            value={form.urlPdf}
-                                            onChange={e => setForm(p => ({ ...p, urlPdf: e.target.value }))}
-                                            placeholder="https://..."
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Portada */}
-                                <div>
-                                    <label className="label-campo">Imagen de Portada (Opcional)</label>
-                                    <input
-                                        type="file"
-                                        accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
-                                        onChange={manejarArchivoPortada}
-                                        disabled={subiendo}
-                                        className="block w-full text-xs t-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sutil file:text-secundario hover:file:bg-sutil-hover cursor-pointer"
-                                    />
-                                    {archivoPortada && (
-                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1">
-                                            ✓ Portada: {archivoPortada.name}
-                                        </p>
-                                    )}
-                                    <input
-                                        className="input-campo text-xs mt-1.5"
-                                        value={form.urlPortada}
-                                        onChange={e => setForm(p => ({ ...p, urlPortada: e.target.value }))}
-                                        placeholder="O pega una URL de imagen: https://..."
-                                        disabled={subiendo}
-                                    />
-                                </div>
-
-                                {/* Toggles: Descargable y Ocultar */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setForm(p => ({ ...p, descargable: !p.descargable }))}
-                                        disabled={subiendo}
-                                        className={`flex items-center gap-3 rounded-xl p-3 border transition-all ${
-                                            form.descargable
-                                                ? 'bg-khaki/10 border-khaki/40'
-                                                : 'bg-sutil border-borde-subtle'
-                                        }`}
-                                    >
-                                        <Download className={`w-4 h-4 ${form.descargable ? 'text-khaki' : 't-muted'}`} />
-                                        <span className="flex-1 text-left">
-                                            <span className="block text-sm font-medium text-secundario">Descargable</span>
-                                            <span className="block text-[11px] t-muted">Mostrar botón "Descargar" al público</span>
-                                        </span>
-                                        <span
-                                            className={`toggle-switch ${form.descargable ? 'bg-vinotinto' : 'bg-sutil-hover'}`}
-                                            role="switch"
-                                            aria-checked={form.descargable}
-                                        >
-                                            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.descargable ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                        </span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setForm(p => ({ ...p, activo: !p.activo }))}
-                                        disabled={subiendo}
-                                        className={`flex items-center gap-3 rounded-xl p-3 border transition-all ${
-                                            form.activo
-                                                ? 'bg-vinotinto/5 dark:bg-khaki/5 border-vinotinto/30 dark:border-khaki/30'
-                                                : 'bg-sutil border-borde-subtle'
-                                        }`}
-                                    >
-                                        <EyeOff className={`w-4 h-4 ${form.activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`} />
-                                        <span className="flex-1 text-left">
-                                            <span className="block text-sm font-medium text-secundario">Ocultar</span>
-                                            <span className="block text-[11px] t-muted">{form.activo ? 'Visible en la web (ON)' : 'Oculta temporalmente'}</span>
-                                        </span>
-                                        <span
-                                            className={`toggle-switch ${form.activo ? 'bg-vinotinto' : 'bg-sutil-hover'}`}
-                                            role="switch"
-                                            aria-checked={form.activo}
-                                        >
-                                            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.activo ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                        </span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Botón de guardado */}
-                            <button
-                                onClick={guardar}
-                                disabled={subiendo}
-                                className="btn-primario w-full justify-center py-2.5 mt-2"
-                            >
-                                {subiendo ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Storage...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Partitura'}
-                                    </>
-                                )}
-                            </button>
-                        </motion.div>
-                    </motion.div>
+                        {subiendo ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Storage...
+                            </>
+                        ) : (
+                            <>
+                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Partitura'}
+                            </>
+                        )}
+                    </button>
+                }
+            >
+                {/* Alerta de error */}
+                {errorSubida && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{errorSubida}</span>
+                    </div>
                 )}
-            </AnimatePresence>, document.body)}
+
+                {/* Campos del formulario */}
+                <div className="space-y-3">
+                    {/* Título y Compositor */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0">
+                            <label className="label-campo">Título de la Obra *</label>
+                            <input
+                                className="input-campo"
+                                value={form.titulo}
+                                onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
+                                placeholder="Ej: Ave Verum Corpus"
+                                disabled={subiendo}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Compositor *</label>
+                            <input
+                                className="input-campo"
+                                value={form.compositor}
+                                onChange={e => setForm(p => ({ ...p, compositor: e.target.value }))}
+                                placeholder="Ej: W. A. Mozart"
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Arreglista */}
+                    <div>
+                        <label className="label-campo">Arreglista (Opcional)</label>
+                        <input
+                            className="input-campo"
+                            value={form.arreglista}
+                            onChange={e => setForm(p => ({ ...p, arreglista: e.target.value }))}
+                            placeholder="Ej: Carlos López"
+                            disabled={subiendo}
+                        />
+                    </div>
+
+                    {/* Cuerdas */}
+                    <div>
+                        <label className="label-campo">Cuerdas que la cantan *</label>
+                        <div className="flex flex-wrap gap-2">
+                            {CUERDAS_PARTITURA.map(c => {
+                                const seleccionada = form.cuerdas.includes(c);
+                                return (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => toggleCuerda(c)}
+                                        disabled={subiendo}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                            seleccionada
+                                                ? 'bg-vinotinto/15 text-vinotinto dark:text-khaki border-vinotinto/40 dark:border-khaki/40'
+                                                : 'bg-sutil t-muted border-borde-subtle hover:border-vinotinto/40'
+                                        }`}
+                                    >
+                                        {seleccionada ? '✓ ' : ''}{c}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Dificultad, Estilo, Época */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="min-w-0">
+                            <label className="label-campo">Dificultad</label>
+                            <select
+                                className="input-campo"
+                                value={form.dificultad}
+                                onChange={e => setForm(p => ({ ...p, dificultad: e.target.value }))}
+                                disabled={subiendo}
+                            >
+                                {DIFICULTADES_PARTITURA.map(d => <option key={d}>{d}</option>)}
+                            </select>
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Estilo</label>
+                            <select
+                                className="input-campo"
+                                value={form.estilo}
+                                onChange={e => setForm(p => ({ ...p, estilo: e.target.value }))}
+                                disabled={subiendo}
+                            >
+                                {ESTILOS_PARTITURA.map(e => <option key={e}>{e}</option>)}
+                            </select>
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Época</label>
+                            <select
+                                className="input-campo"
+                                value={form.epoca}
+                                onChange={e => setForm(p => ({ ...p, epoca: e.target.value }))}
+                                disabled={subiendo}
+                            >
+                                {EPOCAS_PARTITURA.map(ep => <option key={ep}>{ep}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Tonalidad, Compás, Páginas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="min-w-0">
+                            <label className="label-campo">Tonalidad</label>
+                            <input
+                                className="input-campo"
+                                value={form.tonalidad}
+                                onChange={e => setForm(p => ({ ...p, tonalidad: e.target.value }))}
+                                placeholder="Sol mayor"
+                                disabled={subiendo}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Compás</label>
+                            <input
+                                className="input-campo"
+                                value={form.compas}
+                                onChange={e => setForm(p => ({ ...p, compas: e.target.value }))}
+                                placeholder="4/4"
+                                disabled={subiendo}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Páginas</label>
+                            <input
+                                type="number"
+                                min={1}
+                                className="input-campo"
+                                value={form.paginas}
+                                onChange={e => setForm(p => ({ ...p, paginas: e.target.value }))}
+                                placeholder="4"
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Descripción */}
+                    <div>
+                        <label className="label-campo">Descripción</label>
+                        <textarea
+                            rows={2}
+                            className="input-campo resize-none"
+                            value={form.descripcion}
+                            onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))}
+                            placeholder="Breve descripción de la obra o anotaciones de ensayo..."
+                            disabled={subiendo}
+                        />
+                    </div>
+
+                    {/* Archivo PDF */}
+                    <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
+                        <label className="label-campo text-vinotinto dark:text-khaki">
+                            <span className="flex items-center gap-1.5 font-semibold">
+                                <FileText className="w-3.5 h-3.5" /> Partitura (PDF) *
+                            </span>
+                        </label>
+                        <BotonSubirArchivo
+                            id="input-partitura-pdf"
+                            accept="application/pdf,.pdf"
+                            etiqueta="Elegir PDF"
+                            alElegir={manejarArchivoPdf}
+                            ocupado={subiendo}
+                        />
+                        {/* break-all: los nombres largos de PDF son la causa mas
+                            frecuente de desborde en este formulario. */}
+                        {archivoPdf && (
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono break-all">
+                                ✓ Seleccionado: {archivoPdf.name}
+                                <span className="whitespace-nowrap"> ({(archivoPdf.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                            </p>
+                        )}
+                        <div className="pt-2 border-t border-vinotinto/10 dark:border-khaki/10">
+                            <label className="text-[11px] t-muted block mb-1">
+                                O pega una URL directa del PDF (opcional si ya seleccionaste archivo):
+                            </label>
+                            <input
+                                className="input-campo text-xs py-1.5"
+                                value={form.urlPdf}
+                                onChange={e => setForm(p => ({ ...p, urlPdf: e.target.value }))}
+                                placeholder="https://..."
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Portada */}
+                    <div>
+                        <label className="label-campo">Imagen de Portada (Opcional)</label>
+                        <BotonSubirArchivo
+                            id="input-portada-partitura"
+                            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
+                            etiqueta="Elegir imagen"
+                            alElegir={manejarArchivoPortada}
+                            ocupado={subiendo}
+                        />
+                        {archivoPortada && (
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1 break-all">
+                                ✓ Portada: {archivoPortada.name}
+                            </p>
+                        )}
+                        <input
+                            className="input-campo text-xs mt-1.5"
+                            value={form.urlPortada}
+                            onChange={e => setForm(p => ({ ...p, urlPortada: e.target.value }))}
+                            placeholder="O pega una URL de imagen: https://..."
+                            disabled={subiendo}
+                        />
+                    </div>
+
+                    {/* Toggles: Descargable y Ocultar. Son copias manuales de
+                        ToggleCampo y arrastraban sus dos problemas: no llevaban
+                        w-full (funcionaban solo porque el padre es un grid, que
+                        los estira) y su descripcion se recortaba a media frase. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setForm(p => ({ ...p, descargable: !p.descargable }))}
+                            disabled={subiendo}
+                            className={`w-full min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all ${
+                                form.descargable
+                                    ? 'bg-khaki/10 border-khaki/40'
+                                    : 'bg-sutil border-borde-subtle'
+                            }`}
+                        >
+                            <Download className={`w-4 h-4 flex-shrink-0 ${form.descargable ? 'text-khaki' : 't-muted'}`} />
+                            <span className="flex-1 min-w-0 text-left">
+                                <span className="block text-sm font-medium text-secundario break-words">Descargable</span>
+                                <span className="block text-[11px] t-muted break-words">Mostrar botón "Descargar" al público</span>
+                            </span>
+                            <span
+                                className={`toggle-switch flex-shrink-0 ${form.descargable ? 'bg-vinotinto' : 'bg-sutil-hover'}`}
+                                role="switch"
+                                aria-checked={form.descargable}
+                            >
+                                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.descargable ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setForm(p => ({ ...p, activo: !p.activo }))}
+                            disabled={subiendo}
+                            className={`w-full min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all ${
+                                form.activo
+                                    ? 'bg-vinotinto/5 dark:bg-khaki/5 border-vinotinto/30 dark:border-khaki/30'
+                                    : 'bg-sutil border-borde-subtle'
+                            }`}
+                        >
+                            <EyeOff className={`w-4 h-4 flex-shrink-0 ${form.activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`} />
+                            <span className="flex-1 min-w-0 text-left">
+                                <span className="block text-sm font-medium text-secundario break-words">Ocultar</span>
+                                <span className="block text-[11px] t-muted break-words">{form.activo ? 'Visible en la web (ON)' : 'Oculta temporalmente'}</span>
+                            </span>
+                            <span
+                                className={`toggle-switch flex-shrink-0 ${form.activo ? 'bg-vinotinto' : 'bg-sutil-hover'}`}
+                                role="switch"
+                                aria-checked={form.activo}
+                            >
+                                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.activo ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </ModalHoja>
         </div>
     );
 };
@@ -3852,7 +4081,9 @@ const AudioPruebaSolicitud = ({ valor }: { valor: string }) => {
     return (
         <div className="space-y-2">
             {esVideo ? (
-                <video src={urlResuelta} controls className="w-full rounded-lg max-h-44 bg-black" />
+                // bg-transparent en vez de bg-black: el reproductor ya pinta sus
+                // propios controles, y el fondo negro tapaba el color del tema.
+                <video src={urlResuelta} controls className="w-full rounded-lg max-h-44 bg-transparent" />
             ) : (
                 <audio src={urlResuelta} controls className="w-full" />
             )}
@@ -3902,10 +4133,10 @@ const ModuloBuzonAudiciones = () => {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-display font-bold text-secundario mb-1">Buzón de Audiciones</h2>
-                <p className="t-muted text-sm">{solicitudesAudicion.filter(s => s.estado === 'Pendiente').length} pendientes de revisión · {solicitudesAudicion.length} en total</p>
-            </div>
+            <CabeceraModulo
+                titulo="Buzón de Audiciones"
+                descripcion={`${solicitudesAudicion.filter(s => s.estado === 'Pendiente').length} pendientes de revisión · ${solicitudesAudicion.length} en total`}
+            />
 
             {/* Búsqueda + Filtro por estado */}
             {solicitudesAudicion.length > 0 && (
@@ -3918,7 +4149,8 @@ const ModuloBuzonAudiciones = () => {
                             etiqueta: 'Estado',
                             chips: ESTADOS_FILTRO.map(estado => ({
                                 clave: estado,
-                                etiqueta: estado,
+                                etiqueta: estado === 'Todas' ? 'Todas las solicitudes' : estado,
+                                corta: estado === 'Todas' ? 'Todas' : undefined,
                                 contador: estado === 'Todas' ? solicitudesAudicion.length : solicitudesAudicion.filter(s => s.estado === estado).length,
                             })),
                             filtroActivo: filtroEstado,
@@ -3946,11 +4178,11 @@ const ModuloBuzonAudiciones = () => {
                         </div>
                     ) : (
                         solicitudesPaginadas.map(s => (
-                            <div key={s.id} className="card-glass rounded-xl p-5 space-y-3">
+                            <div key={s.id} className="card-glass rounded-xl p-3 sm:p-5 space-y-3">
                                 <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <p className="font-medium text-secundario">{s.nombre}</p>
-                                        <p className="text-xs t-muted">{s.email} · {s.telefono || 'Sin teléfono'}</p>
+                                    <div className="min-w-0">
+                                        <p className="font-medium text-secundario truncate">{s.nombre}</p>
+                                        <p className="text-xs t-muted truncate">{s.email} · {s.telefono || 'Sin teléfono'}</p>
                                         <p className="text-xs text-vinotinto-claro mt-1">Voz: {s.tipoVoz || 'Sin especificar'}</p>
                                     </div>
                                     <div className="text-right flex-shrink-0">
@@ -3962,45 +4194,56 @@ const ModuloBuzonAudiciones = () => {
                                 {s.urlAudioPrueba && (
                                     <AudioPruebaSolicitud valor={s.urlAudioPrueba} />
                                 )}
-                                <div className="flex gap-2 flex-wrap items-center">
+
+                                {/* Antes las siete etiquetas vivían en una sola fila con wrap y
+                                    ml-auto: en un teléfono ocupaban tres renglones desiguales y el
+                                    botón de eliminar saltaba a una esquina. Ahora los estados van
+                                    en su rejilla y las acciones de contacto en la siguiente. Los
+                                    cuatro estados pasan a 2x2 en móvil: a cuatro columnas
+                                    quedaban en 79px y "Rechazada" se cortaba a "Rech…", que
+                                    además rompía la paridad con el buzón de mensajes. */}
+                                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
                                     {(['Pendiente', 'Revisada', 'Aceptada', 'Rechazada'] as const).map(estado => (
                                         <button key={estado} onClick={() => marcarSolicitudRevisada(s.id, estado)}
-                                            className={`text-xs px-3 py-1 rounded-full border transition-all ${s.estado === estado
+                                            className={`text-[11px] sm:text-xs px-1 sm:px-3 py-2 sm:py-1 rounded-full border transition-all truncate ${s.estado === estado
                                                     ? `${COLORES_ESTADO[estado]} border-current`
                                                     : 'borde-subtle t-muted-low hover:borde-medium'
                                                 }`}>
                                             {estado}
                                         </button>
                                     ))}
+                                </div>
+
+                                <div className="grid grid-cols-3 sm:flex sm:flex-wrap sm:items-center gap-1.5 sm:gap-2">
                                     {s.telefono.replace(/[^0-9]/g, '') && (
                                         <a
                                             href={`https://wa.me/${s.telefono.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hola ${s.nombre}, te escribimos por tu solicitud de audición en DaCapo.`)}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-xs px-3 py-1.5 rounded-lg border border-green-600/30 text-green-700 dark:text-green-400 hover:bg-green-500/10 transition-all"
+                                            className="flex items-center justify-center text-[11px] sm:text-xs px-1.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border border-green-600/30 text-green-700 dark:text-green-400 hover:bg-green-500/10 transition-all truncate"
                                             title="Responder por WhatsApp"
                                         >
-                                            <MessageCircle className="w-3 h-3 inline mr-1" /> WhatsApp
+                                            <MessageCircle className="w-3 h-3 shrink-0 sm:mr-1" /> <span className="truncate">WhatsApp</span>
                                         </a>
                                     )}
                                     <a
                                         href={`mailto:${s.email}?subject=${encodeURIComponent('Tu solicitud de audición - DaCapo')}&body=${encodeURIComponent(`Hola ${s.nombre},\n\n`)}`}
-                                        className="text-xs px-3 py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all"
+                                        className="flex items-center justify-center text-[11px] sm:text-xs px-1.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all truncate"
                                         title="Responder por correo"
                                     >
-                                        <Mail className="w-3 h-3 inline mr-1" /> Correo
+                                        <Mail className="w-3 h-3 shrink-0 sm:mr-1" /> <span className="truncate">Correo</span>
                                     </a>
                                     <button
                                         onClick={() => confirmarBorrar(s.id)}
-                                        className={`ml-auto text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                                        className={`flex items-center justify-center text-[11px] sm:text-xs px-1.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border transition-all truncate sm:ml-auto ${
                                             confirmandoBorrar === s.id
                                                 ? 'bg-red-600 text-white border-red-600'
                                                 : 'text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10'
                                         }`}
                                         title={confirmandoBorrar === s.id ? 'Clic de nuevo para confirmar' : 'Eliminar solicitud'}
                                     >
-                                        <Trash2 className="w-3 h-3 inline mr-1" />
-                                        {confirmandoBorrar === s.id ? '¿Confirmar?' : 'Eliminar'}
+                                        <Trash2 className="w-3 h-3 shrink-0 sm:mr-1" />
+                                        <span className="truncate">{confirmandoBorrar === s.id ? '¿Confirmar?' : 'Eliminar'}</span>
                                     </button>
                                 </div>
                             </div>
@@ -4055,17 +4298,22 @@ const ModuloBuzonMensajes = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-secundario mb-1">Buzón de Mensajes</h2>
-                    <p className="t-muted text-sm">{noLeidos} sin leer · {mensajesContacto.length} en total</p>
-                </div>
-                {noLeidos > 0 && (
-                    <button onClick={marcarTodosComoLeidos} className="btn-ghost text-sm px-3 py-2">
-                        <Check className="w-4 h-4" /> Marcar todos como leídos
+            <CabeceraModulo
+                titulo="Buzón de Mensajes"
+                descripcion={`${noLeidos} sin leer · ${mensajesContacto.length} en total`}
+                accion={noLeidos > 0 ? (
+                    <button
+                        type="button"
+                        onClick={marcarTodosComoLeidos}
+                        title="Marcar todos como leídos"
+                        aria-label="Marcar todos como leídos"
+                        className="btn-ghost justify-center gap-1.5 w-10 h-10 p-0 sm:w-auto sm:h-auto sm:px-3 sm:py-2 sm:text-sm border borde-subtle rounded-lg"
+                    >
+                        <Check className="w-4 h-4" />
+                        <span className="hidden sm:inline">Marcar todos como leídos</span>
                     </button>
-                )}
-            </div>
+                ) : undefined}
+            />
 
             {/* Búsqueda + Filtro por estado de lectura */}
             {mensajesContacto.length > 0 && (
@@ -4077,7 +4325,7 @@ const ModuloBuzonMensajes = () => {
                         {
                             etiqueta: 'Lectura',
                             chips: [
-                                { clave: 'Todos', etiqueta: 'Todos', contador: mensajesContacto.length },
+                                { clave: 'Todos', etiqueta: 'Todas las lecturas', corta: 'Todos', contador: mensajesContacto.length },
                                 { clave: 'No leídos', etiqueta: 'No leídos', contador: noLeidos },
                                 { clave: 'Leídos', etiqueta: 'Leídos', contador: mensajesContacto.length - noLeidos },
                             ],
@@ -4106,47 +4354,63 @@ const ModuloBuzonMensajes = () => {
                         </div>
                     ) : (
                         mensajesPaginados.map(m => (
-                            <div key={m.id} className={`card-glass rounded-xl p-5 transition-all ${m.leido ? 'borde-subtle' : 'border-vinotinto/30'}`}>
+                            <div key={m.id} className={`card-glass rounded-xl p-3 sm:p-5 transition-all ${m.leido ? 'borde-subtle' : 'border-vinotinto/30'}`}>
                                 <div className="flex items-start justify-between gap-3 mb-3">
-                                    <div>
+                                    <div className="min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <p className="font-medium text-secundario text-sm">{m.nombre}</p>
-                                            {!m.leido && <div className="w-2 h-2 rounded-full bg-vinotinto animate-pulse" />}
+                                            <p className="font-medium text-secundario text-sm truncate">{m.nombre}</p>
+                                            {!m.leido && <div className="w-2 h-2 rounded-full bg-vinotinto animate-pulse flex-shrink-0" />}
                                         </div>
-                                        <p className="text-xs t-muted">{m.email}</p>
+                                        <p className="text-xs t-muted truncate">{m.email}</p>
                                     </div>
                                     <p className="text-xs t-muted-low flex-shrink-0">{new Date(m.fechaEnvio).toLocaleDateString('es-ES')}</p>
                                 </div>
                                 {m.asunto && <p className="text-xs text-khaki mb-2">Asunto: {m.asunto}</p>}
                                 <p className="text-sm t-muted-high bg-sutil rounded-lg p-3">{m.mensaje}</p>
-                                <div className="mt-3 flex items-center gap-2 flex-wrap">
+
+                                {/* La fila única de antes mezclaba responder, marcar y eliminar
+                                    con ml-auto, de modo que en un teléfono el texto largo de
+                                    "Marcar como no leído" forzaba un cuarto renglón. En móvil
+                                    quedan dos rejillas: responder y el par leer/borrar. */}
+                                <div className="mt-3 grid grid-cols-2 sm:flex sm:items-center sm:flex-wrap gap-1.5 sm:gap-2">
                                     <a
                                         href={`mailto:${m.email}?subject=${encodeURIComponent(`RE: ${m.asunto || 'Mensaje desde la web'}`)}&body=${encodeURIComponent(`Hola ${m.nombre},\n\n`)}`}
-                                        className="text-xs px-3 py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all"
+                                        className="flex items-center justify-center text-xs px-2 py-2.5 sm:py-1.5 rounded-lg border border-blue-600/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 transition-all"
                                         title="Responder por correo"
                                     >
-                                        <Mail className="w-3 h-3 inline mr-1" /> Responder
+                                        <Mail className="w-3.5 h-3.5 shrink-0 sm:mr-1" />
+                                        <span className="truncate sm:ml-1">Responder</span>
                                     </a>
                                     {m.leido ? (
-                                        <button onClick={() => marcarMensajeLeido(m.id, false)} className="text-xs t-muted hover:text-secundario transition-colors flex items-center gap-1">
-                                            <EyeOff className="w-3 h-3" /> Marcar como no leído
+                                        <button
+                                            onClick={() => marcarMensajeLeido(m.id, false)}
+                                            className="flex items-center justify-center text-xs px-2 py-2.5 sm:py-1.5 rounded-lg bg-sutil hover:bg-sutil-hover borde-subtle t-muted hover:text-secundario transition-all"
+                                            title="Marcar como no leído"
+                                        >
+                                            <EyeOff className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="truncate sm:ml-1">No leído</span>
                                         </button>
                                     ) : (
-                                        <button onClick={() => marcarMensajeLeido(m.id)} className="text-xs t-muted hover:text-secundario transition-colors flex items-center gap-1">
-                                            <Check className="w-3 h-3" /> Marcar como leído
+                                        <button
+                                            onClick={() => marcarMensajeLeido(m.id)}
+                                            className="flex items-center justify-center text-xs px-2 py-2.5 sm:py-1.5 rounded-lg bg-sutil hover:bg-sutil-hover borde-subtle t-muted hover:text-secundario transition-all"
+                                            title="Marcar como leído"
+                                        >
+                                            <Check className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="truncate sm:ml-1">Leído</span>
                                         </button>
                                     )}
                                     <button
                                         onClick={() => confirmarBorrar(m.id)}
-                                        className={`ml-auto text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                                        className={`col-span-2 sm:col-span-1 flex items-center justify-center text-xs px-2 py-2.5 sm:py-1.5 rounded-lg border transition-all sm:ml-auto ${
                                             confirmandoBorrar === m.id
                                                 ? 'bg-red-600 text-white border-red-600'
                                                 : 'text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10'
                                         }`}
                                         title={confirmandoBorrar === m.id ? 'Clic de nuevo para confirmar' : 'Eliminar mensaje'}
                                     >
-                                        <Trash2 className="w-3 h-3 inline mr-1" />
-                                        {confirmandoBorrar === m.id ? '¿Confirmar?' : 'Eliminar'}
+                                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                        <span className="truncate sm:ml-1">{confirmandoBorrar === m.id ? '¿Confirmar?' : 'Eliminar'}</span>
                                     </button>
                                 </div>
                             </div>
@@ -4208,8 +4472,16 @@ const AdminPanel = () => {
         <div className="min-h-screen bg-fondo-oscuro flex">
 
             {/* ---- MENÚ LATERAL (Sidebar) ---- */}
-            <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-fondo-card border-r borde-subtle
-                       flex flex-col transition-transform duration-300 lg:translate-x-0 ${menuMovilAbierto ? 'translate-x-0' : '-translate-x-full'
+            {/* En móvil se comporta como drawer: max-w evita que en pantallas
+                muy angostas el menú se coma todo el ancho, h-dvh lo ata al alto
+                visible real (con inset-y-0 en iOS el 100vh excede el área
+                visible y el pie queda cortado), y la sombra lo despega del
+                contenido. Los márgenes seguros laterales solo aplican cuando la
+                pantalla está en horizontal y hay notch. */}
+            <div className={`fixed left-0 top-0 z-50 h-dvh w-64 max-w-[85vw] bg-fondo-card border-r borde-subtle
+                       flex flex-col shadow-2xl lg:shadow-none
+                       transition-transform duration-300 lg:translate-x-0
+                       pl-[env(safe-area-inset-left)] ${menuMovilAbierto ? 'translate-x-0' : '-translate-x-full'
                 }`}>
                 {/* Logo */}
                 <div className="p-6 border-b borde-subtle">
@@ -4284,20 +4556,23 @@ const AdminPanel = () => {
             )}
 
             {/* ---- CONTENIDO PRINCIPAL ---- */}
-            <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
-                {/* Header móvil */}
-                <div className="lg:hidden flex items-center justify-between p-4 border-b borde-subtle bg-fondo-card">
-                    <button onClick={() => setMenuMovilAbierto(true)} className="btn-ghost">
+            <div className="flex-1 lg:ml-64 flex flex-col min-h-screen min-w-0">
+                {/* Header móvil. Con el scroll largo de un módulo, el botón de
+                    Menú desaparecía y había que subir hasta arriba para volver a
+                    abrirlo. Con sticky se queda siempre accesible; el contenido
+                    pasa por debajo, de ahí la sombra. */}
+                <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5 border-b borde-subtle bg-fondo-card shadow-card">
+                    <button onClick={() => setMenuMovilAbierto(true)} className="btn-ghost shrink-0">
                         <LayoutDashboard className="w-5 h-5" />
                         Menú
                     </button>
-                    <div className="flex items-center gap-1">
-                        <span className="text-sm font-medium t-muted-high">
+                    <div className="flex items-center gap-1 min-w-0">
+                        <span className="min-w-0 text-sm font-medium t-muted-high truncate">
                             {MODULOS.find(m => m.id === moduloActivo)?.etiqueta}
                         </span>
                         <button
                             onClick={toggleModoOscuro}
-                            className="w-9 h-9 flex items-center justify-center rounded-lg t-muted-high hover:text-khaki hover:bg-sutil transition-all duration-200"
+                            className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg t-muted-high hover:text-khaki hover:bg-sutil transition-all duration-200"
                             aria-label="Cambiar tema"
                         >
                             {modoOscuro ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -4306,7 +4581,7 @@ const AdminPanel = () => {
                 </div>
 
                 {/* Contenido del módulo activo */}
-                <main className="flex-1 p-6 max-w-5xl w-full mx-auto">
+                <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-5xl w-full mx-auto min-w-0">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={moduloActivo}

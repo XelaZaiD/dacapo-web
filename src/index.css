@@ -146,13 +146,47 @@
     @apply box-border;
   }
 
+  /* ============================================================
+     MÓVIL: NUNCA DESBORDAR LA PANTALLA EN HORIZONTAL
+     Si el documento se hace más ancho que la pantalla, la página
+     se puede arrastrar de lado y los elementos fijos (reproductor,
+     chat, botones) se salen de la vista porque se anclan al
+     documento, no a lo que se ve. 'clip' recorta sin crear barra
+     de scroll (a diferencia de 'hidden'), así que no rompe los
+     'position: sticky' ni el scroll vertical.
+     ============================================================ */
+  /* El 'scroll-behavior: smooth' va SOLO en el <html> cuando se quiere que
+     el salto por '#seccion' sea suave. No lo ponemos a propósito: en el móvil
+     Chrome lo convertía en un scroll asíncrono que se quedaba a medias (la URL
+     cambiaba pero la página no se movía). La suavidad la pide cada código con
+     scrollIntoView({ behavior: 'smooth' }), que sí funciona. */
   html {
-    scroll-behavior: smooth;
+    scroll-behavior: auto;
   }
 
   body {
     @apply bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans antialiased;
+    /* OJO: el recorte va SOLO en 'body', nunca en 'html'. Si el elemento
+       raíz tiene un 'overflow' distinto de 'visible', deja de actuar como
+       contenedor de scroll del documento y los saltos a una sección
+       (#contacto, #eventos...) dejaban de funcionar en el móvil: la URL
+       cambiaba pero la página no se movía. En 'body' recorta igual de
+       bien y no toca el scroller del documento. */
+    overflow-x: hidden;
     transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  @supports (overflow-x: clip) {
+    body {
+      overflow-x: clip;
+    }
+  }
+
+  /* La barra de navegación es fija y mide 64px en móvil y 80px en PC.
+     Al saltar a una sección con el menú, esta separación deja el título
+     de la sección por debajo de la barra en vez de detrás. */
+  section[id] {
+    scroll-margin-top: 5rem;
   }
 
   *, *::before, *::after {

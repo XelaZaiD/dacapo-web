@@ -30,6 +30,28 @@ export default {
   darkMode: 'class',
 
   theme: {
+    // ====================================================
+    // PUNTOS DE QUIEBRE (breakpoints)
+    // ====================================================
+    // ¿CÓMO EDITARLO?
+    // - Cambia 768px, 1024px, etc. por otros valores si quieres
+    //   que el diseño de PC aparezca antes o después.
+    //
+    // NOTA IMPORTANTE (móvil y tableta):
+    // A partir de 'md' exigimos '(pointer: fine)', es decir, un
+    // dispositivo con ratón. Así una TABLETA (que es táctil)
+    // mantiene el diseño móvil en cualquier orientación, en vez
+    // de cargar el diseño de PC que se le queda corto.
+    // 'sm' se deja sin cambios para que un móvil en horizontal
+    // siga aprovechando ese pequeño ajuste.
+    screens: {
+      sm: '640px',
+      md: { raw: '(min-width: 768px) and (pointer: fine)' },
+      lg: { raw: '(min-width: 1024px) and (pointer: fine)' },
+      xl: { raw: '(min-width: 1280px) and (pointer: fine)' },
+      '2xl': { raw: '(min-width: 1536px) and (pointer: fine)' },
+    },
+
     extend: {
       // ====================================================
       // PALETA DE COLORES DE DACAPO GRUPO VOCAL
