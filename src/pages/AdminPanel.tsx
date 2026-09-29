@@ -306,6 +306,12 @@ const FlechasOrden = ({ puedeSubir, puedeBajar, alSubir, alBajar, className = 'b
 );
 
 // Tarjeta con toggle-switch (para destacado / agotado / visible, etc.)
+//
+// El w-full es lo que evita que la tarjeta desborde. Un <button> sin ancho se
+// dimensiona a su contenido, y como la descripcion lleva texto largo en una
+// sola linea, en movil la tarjeta crecia mas que el modal y el cuerpo de la
+// hoja se convertia en un scroller horizontal. Todos los campos de texto se
+// salvaban porque .input-campo si lleva w-full; aqui faltaba ese w-full.
 const ToggleCampo = ({ activo, alCambiar, icono, etiqueta, descripcion, colorActivo = 'bg-vinotinto' }: {
     activo: boolean;
     alCambiar: () => void;
@@ -317,19 +323,25 @@ const ToggleCampo = ({ activo, alCambiar, icono, etiqueta, descripcion, colorAct
     <button
         type="button"
         onClick={alCambiar}
-        className={`flex items-center gap-3 rounded-xl p-3 border transition-all text-left ${
+        className={`w-full min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all text-left ${
             activo
                 ? 'bg-vinotinto/5 dark:bg-khaki/5 border-vinotinto/30 dark:border-khaki/30'
                 : 'bg-sutil border-borde-subtle'
         }`}
     >
-        <span className={`${activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`}>{icono}</span>
+        {/* flex-shrink-0 en icono y switch: el algoritmo flex reduce los hijos
+            con ancho definido cuando falta espacio, y el switch se deformaba por
+            debajo de sus 44px. */}
+        <span className={`flex-shrink-0 ${activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`}>{icono}</span>
         <span className="flex-1 min-w-0">
-            <span className="block text-sm font-medium text-secundario">{etiqueta}</span>
-            {descripcion && <span className="block text-[11px] t-muted truncate">{descripcion}</span>}
+            <span className="block text-sm font-medium text-secundario break-words">{etiqueta}</span>
+            {/* break-words y no truncate: la descripcion salta de linea en vez de
+                recortarse. Con "Visible en la web" en movil el texto se perdia a
+                media frase, y la tarjeta gana una linea de alto a cambio. */}
+            {descripcion && <span className="block text-[11px] t-muted break-words">{descripcion}</span>}
         </span>
         <span
-            className={`toggle-switch ${activo ? colorActivo : 'bg-sutil-hover'}`}
+            className={`toggle-switch flex-shrink-0 ${activo ? colorActivo : 'bg-sutil-hover'}`}
             role="switch"
             aria-checked={activo}
         >
@@ -951,8 +963,16 @@ const ModalHoja = ({
                             </div>
 
                             {/* Unico nivel de scroll. overscroll-contain evita que el
-                                arrastre final se siga transmitiendo a la pagina. */}
-                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 space-y-4">
+                                arrastre final se siga transmitiendo a la pagina.
+                                El overflow-x-hidden no es cosmetico: al declarar
+                                overflow-y sin declarar el eje X, CSS hace que este
+                                computa a 'auto', y entonces el scroller interno se
+                                convertia en el contenedor de scroll horizontal. El
+                                recorte de 'body' no alcanzaba porque el portal vive
+                                en body pero el desborde ocurre aqui dentro. Con esto,
+                                un desborde futuro se recorta en vez de generar una
+                                barra horizontal dentro del modal. */}
+                            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 sm:px-6 py-4 space-y-4">
                                 {children}
                             </div>
 
@@ -3962,16 +3982,16 @@ const ModuloPartituras = () => {
                         />
                     </div>
 
-                    {/* Toggles: Descargable y Ocultar. min-w-0 en el contenedor y
-                        flex-1 + min-w-0 en el texto: son replicas manuales de
-                        ToggleCampo y se habian quedado sin el recorte, que es lo que
-                        hacia partir la descripcion larga. */}
+                    {/* Toggles: Descargable y Ocultar. Son copias manuales de
+                        ToggleCampo y arrastraban sus dos problemas: no llevaban
+                        w-full (funcionaban solo porque el padre es un grid, que
+                        los estira) y su descripcion se recortaba a media frase. */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button
                             type="button"
                             onClick={() => setForm(p => ({ ...p, descargable: !p.descargable }))}
                             disabled={subiendo}
-                            className={`min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all ${
+                            className={`w-full min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all ${
                                 form.descargable
                                     ? 'bg-khaki/10 border-khaki/40'
                                     : 'bg-sutil border-borde-subtle'
@@ -3979,7 +3999,7 @@ const ModuloPartituras = () => {
                         >
                             <Download className={`w-4 h-4 flex-shrink-0 ${form.descargable ? 'text-khaki' : 't-muted'}`} />
                             <span className="flex-1 min-w-0 text-left">
-                                <span className="block text-sm font-medium text-secundario">Descargable</span>
+                                <span className="block text-sm font-medium text-secundario break-words">Descargable</span>
                                 <span className="block text-[11px] t-muted break-words">Mostrar botón "Descargar" al público</span>
                             </span>
                             <span
@@ -3994,7 +4014,7 @@ const ModuloPartituras = () => {
                             type="button"
                             onClick={() => setForm(p => ({ ...p, activo: !p.activo }))}
                             disabled={subiendo}
-                            className={`min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all ${
+                            className={`w-full min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all ${
                                 form.activo
                                     ? 'bg-vinotinto/5 dark:bg-khaki/5 border-vinotinto/30 dark:border-khaki/30'
                                     : 'bg-sutil border-borde-subtle'
@@ -4002,7 +4022,7 @@ const ModuloPartituras = () => {
                         >
                             <EyeOff className={`w-4 h-4 flex-shrink-0 ${form.activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`} />
                             <span className="flex-1 min-w-0 text-left">
-                                <span className="block text-sm font-medium text-secundario">Ocultar</span>
+                                <span className="block text-sm font-medium text-secundario break-words">Ocultar</span>
                                 <span className="block text-[11px] t-muted break-words">{form.activo ? 'Visible en la web (ON)' : 'Oculta temporalmente'}</span>
                             </span>
                             <span
