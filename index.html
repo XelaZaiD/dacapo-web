@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: sin esto env(safe-area-inset-*) vale 0 en iOS, y el pie
+         de las hojas inferiores del admin quedaria bajo la barra de inicio. Con el
+         layout extendido hay que compensar el margen lateral con
+         env(safe-area-inset-left/right) en los elementos fijos. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>DaCapo Grupo Vocal</title>
   </head>
   <body>

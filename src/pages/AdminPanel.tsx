@@ -11,7 +11,7 @@
 import { useRef, useState, useEffect, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import {
     LayoutDashboard, Users, BookOpen, Calendar, Music,
     Settings, LogOut, ChevronLeft, ChevronRight, Eye, EyeOff,
@@ -47,33 +47,49 @@ const MODULOS = [
 // ============================================================
 const REGISTROS_POR_PAGINA = 10;
 
+// Devuelve la lista de páginas a mostrar, con null en los huecos que se
+// sustituyen por elipsis. Antes se renderizaban todas: con 400 integrantes eran
+// 40 botones en dos filas que empujaban el contenido hacia abajo y dejaban el
+// resto de la fila wasted. Ahora siempre son 7 elementos como máximo.
+const paginasVisibles = (pagina: number, total: number): (number | null)[] => {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (pagina <= 4) return [1, 2, 3, 4, 5, null, total];
+    if (pagina >= total - 3) return [1, null, total - 4, total - 3, total - 2, total - 1, total];
+    return [1, null, pagina - 1, pagina, pagina + 1, null, total];
+};
+
 const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
     pagina: number;
     totalPaginas: number;
     alCambiar: (pagina: number) => void;
 }) => {
     if (totalPaginas <= 1) return null;
-    const paginas = Array.from({ length: totalPaginas }, (_, i) => i + 1);
+    const paginas = paginasVisibles(pagina, totalPaginas);
+    const boton = 'w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-all';
+    const inactivo = 'bg-sutil hover:bg-sutil-hover text-secundario';
 
     return (
         <div className="flex items-center justify-center gap-1 flex-wrap py-4">
             <button
                 onClick={() => alCambiar(Math.max(1, pagina - 1))}
                 disabled={pagina <= 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover text-secundario disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className={`${boton} ${inactivo} disabled:opacity-30 disabled:cursor-not-allowed`}
                 title="Página anterior"
+                aria-label="Página anterior"
             >
                 <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            {paginas.map(p => (
+            {paginas.map((p, i) => p === null ? (
+                <span key={`hueco-${i}`} className="w-6 h-8 sm:w-5 flex items-center justify-center text-secundario select-none" aria-hidden="true">
+                    &hellip;
+                </span>
+            ) : (
                 <button
                     key={p}
                     onClick={() => alCambiar(p)}
-                    className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
-                        p === pagina
-                            ? 'bg-vinotinto text-white shadow-glow-vinotinto'
-                            : 'bg-sutil hover:bg-sutil-hover text-secundario'
-                    }`}
+                    aria-current={p === pagina ? 'page' : undefined}
+                    aria-label={`Página ${p}`}
+                    className={p === pagina ? `${boton} bg-vinotinto text-white shadow-glow-vinotinto` : `${boton} ${inactivo}`}
                 >
                     {p}
                 </button>
@@ -81,8 +97,9 @@ const PaginadorRegistros = ({ pagina, totalPaginas, alCambiar }: {
             <button
                 onClick={() => alCambiar(Math.min(totalPaginas, pagina + 1))}
                 disabled={pagina >= totalPaginas}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-sutil hover:bg-sutil-hover text-secundario disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className={`${boton} ${inactivo} disabled:opacity-30 disabled:cursor-not-allowed`}
                 title="Página siguiente"
+                aria-label="Página siguiente"
             >
                 <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -706,18 +723,23 @@ const ContadorSincronizado = ({ etiqueta, icono, valor, tooltip, modulo, alNaveg
 // Encabezado único para los módulos del panel. Antes cada módulo montaba el suyo
 // con un envoltorio distinto, y cuatro de ellos comprimían el título contra el
 // botón de acción en pantallas angostas. El título baja a text-xl en móvil para
-// dejarle sitio a la descripción, que es la que más suffería.
+// dejarle sitio a la descripción, que es la que más sufría.
+//
+// Estructura: título y acción comparten fila, con la acción pegada al borde
+// derecho, y la descripción debajo a ancho completo. Así los nueve módulos
+// quedan alineados entre sí y el botón nunca salta de sitio al cambiar de
+// módulo. Es el mismo criterio que usan las cabeceras de las apps.
 const CabeceraModulo = ({ titulo, descripcion, accion }: {
     titulo: string;
     descripcion: ReactNode;
     accion?: ReactNode;
 }) => (
-    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="min-w-0">
-            <h2 className="text-xl sm:text-2xl font-display font-bold text-secundario mb-1">{titulo}</h2>
-            <p className="t-muted text-xs sm:text-sm">{descripcion}</p>
+    <div className="space-y-2 sm:space-y-1">
+        <div className="flex items-start justify-between gap-3">
+            <h2 className="min-w-0 text-xl sm:text-2xl font-display font-bold text-secundario">{titulo}</h2>
+            {accion && <div className="shrink-0 -mt-1 sm:mt-0">{accion}</div>}
         </div>
-        {accion && <div className="shrink-0">{accion}</div>}
+        <p className="t-muted text-xs sm:text-sm">{descripcion}</p>
     </div>
 );
 
@@ -779,6 +801,178 @@ const BotonSubirArchivo = ({
     );
 };
 
+// ============================================================
+// HOJA INFERIOR (BOTTOM SHEET) PARA LOS FORMULARIOS
+// ============================================================
+// Sustituye a los seis overlays que cada modulo montaba a mano. En movil la hoja
+// se ancla abajo y ocupa el ancho completo, como en las apps nativas; desde 640px
+// vuelve a ser el dialogo centrado de siempre, con el boton de guardar dentro
+// del flujo. El corte es en sm a proposito: es el unico breakpoint sin
+// (pointer: fine), asi que un movil en horizontal recibe la hoja en vez de un
+// dialogo estrecho, y una tableta en vertical, que tiene 768px, recibe el
+// dialogo, que es lo que le cabe bien.
+//
+// Lo que corrige de raiz el scroll horizontal que se veía en los formularios:
+//   - Un solo nivel de scroll. Audio y Partituras tenian el overlay scroller con
+//     el panel scroller dentro, dos contenedores anidados.
+//   - Cabecera y pie fijos: el boton Guardar estaba al final del scroll, y en un
+//     formulario de Partituras habia que bajar del todo para poder confirmar.
+//   - El titulo lleva min-w-0 + truncate. "Anadir Nueva Partitura" es el mas
+//     largo de los seis y empujaba al boton de cerrar.
+//
+// El arrastre se inicia desde la cabecera con useDragControls y no desde el
+// panel entero: si el panel entero fuera draggable, el gesto se comeria el
+// scroll del contenido en el mismo dedo.
+const ModalHoja = ({
+    abierto, alCerrar, titulo, ancho = 'max-w-md', bloqueado = false, pie, children,
+}: {
+    abierto: boolean;
+    alCerrar: () => void;
+    titulo: string;
+    ancho?: string;
+    bloqueado?: boolean;
+    pie?: ReactNode;
+    children: ReactNode;
+}) => {
+    const controlesArrastre = useDragControls();
+    const desplazamientoY = useMotionValue(0);
+    // El velo se aclara conforme baja la hoja: es lo que hace que el gesto se
+    // lea como "soltar para cerrar" en vez de como un arrastre sin sentido.
+    const opacidadVelo = useTransform(desplazamientoY, [0, 220], [1, 0]);
+
+    // En iOS el fondo se desplaza detras de la hoja si no se bloquea a mano.
+    useEffect(() => {
+        if (!abierto) return;
+        // Si un arrastre quedara interrumpido a mitad, al reabrir la hoja se
+        // encontraria desplazada. Se reinicia siempre al abrir.
+        desplazamientoY.set(0);
+        const previo = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = previo; };
+    }, [abierto]);
+
+    // Escape cierra, igual que en escritorio, siempre que no haya una subida en
+    // curso. El overlay no captura el teclado cuando esta abierto.
+    useEffect(() => {
+        if (!abierto || bloqueado) return;
+        const alPulsar = (e: KeyboardEvent) => { if (e.key === 'Escape') alCerrar(); };
+        document.addEventListener('keydown', alPulsar);
+        return () => document.removeEventListener('keydown', alPulsar);
+    }, [abierto, bloqueado, alCerrar]);
+
+    // El arrastre se dispara desde la cabecera, pero no desde el boton de cerrar:
+    // sin este filtro, pulsar la X tambien arrancaba el gesto.
+    const iniciarArrastre = (e: React.PointerEvent) => {
+        if (bloqueado) return;
+        if ((e.target as HTMLElement).closest('button')) return;
+        controlesArrastre.start(e);
+    };
+
+    const cerrarSiSeSuelta = (_: unknown, info: PanInfo) => {
+        if (bloqueado) return;
+        if (desplazamientoY.get() > 100 || info.velocity.y > 500) alCerrar();
+    };
+
+    return createPortal(
+        <AnimatePresence>
+            {abierto && (
+                <motion.div
+                    className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                >
+                    <motion.div
+                        className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm"
+                        style={{ opacity: opacidadVelo }}
+                        onClick={bloqueado ? undefined : alCerrar}
+                    />
+
+                    {/* Dos capas a proposito. La exterior lleva la animacion de
+                        entrada y salida; la interior lleva el arrastre. Si el
+                        arrastre viviera en la misma capa que `animate={{ y: 0 }}`,
+                        ambos pelearian por la misma propiedad y el gesto se
+                        perderia. Ademas el contenedor NO lleva touch-none: eso
+                        impediria el scroll del formulario con el dedo. */}
+                    <motion.div
+                        className="relative w-full flex justify-center z-10"
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%', transition: { duration: 0.2 } }}
+                        transition={{ type: 'spring', damping: 32, stiffness: 340 }}
+                    >
+                        <motion.div
+                            className={`card-modal w-full ${ancho} flex flex-col
+                                        rounded-t-3xl sm:rounded-2xl
+                                        max-h-[92dvh] sm:max-h-[90dvh]
+                                        shadow-2xl`}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={titulo}
+                            initial={{ opacity: 0.6 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0.6 }}
+                            style={{ y: desplazamientoY }}
+                            drag="y"
+                            dragListener={false}
+                            dragControls={controlesArrastre}
+                            dragConstraints={{ top: 0 }}
+                            dragElastic={{ top: 0, bottom: 0.4 }}
+                            dragSnapToOrigin
+                            onDragEnd={cerrarSiSeSuelta}
+                        >
+                            {/* Handle: afordancia visual de hoja inferior. */}
+                            <div className="shrink-0 flex justify-center pt-2.5 pb-1 sm:hidden" aria-hidden="true">
+                                <span className="w-10 h-1 rounded-full bg-sutil-hover" />
+                            </div>
+
+                            {/* Cabecera fija. min-w-0 + truncate en el titulo y gap
+                                contra el boton: los dos faltaban y el titulo largo
+                                desplazaba al boton de cerrar fuera de la caja.
+                                touch-none va aqui y no en el panel: el gesto de
+                                arrastre no puede competir con el scroll del cuerpo. */}
+                            <div
+                                className="shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 pt-3 sm:pt-4 pb-3 border-b borde-subtle touch-none sm:touch-auto"
+                                onPointerDown={iniciarArrastre}
+                            >
+                                <h3 className="min-w-0 flex-1 font-display font-bold text-lg text-secundario truncate">
+                                    {titulo}
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={alCerrar}
+                                    disabled={bloqueado}
+                                    aria-label="Cerrar"
+                                    className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg t-muted hover:text-vinotinto hover:bg-vinotinto/10 transition-all disabled:opacity-40"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Unico nivel de scroll. overscroll-contain evita que el
+                                arrastre final se siga transmitiendo a la pagina. */}
+                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 space-y-4">
+                                {children}
+                            </div>
+
+                            {/* Pie fijo solo en movil. En escritorio vuelve a ser el
+                                boton dentro del flujo, como estaba. */}
+                            {pie && (
+                                <div className="shrink-0 px-4 sm:hidden pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-fondo-card border-t borde-subtle">
+                                    {pie}
+                                </div>
+                            )}
+                            {pie && <div className="hidden sm:block pt-1">{pie}</div>}
+                        </motion.div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>,
+        document.body
+    );
+};
+
 const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void }) => {
     const { integrantes, partituras, eventos, solicitudesAudicion, mensajesContacto, infoGrupo, actualizarInfoGrupo, actualizarAsistente } = useApp();
     const [subiendoLogo, setSubiendoLogo] = useState(false);
@@ -821,43 +1015,48 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                 descripcion="Resumen general de DaCapo Grupo Vocal"
             />
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {stats.map((s, i) => (
                     <button key={i} onClick={() => onNavigate(s.modulo)}
-                        className="card-glass rounded-xl p-5 text-left w-full
+                        className="card-glass rounded-xl p-4 sm:p-5 text-left w-full min-w-0
                             hover:border-vinotinto/50 hover:shadow-glow-vinotinto
                             transition-all duration-300 cursor-pointer group relative"
                     >
                         {s.alerta && (
                             <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-ping" />
                         )}
-                        <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs t-muted uppercase tracking-wider">{s.etiqueta}</p>
-                            <ChevronRight className="w-3 h-3 text-black/20 dark:text-white/20 group-hover:text-vinotinto-claro 
+                        {/* min-w-0 + truncate en la etiqueta y shrink-0 en el
+                            chevron: con dos columnas en un teléfono la etiqueta
+                            "SOLICITUDES PENDIENTES" no cabía y se partia en
+                            varias líneas, lo que descuadraba la altura de las
+                            cuatro tarjetas. */}
+                        <div className="flex items-center justify-between gap-1 mb-2">
+                            <p className="min-w-0 text-[11px] sm:text-xs t-muted uppercase tracking-wider truncate">{s.etiqueta}</p>
+                            <ChevronRight className="w-3 h-3 shrink-0 text-black/20 dark:text-white/20 group-hover:text-vinotinto-claro
                                 group-hover:translate-x-0.5 transition-all" />
                         </div>
-                        <p className={`text-4xl font-display font-bold ${s.color}`}>{s.valor}</p>
+                        <p className={`text-3xl sm:text-4xl font-display font-bold ${s.color}`}>{s.valor}</p>
                     </button>
                 ))}
             </div>
 
             {/* Tarjeta de mensajes no leídos */}
             <button onClick={() => onNavigate('mensajes')}
-                className="card-glass rounded-xl p-5 text-left w-full
+                className="card-glass rounded-xl p-4 sm:p-5 text-left w-full min-w-0
                     hover:border-vinotinto/50 hover:shadow-glow-vinotinto
                     transition-all duration-300 cursor-pointer group relative"
             >
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-vinotinto-claro" />
-                        <h3 className="font-semibold text-secundario">Buzón de Mensajes</h3>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Mail className="w-4 h-4 shrink-0 text-vinotinto-claro" />
+                        <h3 className="min-w-0 font-semibold text-secundario truncate">Buzón de Mensajes</h3>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-black/20 dark:text-white/20 group-hover:text-vinotinto-claro 
+                    <ChevronRight className="w-4 h-4 shrink-0 text-black/20 dark:text-white/20 group-hover:text-vinotinto-claro
                         group-hover:translate-x-0.5 transition-all" />
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-baseline gap-2 min-w-0">
                     <p className="text-3xl font-display font-bold text-blue-700 dark:text-blue-400">{mensajesNoLeidos}</p>
-                    <span className="text-sm t-muted">mensajes sin leer</span>
+                    <span className="min-w-0 text-sm t-muted truncate">mensajes sin leer</span>
                 </div>
                 {mensajesNoLeidos > 0 && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping" />
@@ -865,10 +1064,10 @@ const ModuloDashboard = ({ onNavigate }: { onNavigate: (modulo: string) => void 
             </button>
 
             {/* Información del Grupo (edición en línea) */}
-            <div className="card-glass rounded-xl p-6 space-y-6">
-                <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-secundario">Información del Grupo</h3>
-                    <p className="text-[11px] t-muted-low">Pulsa el lápiz para editar en el sitio · Enter guarda</p>
+            <div className="card-glass rounded-xl p-4 sm:p-6 space-y-6">
+                <div className="flex items-center justify-between gap-3">
+                    <h3 className="min-w-0 font-semibold text-secundario">Información del Grupo</h3>
+                    <p className="shrink-0 text-[11px] t-muted-low">Pulsa el lápiz para editar en el sitio · Enter guarda</p>
                 </div>
 
                 {/* Identidad + logo */}
@@ -1099,13 +1298,16 @@ const ModuloSecciones = ({ onNavigate }: { onNavigate: (modulo: string) => void 
                                         : 'bg-sutil borde-subtle t-muted-high hover:bg-sutil-hover hover:text-secundario'
                                     }`}
                             >
-                                <span className="text-xl">{opcion.icono}</span>
-                                <div className="flex-1">
+                                <span className="text-xl shrink-0">{opcion.icono}</span>
+                                {/* min-w-0: sin esto, flex-1 no puede encogerse por
+                                    debajo del contenido y la descripción larga de
+                                    una opción rompía la tarjeta en móvil. */}
+                                <div className="flex-1 min-w-0">
                                     <p className={`font-medium text-sm ${activo ? 'text-secundario' : ''}`}>{opcion.label}</p>
                                     <p className="text-xs t-muted">{opcion.desc}</p>
                                 </div>
                                 {activo && (
-                                    <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                                    <div className="w-5 h-5 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center">
                                         <span className="text-[10px] text-white">✓</span>
                                     </div>
                                 )}
@@ -1446,58 +1648,53 @@ const ModuloIntegrantes = () => {
             )}
 
             {/* Formulario modal */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormulario && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormulario(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">{editando ? 'Editar' : 'Añadir'} Integrante</h3>
-                                <button onClick={() => setMostrarFormulario(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
-                            </div>
-                            <div className="grid grid-cols-1 gap-3">
-                                <div className="col-span-full"><label className="label-campo">Nombre *</label><input className="input-campo" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre completo" /></div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Cuerda</label><select className="input-campo" value={form.cuerda} onChange={e => setForm(p => ({ ...p, cuerda: e.target.value as Integrante['cuerda'] }))}>
-                                        {CUERDAS_INTEGRANTE.map(c => <option key={c}>{c}</option>)}
-                                    </select></div>
-                                    <div><label className="label-campo">Rango Vocal</label><input className="input-campo" value={form.rangoVocal} onChange={e => setForm(p => ({ ...p, rangoVocal: e.target.value }))} placeholder="C4 - G5" /></div>
-                                </div>
-                                <div className="col-span-full"><label className="label-campo">Foto</label>
-                                    <div className="flex flex-col sm:flex-row gap-2">
-                                        <BotonSubirArchivo
-                                            id="input-foto-integrante"
-                                            accept="image/*"
-                                            etiqueta="Subir foto"
-                                            alElegir={f => subirFoto(f)}
-                                            ocupado={subiendoFoto}
-                                        />
-                                        <input className="input-campo flex-1" value={form.foto} onChange={e => setForm(p => ({ ...p, foto: e.target.value }))} placeholder="o pega una URL https://..." />
-                                    </div>
-                                </div>
-                                <div className="col-span-full"><label className="label-campo">Biografía</label><textarea rows={3} className="input-campo resize-none" value={form.biografia} onChange={e => setForm(p => ({ ...p, biografia: e.target.value }))} placeholder="Mini-biografía..." /></div>
-                                <div className="col-span-full">
-                                    <ToggleCampo
-                                        activo={form.esDirectivo}
-                                        alCambiar={() => setForm(p => ({ ...p, esDirectivo: !p.esDirectivo }))}
-                                        icono={<Users className="w-4 h-4" />}
-                                        etiqueta="Es miembro directivo"
-                                        descripcion="Aparece en la sección de directiva"
-                                    />
-                                </div>
-                                {form.esDirectivo && <div className="col-span-full"><label className="label-campo">Cargo</label><input className="input-campo" value={form.cargo} onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))} placeholder="Ej: Presidenta" /></div>}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Año de ingreso</label><input type="number" min={1900} max={2100} className="input-campo" value={form.anioIngreso} onChange={e => setForm(p => ({ ...p, anioIngreso: e.target.value.replace(/[^0-9]/g, '') }))} placeholder="2019" /></div>
-                                    <div><label className="label-campo">Instagram</label><input className="input-campo" value={form.urlInstagram} onChange={e => setForm(p => ({ ...p, urlInstagram: e.target.value }))} placeholder="https://instagram.com/..." /></div>
-                                </div>
-                            </div>
-                            <button onClick={guardar} className="btn-primario w-full justify-center">
-                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Integrante'}
-                            </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
+            <ModalHoja
+                abierto={mostrarFormulario}
+                alCerrar={() => setMostrarFormulario(false)}
+                titulo={`${editando ? 'Editar' : 'Añadir'} Integrante`}
+                pie={
+                    <button onClick={guardar} className="btn-primario w-full justify-center">
+                        <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Integrante'}
+                    </button>
+                }
+            >
+                <div className="grid grid-cols-1 gap-3">
+                    <div className="col-span-full"><label className="label-campo">Nombre *</label><input className="input-campo" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre completo" /></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="label-campo">Cuerda</label><select className="input-campo" value={form.cuerda} onChange={e => setForm(p => ({ ...p, cuerda: e.target.value as Integrante['cuerda'] }))}>
+                            {CUERDAS_INTEGRANTE.map(c => <option key={c}>{c}</option>)}
+                        </select></div>
+                        <div className="min-w-0"><label className="label-campo">Rango Vocal</label><input className="input-campo" value={form.rangoVocal} onChange={e => setForm(p => ({ ...p, rangoVocal: e.target.value }))} placeholder="C4 - G5" /></div>
+                    </div>
+                    <div className="col-span-full"><label className="label-campo">Foto</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <BotonSubirArchivo
+                                id="input-foto-integrante"
+                                accept="image/*"
+                                etiqueta="Subir foto"
+                                alElegir={f => subirFoto(f)}
+                                ocupado={subiendoFoto}
+                            />
+                            <input className="input-campo flex-1 min-w-0" value={form.foto} onChange={e => setForm(p => ({ ...p, foto: e.target.value }))} placeholder="o pega una URL https://..." />
+                        </div>
+                    </div>
+                    <div className="col-span-full"><label className="label-campo">Biografía</label><textarea rows={3} className="input-campo resize-none" value={form.biografia} onChange={e => setForm(p => ({ ...p, biografia: e.target.value }))} placeholder="Mini-biografía..." /></div>
+                    <div className="col-span-full">
+                        <ToggleCampo
+                            activo={form.esDirectivo}
+                            alCambiar={() => setForm(p => ({ ...p, esDirectivo: !p.esDirectivo }))}
+                            icono={<Users className="w-4 h-4" />}
+                            etiqueta="Es miembro directivo"
+                            descripcion="Aparece en la sección de directiva"
+                        />
+                    </div>
+                    {form.esDirectivo && <div className="col-span-full"><label className="label-campo">Cargo</label><input className="input-campo" value={form.cargo} onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))} placeholder="Ej: Presidenta" /></div>}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="label-campo">Año de ingreso</label><input type="number" min={1900} max={2100} className="input-campo" value={form.anioIngreso} onChange={e => setForm(p => ({ ...p, anioIngreso: e.target.value.replace(/[^0-9]/g, '') }))} placeholder="2019" /></div>
+                        <div className="min-w-0"><label className="label-campo">Instagram</label><input className="input-campo" value={form.urlInstagram} onChange={e => setForm(p => ({ ...p, urlInstagram: e.target.value }))} placeholder="https://instagram.com/..." /></div>
+                    </div>
+                </div>
+            </ModalHoja>
 
             {/* Aviso flotante (subida de foto / errores) */}
             <AvisoTemporal
@@ -1861,126 +2058,122 @@ const ModuloEventos = () => {
                 </div>
             )}
 
-            {createPortal(<AnimatePresence>
-                {mostrarForm && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarForm(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-xl p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">{editando ? 'Editar' : 'Nuevo'} Evento</h3>
-                                <button onClick={() => setMostrarForm(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
+            <ModalHoja
+                abierto={mostrarForm}
+                alCerrar={() => setMostrarForm(false)}
+                titulo={`${editando ? 'Editar' : 'Nuevo'} Evento`}
+                ancho="max-w-xl"
+                pie={
+                    <button onClick={guardar} className="btn-primario w-full justify-center">
+                        <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Guardar Evento'}
+                    </button>
+                }
+            >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="col-span-full"><label className="label-campo">Título *</label><input className="input-campo" value={formEvento.titulo} onChange={e => setFormEvento(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del concierto" /></div>
+                    <div className="col-span-full"><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formEvento.descripcion} onChange={e => setFormEvento(p => ({ ...p, descripcion: e.target.value }))} /></div>
+                    <div className="col-span-full"><label className="label-campo">Fecha y Hora *</label><input type="datetime-local" className="input-campo" value={formEvento.fecha} onChange={e => setFormEvento(p => ({ ...p, fecha: e.target.value }))} /></div>
+                    <div className="min-w-0"><label className="label-campo">Lugar</label><input className="input-campo" value={formEvento.lugar} onChange={e => setFormEvento(p => ({ ...p, lugar: e.target.value }))} placeholder="Teatro / Iglesia / Sala" /></div>
+                    <div className="min-w-0"><label className="label-campo">Dirección</label><input className="input-campo" value={formEvento.direccion} onChange={e => setFormEvento(p => ({ ...p, direccion: e.target.value }))} /></div>
+                    <div className="min-w-0"><label className="label-campo">Categoría</label>
+                        <select className="input-campo" value={formEvento.categoria} onChange={e => setFormEvento(p => ({ ...p, categoria: e.target.value }))}>
+                            {CATEGORIAS_EVENTO.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="min-w-0"><label className="label-campo">Organizador</label><input className="input-campo" value={formEvento.organizador} onChange={e => setFormEvento(p => ({ ...p, organizador: e.target.value }))} /></div>
+                    <div className="min-w-0"><label className="label-campo">Duración (minutos)</label><input type="number" min={15} step={15} className="input-campo" value={formEvento.duracionMin} onChange={e => setFormEvento(p => ({ ...p, duracionMin: Number(e.target.value) || 120 }))} /></div>
+                    <div className="min-w-0"><label className="label-campo">URL Mapa</label><input className="input-campo" value={formEvento.urlMapa} onChange={e => setFormEvento(p => ({ ...p, urlMapa: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
+                    <div className="col-span-full"><label className="label-campo">Tipo de Entrada</label>
+                        <select className="input-campo" value={formEvento.tipoEntrada} onChange={e => cambiarTipoEntrada(e.target.value as Evento['tipoEntrada'])}>
+                            {['Libre', 'Con entrada', 'Donación voluntaria'].map(t => <option key={t}>{t}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Bloque dinámico según tipo de entrada */}
+                    {mostrarBloqueEntradas && (
+                        <div className="col-span-full border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-3">
+                            <p className="label-campo flex items-center gap-1.5 font-semibold text-vinotinto dark:text-khaki">
+                                <Ticket className="w-3.5 h-3.5" /> {esEntrada ? 'Entradas' : 'Donaciones'}
+                            </p>
+                            {esEntrada && (
+                                <div>
+                                    <label className="label-campo">Precio / Bono</label>
+                                    <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 10" />
+                                </div>
+                            )}
+                            {esDonacion && (
+                                <div>
+                                    <label className="label-campo">Aporte sugerido</label>
+                                    <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 5 / aporte libre" />
+                                </div>
+                            )}
+                            <div>
+                                <label className="label-campo">{esEntrada ? 'URL del sitio de venta' : 'Link de donación'}</label>
+                                <input className="input-campo" value={formEvento.urlEntradas} onChange={e => setFormEvento(p => ({ ...p, urlEntradas: e.target.value }))} placeholder="https://..." />
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="col-span-full"><label className="label-campo">Título *</label><input className="input-campo" value={formEvento.titulo} onChange={e => setFormEvento(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del concierto" /></div>
-                                <div className="col-span-full"><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formEvento.descripcion} onChange={e => setFormEvento(p => ({ ...p, descripcion: e.target.value }))} /></div>
-                                <div className="col-span-full"><label className="label-campo">Fecha y Hora *</label><input type="datetime-local" className="input-campo" value={formEvento.fecha} onChange={e => setFormEvento(p => ({ ...p, fecha: e.target.value }))} /></div>
-                                <div><label className="label-campo">Lugar</label><input className="input-campo" value={formEvento.lugar} onChange={e => setFormEvento(p => ({ ...p, lugar: e.target.value }))} placeholder="Teatro / Iglesia / Sala" /></div>
-                                <div><label className="label-campo">Dirección</label><input className="input-campo" value={formEvento.direccion} onChange={e => setFormEvento(p => ({ ...p, direccion: e.target.value }))} /></div>
-                                <div><label className="label-campo">Categoría</label>
-                                    <select className="input-campo" value={formEvento.categoria} onChange={e => setFormEvento(p => ({ ...p, categoria: e.target.value }))}>
-                                        {CATEGORIAS_EVENTO.map(c => <option key={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div><label className="label-campo">Organizador</label><input className="input-campo" value={formEvento.organizador} onChange={e => setFormEvento(p => ({ ...p, organizador: e.target.value }))} /></div>
-                                <div><label className="label-campo">Duración (minutos)</label><input type="number" min={15} step={15} className="input-campo" value={formEvento.duracionMin} onChange={e => setFormEvento(p => ({ ...p, duracionMin: Number(e.target.value) || 120 }))} /></div>
-                                <div><label className="label-campo">URL Mapa</label><input className="input-campo" value={formEvento.urlMapa} onChange={e => setFormEvento(p => ({ ...p, urlMapa: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
-                                <div className="col-span-full"><label className="label-campo">Tipo de Entrada</label>
-                                    <select className="input-campo" value={formEvento.tipoEntrada} onChange={e => cambiarTipoEntrada(e.target.value as Evento['tipoEntrada'])}>
-                                        {['Libre', 'Con entrada', 'Donación voluntaria'].map(t => <option key={t}>{t}</option>)}
-                                    </select>
-                                </div>
+                            {esEntrada && (
+                                <ToggleCampo
+                                    activo={formEvento.agotado}
+                                    alCambiar={() => setFormEvento(p => ({ ...p, agotado: !p.agotado }))}
+                                    icono={<Ticket className="w-4 h-4" />}
+                                    etiqueta="Entradas agotadas"
+                                    descripcion="Mostrar el aviso de agotado en la web"
+                                />
+                            )}
+                        </div>
+                    )}
 
-                                {/* Bloque dinámico según tipo de entrada */}
-                                {mostrarBloqueEntradas && (
-                                    <div className="col-span-full border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-3">
-                                        <p className="label-campo flex items-center gap-1.5 font-semibold text-vinotinto dark:text-khaki">
-                                            <Ticket className="w-3.5 h-3.5" /> {esEntrada ? 'Entradas' : 'Donaciones'}
-                                        </p>
-                                        {esEntrada && (
-                                            <div>
-                                                <label className="label-campo">Precio / Bono</label>
-                                                <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 10" />
-                                            </div>
-                                        )}
-                                        {esDonacion && (
-                                            <div>
-                                                <label className="label-campo">Aporte sugerido</label>
-                                                <input className="input-campo" value={formEvento.precio} onChange={e => setFormEvento(p => ({ ...p, precio: e.target.value }))} placeholder="Ej: Bs. 5 / aporte libre" />
-                                            </div>
-                                        )}
-                                        <div>
-                                            <label className="label-campo">{esEntrada ? 'URL del sitio de venta' : 'Link de donación'}</label>
-                                            <input className="input-campo" value={formEvento.urlEntradas} onChange={e => setFormEvento(p => ({ ...p, urlEntradas: e.target.value }))} placeholder="https://..." />
-                                        </div>
-                                        {esEntrada && (
-                                            <ToggleCampo
-                                                activo={formEvento.agotado}
-                                                alCambiar={() => setFormEvento(p => ({ ...p, agotado: !p.agotado }))}
-                                                icono={<Ticket className="w-4 h-4" />}
-                                                etiqueta="Entradas agotadas"
-                                                descripcion="Mostrar el aviso de agotado en la web"
-                                            />
-                                        )}
-                                    </div>
-                                )}
-
-                                <div className="col-span-full"><label className="label-campo">Imagen promocional</label>
-                                    <div className="flex flex-col sm:flex-row gap-2">
-                                        <BotonSubirArchivo
-                                            id="input-imagen-evento"
-                                            accept="image/*"
-                                            etiqueta="Subir imagen"
-                                            alElegir={f => subirImagen(f)}
-                                            ocupado={subiendoImagen}
-                                        />
-                                        <input className="input-campo flex-1 min-w-0" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
-                                    </div>
-                                    {formEvento.imagen && (
-                                        <div className="relative mt-2 rounded-lg overflow-hidden border borde-subtle">
-                                            <button
-                                                onClick={() => setFormEvento(p => ({ ...p, imagen: '' }))}
-                                                className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-lg bg-black/60 text-white hover:bg-red-600 transition-all"
-                                                title="Quitar imagen"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                            <img
-                                                src={formEvento.imagen}
-                                                alt="Vista previa"
-                                                className="w-full h-32 object-cover"
-                                                onError={ev => { (ev.target as HTMLImageElement).style.display = 'none'; }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="col-span-full"><label className="label-campo">Repertorio (una obra por línea)</label><textarea rows={5} className="input-campo resize-none font-mono text-xs" value={formEvento.repertorio} onChange={e => setFormEvento(p => ({ ...p, repertorio: e.target.value }))} placeholder={"Parte I:\nAlleluia\nBogoroditse Djevo\n..."} /></div>
-
-                                {/* Publicación con toggles rediseñados */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 col-span-full">
-                                    <ToggleCampo
-                                        activo={formEvento.destacado}
-                                        alCambiar={() => setFormEvento(p => ({ ...p, destacado: !p.destacado }))}
-                                        icono={<Star className="w-4 h-4" />}
-                                        etiqueta="Destacado en la web"
-                                        descripcion="Se muestra en tarjeta grande con imagen"
-                                        colorActivo="bg-khaki"
-                                    />
-                                    <ToggleCampo
-                                        activo={formEvento.activo}
-                                        alCambiar={() => setFormEvento(p => ({ ...p, activo: !p.activo }))}
-                                        icono={formEvento.activo ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                                        etiqueta="Visible en la web"
-                                        descripcion={formEvento.activo ? 'Este evento se muestra al público' : 'Oculto temporalmente'}
-                                    />
-                                </div>
+                    <div className="col-span-full"><label className="label-campo">Imagen promocional</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <BotonSubirArchivo
+                                id="input-imagen-evento"
+                                accept="image/*"
+                                etiqueta="Subir imagen"
+                                alElegir={f => subirImagen(f)}
+                                ocupado={subiendoImagen}
+                            />
+                            <input className="input-campo flex-1 min-w-0" value={formEvento.imagen} onChange={e => setFormEvento(p => ({ ...p, imagen: e.target.value }))} placeholder="o pega una URL https://..." />
+                        </div>
+                        {formEvento.imagen && (
+                            <div className="relative mt-2 rounded-lg overflow-hidden border borde-subtle">
+                                <button
+                                    onClick={() => setFormEvento(p => ({ ...p, imagen: '' }))}
+                                    className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-lg bg-black/60 text-white hover:bg-red-600 transition-all"
+                                    title="Quitar imagen"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                                <img
+                                    src={formEvento.imagen}
+                                    alt="Vista previa"
+                                    className="w-full h-32 object-cover"
+                                    onError={ev => { (ev.target as HTMLImageElement).style.display = 'none'; }}
+                                />
                             </div>
-                            <button onClick={guardar} className="btn-primario w-full justify-center">
-                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Guardar Evento'}
-                            </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
+                        )}
+                    </div>
+                    <div className="col-span-full"><label className="label-campo">Repertorio (una obra por línea)</label><textarea rows={5} className="input-campo resize-none font-mono text-xs" value={formEvento.repertorio} onChange={e => setFormEvento(p => ({ ...p, repertorio: e.target.value }))} placeholder={"Parte I:\nAlleluia\nBogoroditse Djevo\n..."} /></div>
+
+                    {/* Publicación con toggles rediseñados */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 col-span-full">
+                        <ToggleCampo
+                            activo={formEvento.destacado}
+                            alCambiar={() => setFormEvento(p => ({ ...p, destacado: !p.destacado }))}
+                            icono={<Star className="w-4 h-4" />}
+                            etiqueta="Destacado en la web"
+                            descripcion="Se muestra en tarjeta grande con imagen"
+                            colorActivo="bg-khaki"
+                        />
+                        <ToggleCampo
+                            activo={formEvento.activo}
+                            alCambiar={() => setFormEvento(p => ({ ...p, activo: !p.activo }))}
+                            icono={formEvento.activo ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                            etiqueta="Visible en la web"
+                            descripcion={formEvento.activo ? 'Este evento se muestra al público' : 'Oculto temporalmente'}
+                        />
+                    </div>
+                </div>
+            </ModalHoja>
 
             <AvisoTemporal
                 visibilidad={!!aviso}
@@ -2262,164 +2455,140 @@ const ModuloAudio = () => {
             </div>
 
             {/* Formulario modal */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormulario && (
-                    <motion.div
-                        className="fixed inset-0 z-[70] flex overflow-y-auto p-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => !subiendo && setMostrarFormulario(false)}
+            <ModalHoja
+                abierto={mostrarFormulario}
+                alCerrar={() => !subiendo && setMostrarFormulario(false)}
+                titulo={editando ? 'Editar Pista' : 'Añadir Nueva Pista'}
+                ancho="max-w-lg"
+                bloqueado={subiendo}
+                pie={
+                    <button
+                        onClick={guardar}
+                        disabled={subiendo}
+                        className="btn-primario w-full justify-center py-2.5"
                     >
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-
-                        <motion.div
-                            className="relative card-modal w-full max-w-lg p-6 z-10 space-y-4 m-auto max-h-[calc(100vh-2rem)] overflow-y-auto"
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {/* Encabezado modal */}
-                            <div className="flex items-center justify-between border-b borde-subtle pb-3">
-                                <h3 className="font-display font-bold text-lg text-secundario">
-                                    {editando ? 'Editar Pista' : 'Añadir Nueva Pista'}
-                                </h3>
-                                <button
-                                    onClick={() => !subiendo && setMostrarFormulario(false)}
-                                    disabled={subiendo}
-                                    className="btn-ghost"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Alerta de error si existe */}
-                            {errorSubida && (
-                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                    <span>{errorSubida}</span>
-                                </div>
-                            )}
-
-                            {/* Campos del formulario */}
-                            <div className="space-y-3">
-                                {/* Título */}
-                                <div>
-                                    <label className="label-campo">Título de la Obra *</label>
-                                    <input
-                                        className="input-campo"
-                                        value={form.titulo}
-                                        onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
-                                        placeholder="Ej: Ave Verum Corpus"
-                                        disabled={subiendo}
-                                    />
-                                </div>
-
-                                {/* Compositor y Duración */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="label-campo">Compositor / Arreglista</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.compositor}
-                                            onChange={e => setForm(p => ({ ...p, compositor: e.target.value }))}
-                                            placeholder="Ej: W. A. Mozart"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Duración (mm:ss)</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.duracion}
-                                            onChange={e => setForm(p => ({ ...p, duracion: e.target.value }))}
-                                            placeholder="Ej: 3:24"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Archivo de Audio .mp3 */}
-                                <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
-                                    <label className="label-campo text-vinotinto dark:text-khaki">
-                                        <span className="flex items-center gap-1.5 font-semibold">
-                                            <Upload className="w-3.5 h-3.5" /> Archivo de Audio (.mp3)
-                                        </span>
-                                    </label>
-                                    <BotonSubirArchivo
-                                        id="input-audio-mp3"
-                                        accept="audio/mp3,audio/mpeg,.mp3"
-                                        etiqueta="Elegir archivo"
-                                        alElegir={manejarArchivoAudio}
-                                        ocupado={subiendo}
-                                    />
-                                    {archivoAudio && (
-                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono">
-                                            ✓ Seleccionado: {archivoAudio.name} ({(archivoAudio.size / (1024 * 1024)).toFixed(2)} MB)
-                                        </p>
-                                    )}
-
-                                    {/* Alternativa: URL directa */}
-                                    <div className="pt-2 border-t border-vinotinto/10 dark:border-khaki/10">
-                                        <label className="text-[11px] t-muted block mb-1">
-                                            O pega una URL directa de audio (opcional si ya seleccionaste archivo):
-                                        </label>
-                                        <input
-                                            className="input-campo text-xs py-1.5"
-                                            value={form.urlAudio}
-                                            onChange={e => setForm(p => ({ ...p, urlAudio: e.target.value }))}
-                                            placeholder="https://..."
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                    {/* Portada (Opcional) */}
-                                    <div>
-                                        <label className="label-campo">Imagen de Portada (Opcional)</label>
-                                        <BotonSubirArchivo
-                                            id="input-portada-audio"
-                                            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
-                                            etiqueta="Elegir imagen"
-                                            alElegir={manejarArchivoPortada}
-                                            ocupado={subiendo}
-                                        />
-                                    {archivoPortada && (
-                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1">
-                                            ✓ Portada: {archivoPortada.name}
-                                        </p>
-                                    )}
-                                    <input
-                                        className="input-campo text-xs mt-1.5"
-                                        value={form.portada}
-                                        onChange={e => setForm(p => ({ ...p, portada: e.target.value }))}
-                                        placeholder="O pega una URL de imagen: https://..."
-                                        disabled={subiendo}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Botón de guardado */}
-                            <button
-                                onClick={guardar}
-                                disabled={subiendo}
-                                className="btn-primario w-full justify-center py-2.5 mt-2"
-                            >
-                                {subiendo ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Storage...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Pista'}
-                                    </>
-                                )}
-                            </button>
-                        </motion.div>
-                    </motion.div>
+                        {subiendo ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Storage...
+                            </>
+                        ) : (
+                            <>
+                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Pista'}
+                            </>
+                        )}
+                    </button>
+                }
+            >
+                {/* Alerta de error si existe */}
+                {errorSubida && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{errorSubida}</span>
+                    </div>
                 )}
-            </AnimatePresence>, document.body)}
+
+                {/* Campos del formulario */}
+                <div className="space-y-3">
+                    {/* Título */}
+                    <div>
+                        <label className="label-campo">Título de la Obra *</label>
+                        <input
+                            className="input-campo"
+                            value={form.titulo}
+                            onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
+                            placeholder="Ej: Ave Verum Corpus"
+                            disabled={subiendo}
+                        />
+                    </div>
+
+                    {/* Compositor y Duración */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0">
+                            <label className="label-campo">Compositor / Arreglista</label>
+                            <input
+                                className="input-campo"
+                                value={form.compositor}
+                                onChange={e => setForm(p => ({ ...p, compositor: e.target.value }))}
+                                placeholder="Ej: W. A. Mozart"
+                                disabled={subiendo}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Duración (mm:ss)</label>
+                            <input
+                                className="input-campo"
+                                value={form.duracion}
+                                onChange={e => setForm(p => ({ ...p, duracion: e.target.value }))}
+                                placeholder="Ej: 3:24"
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Archivo de Audio .mp3 */}
+                    <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
+                        <label className="label-campo text-vinotinto dark:text-khaki">
+                            <span className="flex items-center gap-1.5 font-semibold">
+                                <Upload className="w-3.5 h-3.5" /> Archivo de Audio (.mp3)
+                            </span>
+                        </label>
+                        <BotonSubirArchivo
+                            id="input-audio-mp3"
+                            accept="audio/mp3,audio/mpeg,.mp3"
+                            etiqueta="Elegir archivo"
+                            alElegir={manejarArchivoAudio}
+                            ocupado={subiendo}
+                        />
+                        {/* break-all: los nombres de archivo no tienen espacios donde
+                            cortar, y sin esto la palabra larga empuja el contenedor
+                            y aparece el scroll horizontal. */}
+                        {archivoAudio && (
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono break-all">
+                                ✓ Seleccionado: {archivoAudio.name}
+                                <span className="whitespace-nowrap"> ({(archivoAudio.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                            </p>
+                        )}
+
+                        {/* Alternativa: URL directa */}
+                        <div className="pt-2 border-t border-vinotinto/10 dark:border-khaki/10">
+                            <label className="text-[11px] t-muted block mb-1">
+                                O pega una URL directa de audio (opcional si ya seleccionaste archivo):
+                            </label>
+                            <input
+                                className="input-campo text-xs py-1.5"
+                                value={form.urlAudio}
+                                onChange={e => setForm(p => ({ ...p, urlAudio: e.target.value }))}
+                                placeholder="https://..."
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Portada (Opcional) */}
+                    <div>
+                        <label className="label-campo">Imagen de Portada (Opcional)</label>
+                        <BotonSubirArchivo
+                            id="input-portada-audio"
+                            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
+                            etiqueta="Elegir imagen"
+                            alElegir={manejarArchivoPortada}
+                            ocupado={subiendo}
+                        />
+                        {archivoPortada && (
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1 break-all">
+                                ✓ Portada: {archivoPortada.name}
+                            </p>
+                        )}
+                        <input
+                            className="input-campo text-xs mt-1.5"
+                            value={form.portada}
+                            onChange={e => setForm(p => ({ ...p, portada: e.target.value }))}
+                            placeholder="O pega una URL de imagen: https://..."
+                            disabled={subiendo}
+                        />
+                    </div>
+                </div>
+            </ModalHoja>
         </div>
     );
 };
@@ -2792,8 +2961,10 @@ const ModuloMedia = () => {
                                                 </button>
                                                 {/* Miniatura */}
                                                 {v.tipoOrigen === 'archivo' ? (
-                                                    <div className="w-12 h-8 sm:w-20 sm:h-12 rounded-lg bg-black flex items-center justify-center flex-shrink-0 border border-black/10 dark:border-white/5">
-                                                        <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/80" />
+                                                    // fondo-medio en vez de negro: en modo día el
+                                                    // negro recortaba contra el resto de tarjetas.
+                                                    <div className="w-12 h-8 sm:w-20 sm:h-12 rounded-lg bg-fondo-medio flex items-center justify-center flex-shrink-0 border border-black/10 dark:border-white/5">
+                                                        <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 t-muted" />
                                                     </div>
                                                 ) : (
                                                     <img
@@ -2983,159 +3154,151 @@ const ModuloMedia = () => {
             )}
 
             {/* ---- FORMULARIO: Video ---- */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormVideo && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormVideo(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">{editandoVideo ? 'Editar' : 'Añadir'} Video</h3>
-                                <button onClick={() => setMostrarFormVideo(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
-                            </div>
-                            <div className="space-y-3">
-                                <div><label className="label-campo">Título *</label><input className="input-campo" value={formVideo.titulo} onChange={e => setFormVideo(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del video" /></div>
-                                <div>
-                                    <label className="label-campo">Origen del video</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'youtube' }))}
-                                            className={`h-9 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'youtube' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
-                                        >
-                                            YouTube
-                                        </button>
-                                        <button
-                                            onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'archivo' }))}
-                                            className={`h-9 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'archivo' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
-                                        >
-                                            Archivo propio
-                                        </button>
-                                    </div>
-                                </div>
-                                {formVideo.tipoOrigen === 'youtube' ? (
-                                    <>
-                                        <div><label className="label-campo">URL o ID de YouTube *</label><input className="input-campo" value={formVideo.urlYoutube} onChange={e => setFormVideo(p => ({ ...p, urlYoutube: e.target.value }))} placeholder="https://www.youtube.com/watch?v=..." /></div>
-                                        {extraerYoutubeId(formVideo.urlYoutube) && (
-                                            <div className="rounded-lg overflow-hidden border borde-subtle">
-                                                <img
-                                                    src={`https://img.youtube.com/vi/${extraerYoutubeId(formVideo.urlYoutube)}/mqdefault.jpg`}
-                                                    alt="Vista previa"
-                                                    className="w-full h-28 object-cover"
-                                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                                />
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    <>
-                                        <div>
-                                            <label className="label-campo">Video (.mp4/.webm) *</label>
-                                            <div className="flex flex-col sm:flex-row gap-2">
-                                                <BotonSubirArchivo
-                                                    id="input-video-archivo"
-                                                    accept="video/*"
-                                                    etiqueta={formVideo.videoArchivo ? 'Reemplazar video' : 'Subir video'}
-                                                    alElegir={f => f && subirVideoLocal(f)}
-                                                    ocupado={subiendoVideo}
-                                                />
-                                                <input className="input-campo flex-1 min-w-0" value={formVideo.videoArchivo} onChange={e => setFormVideo(p => ({ ...p, videoArchivo: e.target.value }))} placeholder="o pega la URL del archivo" />
-                                            </div>
-                                            {formVideo.videoArchivo && (
-                                                <video
-                                                    key={formVideo.videoArchivo}
-                                                    src={formVideo.videoArchivo}
-                                                    preload="metadata"
-                                                    controls
-                                                    className="mt-2 w-full h-32 object-cover rounded-lg border borde-subtle bg-black"
-                                                />
-                                            )}
-                                        </div>
-                                        <p className="text-[11px] t-muted-low -mt-1">La duración se detecta automáticamente al subir el archivo.</p>
-                                    </>
-                                )}
-                                <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formVideo.descripcion} onChange={e => setFormVideo(p => ({ ...p, descripcion: e.target.value }))} placeholder="Lugar, fecha, evento..." /></div>
-                                <div><label className="label-campo">Categoría</label>
-                                    <select className="input-campo" value={formVideo.categoria} onChange={e => setFormVideo(p => ({ ...p, categoria: e.target.value }))}>
-                                        {CATEGORIAS_VIDEO.map(c => <option key={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Duración (ej: 4:35)</label><input className="input-campo" value={formVideo.duracion} onChange={e => setFormVideo(p => ({ ...p, duracion: e.target.value }))} placeholder="4:35" /></div>
-                                    <div className="flex items-end pb-0.5"><button onClick={() => setFormVideo(p => ({ ...p, destacado: !p.destacado }))}
-                                        className={`w-full h-[38px] flex items-center justify-center gap-2 rounded-xl border text-sm transition-all ${
-                                            formVideo.destacado ? 'bg-khaki/15 text-khaki border-khaki/40' : 'borde-subtle t-muted hover:borde-medium'
-                                        }`}>
-                                        <Star className="w-4 h-4" /> Destacado
-                                    </button></div>
-                                </div>
-                                <ToggleCampo
-                                    activo={formVideo.activo}
-                                    alCambiar={() => setFormVideo(p => ({ ...p, activo: !p.activo }))}
-                                    icono={<Eye className="w-4 h-4" />}
-                                    etiqueta="Visible en la web"
-                                    descripcion="Si está apagado, el video se oculta del sitio público"
-                                />
-                            </div>
-                            <button onClick={guardarVideo} className="btn-primario w-full justify-center">
-                                <Check className="w-4 h-4" /> {editandoVideo ? 'Guardar Cambios' : 'Añadir Video'}
+            <ModalHoja
+                abierto={mostrarFormVideo}
+                alCerrar={() => setMostrarFormVideo(false)}
+                titulo={`${editandoVideo ? 'Editar' : 'Añadir'} Video`}
+                pie={
+                    <button onClick={guardarVideo} className="btn-primario w-full justify-center">
+                        <Check className="w-4 h-4" /> {editandoVideo ? 'Guardar Cambios' : 'Añadir Video'}
+                    </button>
+                }
+            >
+                <div className="space-y-3">
+                    <div><label className="label-campo">Título *</label><input className="input-campo" value={formVideo.titulo} onChange={e => setFormVideo(p => ({ ...p, titulo: e.target.value }))} placeholder="Nombre del video" /></div>
+                    <div>
+                        <label className="label-campo">Origen del video</label>
+                        {/* min-w-0 + truncate: a 2 columnas en movil cada celda ronda
+                            136px, y "Archivo propio" se partia en dos lineas. */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'youtube' }))}
+                                className={`h-9 min-w-0 px-2 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'youtube' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
+                            >
+                                <span className="block truncate">YouTube</span>
                             </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
+                            <button
+                                onClick={() => setFormVideo(p => ({ ...p, tipoOrigen: 'archivo' }))}
+                                className={`h-9 min-w-0 px-2 rounded-xl border text-xs font-medium transition-all ${formVideo.tipoOrigen === 'archivo' ? 'border-vinotinto bg-vinotinto/10 text-vinotinto' : 'border-borde-subtle bg-sutil t-muted'}`}
+                            >
+                                <span className="block truncate">Archivo propio</span>
+                            </button>
+                        </div>
+                    </div>
+                    {formVideo.tipoOrigen === 'youtube' ? (
+                        <>
+                            <div><label className="label-campo">URL o ID de YouTube *</label><input className="input-campo" value={formVideo.urlYoutube} onChange={e => setFormVideo(p => ({ ...p, urlYoutube: e.target.value }))} placeholder="https://www.youtube.com/watch?v=..." /></div>
+                            {extraerYoutubeId(formVideo.urlYoutube) && (
+                                <div className="rounded-lg overflow-hidden border borde-subtle">
+                                    <img
+                                        src={`https://img.youtube.com/vi/${extraerYoutubeId(formVideo.urlYoutube)}/mqdefault.jpg`}
+                                        alt="Vista previa"
+                                        className="w-full h-28 object-cover"
+                                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <div>
+                                <label className="label-campo">Video (.mp4/.webm) *</label>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <BotonSubirArchivo
+                                        id="input-video-archivo"
+                                        accept="video/*"
+                                        etiqueta={formVideo.videoArchivo ? 'Reemplazar video' : 'Subir video'}
+                                        alElegir={f => f && subirVideoLocal(f)}
+                                        ocupado={subiendoVideo}
+                                    />
+                                    <input className="input-campo flex-1 min-w-0" value={formVideo.videoArchivo} onChange={e => setFormVideo(p => ({ ...p, videoArchivo: e.target.value }))} placeholder="o pega la URL del archivo" />
+                                </div>
+                                {formVideo.videoArchivo && (
+                                    <video
+                                        key={formVideo.videoArchivo}
+                                        src={formVideo.videoArchivo}
+                                        preload="metadata"
+                                        controls
+                                        className="mt-2 w-full h-32 object-cover rounded-lg border borde-subtle bg-transparent"
+                                    />
+                                )}
+                            </div>
+                            <p className="text-[11px] t-muted-low -mt-1">La duración se detecta automáticamente al subir el archivo.</p>
+                        </>
+                    )}
+                    <div><label className="label-campo">Descripción</label><textarea rows={2} className="input-campo resize-none" value={formVideo.descripcion} onChange={e => setFormVideo(p => ({ ...p, descripcion: e.target.value }))} placeholder="Lugar, fecha, evento..." /></div>
+                    <div><label className="label-campo">Categoría</label>
+                        <select className="input-campo" value={formVideo.categoria} onChange={e => setFormVideo(p => ({ ...p, categoria: e.target.value }))}>
+                            {CATEGORIAS_VIDEO.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="label-campo">Duración (ej: 4:35)</label><input className="input-campo" value={formVideo.duracion} onChange={e => setFormVideo(p => ({ ...p, duracion: e.target.value }))} placeholder="4:35" /></div>
+                        <div className="min-w-0 flex items-end pb-0.5"><button onClick={() => setFormVideo(p => ({ ...p, destacado: !p.destacado }))}
+                            className={`w-full h-[38px] flex items-center justify-center gap-2 rounded-xl border text-sm transition-all ${
+                                formVideo.destacado ? 'bg-khaki/15 text-khaki border-khaki/40' : 'borde-subtle t-muted hover:borde-medium'
+                            }`}>
+                            <Star className="w-4 h-4" /> Destacado
+                        </button></div>
+                    </div>
+                    <ToggleCampo
+                        activo={formVideo.activo}
+                        alCambiar={() => setFormVideo(p => ({ ...p, activo: !p.activo }))}
+                        icono={<Eye className="w-4 h-4" />}
+                        etiqueta="Visible en la web"
+                        descripcion="Si está apagado, el video se oculta del sitio público"
+                    />
+                </div>
+            </ModalHoja>
 
             {/* ---- FORMULARIO: Foto ---- */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormFoto && (
-                    <motion.div className="fixed inset-0 z-[70] flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMostrarFormFoto(false)}>
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-                        <motion.div className="relative card-modal w-full max-w-md p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto sin-scrollbar" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-display font-bold text-lg text-secundario">{editandoFoto ? 'Editar' : 'Añadir'} Foto</h3>
-                                <button onClick={() => setMostrarFormFoto(false)} className="btn-ghost"><X className="w-5 h-5" /></button>
-                            </div>
-                            <div className="space-y-3">
-                                <div><label className="label-campo">Título *</label><input className="input-campo" value={formFoto.titulo} onChange={e => setFormFoto(p => ({ ...p, titulo: e.target.value }))} placeholder="Descripción breve de la foto" /></div>
-                                <div><label className="label-campo">URL de la imagen *</label>
-                                    <div className="flex flex-col sm:flex-row gap-2">
-                                        <BotonSubirArchivo
-                                            id="input-foto-archivo"
-                                            accept="image/*"
-                                            etiqueta="Subir imagen"
-                                            alElegir={f => f && subirImagen(f)}
-                                            ocupado={subiendoFoto}
-                                        />
-                                        <input className="input-campo flex-1 min-w-0" value={formFoto.src} onChange={e => setFormFoto(p => ({ ...p, src: e.target.value }))} placeholder="https://..." />
-                                    </div>
-                                </div>
-                                {formFoto.src && (
-                                    <div className="rounded-lg overflow-hidden border borde-subtle">
-                                        <img src={formFoto.src} alt="Vista previa" className="w-full h-28 object-cover" />
-                                    </div>
-                                )}
-                                <div><label className="label-campo">Categoría</label>
-                                    <select className="input-campo" value={formFoto.categoria} onChange={e => setFormFoto(p => ({ ...p, categoria: e.target.value }))}>
-                                        {CATEGORIAS_FOTO.map(c => <option key={c}>{c}</option>)}
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="label-campo">Texto del enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceTexto} onChange={e => setFormFoto(p => ({ ...p, enlaceTexto: e.target.value }))} placeholder="Ver reseña del concierto" /></div>
-                                    <div><label className="label-campo">URL de enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceUrl} onChange={e => setFormFoto(p => ({ ...p, enlaceUrl: e.target.value }))} placeholder="https://..." /></div>
-                                </div>
-                                <ToggleCampo
-                                    activo={formFoto.activo}
-                                    alCambiar={() => setFormFoto(p => ({ ...p, activo: !p.activo }))}
-                                    icono={<Eye className="w-4 h-4" />}
-                                    etiqueta="Visible en la web"
-                                    descripcion="Si está apagado, la foto se oculta del sitio público"
-                                />
-                            </div>
-                            <button onClick={guardarFoto} className="btn-primario w-full justify-center">
-                                <Check className="w-4 h-4" /> {editandoFoto ? 'Guardar Cambios' : 'Añadir Foto'}
-                            </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>, document.body)}
+            <ModalHoja
+                abierto={mostrarFormFoto}
+                alCerrar={() => setMostrarFormFoto(false)}
+                titulo={`${editandoFoto ? 'Editar' : 'Añadir'} Foto`}
+                pie={
+                    <button onClick={guardarFoto} className="btn-primario w-full justify-center">
+                        <Check className="w-4 h-4" /> {editandoFoto ? 'Guardar Cambios' : 'Añadir Foto'}
+                    </button>
+                }
+            >
+                <div className="space-y-3">
+                    <div><label className="label-campo">Título *</label><input className="input-campo" value={formFoto.titulo} onChange={e => setFormFoto(p => ({ ...p, titulo: e.target.value }))} placeholder="Descripción breve de la foto" /></div>
+                    <div><label className="label-campo">URL de la imagen *</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <BotonSubirArchivo
+                                id="input-foto-archivo"
+                                accept="image/*"
+                                etiqueta="Subir imagen"
+                                alElegir={f => f && subirImagen(f)}
+                                ocupado={subiendoFoto}
+                            />
+                            <input className="input-campo flex-1 min-w-0" value={formFoto.src} onChange={e => setFormFoto(p => ({ ...p, src: e.target.value }))} placeholder="https://..." />
+                        </div>
+                    </div>
+                    {formFoto.src && (
+                        <div className="rounded-lg overflow-hidden border borde-subtle">
+                            <img src={formFoto.src} alt="Vista previa" className="w-full h-28 object-cover" />
+                        </div>
+                    )}
+                    <div><label className="label-campo">Categoría</label>
+                        <select className="input-campo" value={formFoto.categoria} onChange={e => setFormFoto(p => ({ ...p, categoria: e.target.value }))}>
+                            {CATEGORIAS_FOTO.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0"><label className="label-campo">Texto del enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceTexto} onChange={e => setFormFoto(p => ({ ...p, enlaceTexto: e.target.value }))} placeholder="Ver reseña del concierto" /></div>
+                        <div className="min-w-0"><label className="label-campo">URL de enlace (opcional)</label><input className="input-campo" value={formFoto.enlaceUrl} onChange={e => setFormFoto(p => ({ ...p, enlaceUrl: e.target.value }))} placeholder="https://..." /></div>
+                    </div>
+                    <ToggleCampo
+                        activo={formFoto.activo}
+                        alCambiar={() => setFormFoto(p => ({ ...p, activo: !p.activo }))}
+                        icono={<Eye className="w-4 h-4" />}
+                        etiqueta="Visible en la web"
+                        descripcion="Si está apagado, la foto se oculta del sitio público"
+                    />
+                </div>
+            </ModalHoja>
         </div>
     );
 };
@@ -3558,323 +3721,301 @@ const ModuloPartituras = () => {
             </div>
 
             {/* Formulario modal */}
-            {createPortal(<AnimatePresence>
-                {mostrarFormulario && (
-                    <motion.div
-                        className="fixed inset-0 z-[70] flex overflow-y-auto p-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => !subiendo && setMostrarFormulario(false)}
+            <ModalHoja
+                abierto={mostrarFormulario}
+                alCerrar={() => !subiendo && setMostrarFormulario(false)}
+                titulo={editando ? 'Editar Partitura' : 'Añadir Nueva Partitura'}
+                ancho="max-w-2xl"
+                bloqueado={subiendo}
+                pie={
+                    <button
+                        onClick={guardar}
+                        disabled={subiendo}
+                        className="btn-primario w-full justify-center py-2.5"
                     >
-                        <div className="absolute inset-0 bg-black/60 dark:bg-black/70 backdrop-blur-sm" />
-
-                        <motion.div
-                            className="relative card-modal w-full max-w-2xl p-6 z-10 space-y-4 m-auto max-h-[calc(100vh-2rem)] overflow-y-auto"
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {/* Encabezado modal */}
-                            <div className="flex items-center justify-between border-b borde-subtle pb-3">
-                                <h3 className="font-display font-bold text-lg text-secundario">
-                                    {editando ? 'Editar Partitura' : 'Añadir Nueva Partitura'}
-                                </h3>
-                                <button
-                                    onClick={() => !subiendo && setMostrarFormulario(false)}
-                                    disabled={subiendo}
-                                    className="btn-ghost"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Alerta de error */}
-                            {errorSubida && (
-                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                    <span>{errorSubida}</span>
-                                </div>
-                            )}
-
-                            {/* Campos del formulario */}
-                            <div className="space-y-3">
-                                {/* Título y Compositor */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="label-campo">Título de la Obra *</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.titulo}
-                                            onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
-                                            placeholder="Ej: Ave Verum Corpus"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Compositor *</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.compositor}
-                                            onChange={e => setForm(p => ({ ...p, compositor: e.target.value }))}
-                                            placeholder="Ej: W. A. Mozart"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Arreglista */}
-                                <div>
-                                    <label className="label-campo">Arreglista (Opcional)</label>
-                                    <input
-                                        className="input-campo"
-                                        value={form.arreglista}
-                                        onChange={e => setForm(p => ({ ...p, arreglista: e.target.value }))}
-                                        placeholder="Ej: Carlos López"
-                                        disabled={subiendo}
-                                    />
-                                </div>
-
-                                {/* Cuerdas */}
-                                <div>
-                                    <label className="label-campo">Cuerdas que la cantan *</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {CUERDAS_PARTITURA.map(c => {
-                                            const seleccionada = form.cuerdas.includes(c);
-                                            return (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => toggleCuerda(c)}
-                                                    disabled={subiendo}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                                                        seleccionada
-                                                            ? 'bg-vinotinto/15 text-vinotinto dark:text-khaki border-vinotinto/40 dark:border-khaki/40'
-                                                            : 'bg-sutil t-muted border-borde-subtle hover:border-vinotinto/40'
-                                                    }`}
-                                                >
-                                                    {seleccionada ? '✓ ' : ''}{c}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Dificultad, Estilo, Época */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                        <label className="label-campo">Dificultad</label>
-                                        <select
-                                            className="input-campo"
-                                            value={form.dificultad}
-                                            onChange={e => setForm(p => ({ ...p, dificultad: e.target.value }))}
-                                            disabled={subiendo}
-                                        >
-                                            {DIFICULTADES_PARTITURA.map(d => <option key={d}>{d}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Estilo</label>
-                                        <select
-                                            className="input-campo"
-                                            value={form.estilo}
-                                            onChange={e => setForm(p => ({ ...p, estilo: e.target.value }))}
-                                            disabled={subiendo}
-                                        >
-                                            {ESTILOS_PARTITURA.map(e => <option key={e}>{e}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Época</label>
-                                        <select
-                                            className="input-campo"
-                                            value={form.epoca}
-                                            onChange={e => setForm(p => ({ ...p, epoca: e.target.value }))}
-                                            disabled={subiendo}
-                                        >
-                                            {EPOCAS_PARTITURA.map(ep => <option key={ep}>{ep}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Tonalidad, Compás, Páginas */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                        <label className="label-campo">Tonalidad</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.tonalidad}
-                                            onChange={e => setForm(p => ({ ...p, tonalidad: e.target.value }))}
-                                            placeholder="Sol mayor"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Compás</label>
-                                        <input
-                                            className="input-campo"
-                                            value={form.compas}
-                                            onChange={e => setForm(p => ({ ...p, compas: e.target.value }))}
-                                            placeholder="4/4"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="label-campo">Páginas</label>
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            className="input-campo"
-                                            value={form.paginas}
-                                            onChange={e => setForm(p => ({ ...p, paginas: e.target.value }))}
-                                            placeholder="4"
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Descripción */}
-                                <div>
-                                    <label className="label-campo">Descripción</label>
-                                    <textarea
-                                        rows={2}
-                                        className="input-campo resize-none"
-                                        value={form.descripcion}
-                                        onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))}
-                                        placeholder="Breve descripción de la obra o anotaciones de ensayo..."
-                                        disabled={subiendo}
-                                    />
-                                </div>
-
-                                {/* Archivo PDF */}
-                                <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
-                                    <label className="label-campo text-vinotinto dark:text-khaki">
-                                        <span className="flex items-center gap-1.5 font-semibold">
-                                            <FileText className="w-3.5 h-3.5" /> Partitura (PDF) *
-                                        </span>
-                                    </label>
-                                    <BotonSubirArchivo
-                                        id="input-partitura-pdf"
-                                        accept="application/pdf,.pdf"
-                                        etiqueta="Elegir PDF"
-                                        alElegir={manejarArchivoPdf}
-                                        ocupado={subiendo}
-                                    />
-                                    {archivoPdf && (
-                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono">
-                                            ✓ Seleccionado: {archivoPdf.name} ({(archivoPdf.size / (1024 * 1024)).toFixed(2)} MB)
-                                        </p>
-                                    )}
-                                    <div className="pt-2 border-t border-vinotinto/10 dark:border-khaki/10">
-                                        <label className="text-[11px] t-muted block mb-1">
-                                            O pega una URL directa del PDF (opcional si ya seleccionaste archivo):
-                                        </label>
-                                        <input
-                                            className="input-campo text-xs py-1.5"
-                                            value={form.urlPdf}
-                                            onChange={e => setForm(p => ({ ...p, urlPdf: e.target.value }))}
-                                            placeholder="https://..."
-                                            disabled={subiendo}
-                                        />
-                                    </div>
-                                </div>
-
-                                    {/* Portada */}
-                                    <div>
-                                        <label className="label-campo">Imagen de Portada (Opcional)</label>
-                                        <BotonSubirArchivo
-                                            id="input-portada-partitura"
-                                            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
-                                            etiqueta="Elegir imagen"
-                                            alElegir={manejarArchivoPortada}
-                                            ocupado={subiendo}
-                                        />
-                                    {archivoPortada && (
-                                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1">
-                                            ✓ Portada: {archivoPortada.name}
-                                        </p>
-                                    )}
-                                    <input
-                                        className="input-campo text-xs mt-1.5"
-                                        value={form.urlPortada}
-                                        onChange={e => setForm(p => ({ ...p, urlPortada: e.target.value }))}
-                                        placeholder="O pega una URL de imagen: https://..."
-                                        disabled={subiendo}
-                                    />
-                                </div>
-
-                                {/* Toggles: Descargable y Ocultar */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setForm(p => ({ ...p, descargable: !p.descargable }))}
-                                        disabled={subiendo}
-                                        className={`flex items-center gap-3 rounded-xl p-3 border transition-all ${
-                                            form.descargable
-                                                ? 'bg-khaki/10 border-khaki/40'
-                                                : 'bg-sutil border-borde-subtle'
-                                        }`}
-                                    >
-                                        <Download className={`w-4 h-4 ${form.descargable ? 'text-khaki' : 't-muted'}`} />
-                                        <span className="flex-1 text-left">
-                                            <span className="block text-sm font-medium text-secundario">Descargable</span>
-                                            <span className="block text-[11px] t-muted">Mostrar botón "Descargar" al público</span>
-                                        </span>
-                                        <span
-                                            className={`toggle-switch ${form.descargable ? 'bg-vinotinto' : 'bg-sutil-hover'}`}
-                                            role="switch"
-                                            aria-checked={form.descargable}
-                                        >
-                                            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.descargable ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                        </span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setForm(p => ({ ...p, activo: !p.activo }))}
-                                        disabled={subiendo}
-                                        className={`flex items-center gap-3 rounded-xl p-3 border transition-all ${
-                                            form.activo
-                                                ? 'bg-vinotinto/5 dark:bg-khaki/5 border-vinotinto/30 dark:border-khaki/30'
-                                                : 'bg-sutil border-borde-subtle'
-                                        }`}
-                                    >
-                                        <EyeOff className={`w-4 h-4 ${form.activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`} />
-                                        <span className="flex-1 text-left">
-                                            <span className="block text-sm font-medium text-secundario">Ocultar</span>
-                                            <span className="block text-[11px] t-muted">{form.activo ? 'Visible en la web (ON)' : 'Oculta temporalmente'}</span>
-                                        </span>
-                                        <span
-                                            className={`toggle-switch ${form.activo ? 'bg-vinotinto' : 'bg-sutil-hover'}`}
-                                            role="switch"
-                                            aria-checked={form.activo}
-                                        >
-                                            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.activo ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                        </span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Botón de guardado */}
-                            <button
-                                onClick={guardar}
-                                disabled={subiendo}
-                                className="btn-primario w-full justify-center py-2.5 mt-2"
-                            >
-                                {subiendo ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Storage...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Partitura'}
-                                    </>
-                                )}
-                            </button>
-                        </motion.div>
-                    </motion.div>
+                        {subiendo ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Storage...
+                            </>
+                        ) : (
+                            <>
+                                <Check className="w-4 h-4" /> {editando ? 'Guardar Cambios' : 'Añadir Partitura'}
+                            </>
+                        )}
+                    </button>
+                }
+            >
+                {/* Alerta de error */}
+                {errorSubida && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>{errorSubida}</span>
+                    </div>
                 )}
-            </AnimatePresence>, document.body)}
+
+                {/* Campos del formulario */}
+                <div className="space-y-3">
+                    {/* Título y Compositor */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="min-w-0">
+                            <label className="label-campo">Título de la Obra *</label>
+                            <input
+                                className="input-campo"
+                                value={form.titulo}
+                                onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
+                                placeholder="Ej: Ave Verum Corpus"
+                                disabled={subiendo}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Compositor *</label>
+                            <input
+                                className="input-campo"
+                                value={form.compositor}
+                                onChange={e => setForm(p => ({ ...p, compositor: e.target.value }))}
+                                placeholder="Ej: W. A. Mozart"
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Arreglista */}
+                    <div>
+                        <label className="label-campo">Arreglista (Opcional)</label>
+                        <input
+                            className="input-campo"
+                            value={form.arreglista}
+                            onChange={e => setForm(p => ({ ...p, arreglista: e.target.value }))}
+                            placeholder="Ej: Carlos López"
+                            disabled={subiendo}
+                        />
+                    </div>
+
+                    {/* Cuerdas */}
+                    <div>
+                        <label className="label-campo">Cuerdas que la cantan *</label>
+                        <div className="flex flex-wrap gap-2">
+                            {CUERDAS_PARTITURA.map(c => {
+                                const seleccionada = form.cuerdas.includes(c);
+                                return (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => toggleCuerda(c)}
+                                        disabled={subiendo}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                            seleccionada
+                                                ? 'bg-vinotinto/15 text-vinotinto dark:text-khaki border-vinotinto/40 dark:border-khaki/40'
+                                                : 'bg-sutil t-muted border-borde-subtle hover:border-vinotinto/40'
+                                        }`}
+                                    >
+                                        {seleccionada ? '✓ ' : ''}{c}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Dificultad, Estilo, Época */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="min-w-0">
+                            <label className="label-campo">Dificultad</label>
+                            <select
+                                className="input-campo"
+                                value={form.dificultad}
+                                onChange={e => setForm(p => ({ ...p, dificultad: e.target.value }))}
+                                disabled={subiendo}
+                            >
+                                {DIFICULTADES_PARTITURA.map(d => <option key={d}>{d}</option>)}
+                            </select>
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Estilo</label>
+                            <select
+                                className="input-campo"
+                                value={form.estilo}
+                                onChange={e => setForm(p => ({ ...p, estilo: e.target.value }))}
+                                disabled={subiendo}
+                            >
+                                {ESTILOS_PARTITURA.map(e => <option key={e}>{e}</option>)}
+                            </select>
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Época</label>
+                            <select
+                                className="input-campo"
+                                value={form.epoca}
+                                onChange={e => setForm(p => ({ ...p, epoca: e.target.value }))}
+                                disabled={subiendo}
+                            >
+                                {EPOCAS_PARTITURA.map(ep => <option key={ep}>{ep}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Tonalidad, Compás, Páginas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="min-w-0">
+                            <label className="label-campo">Tonalidad</label>
+                            <input
+                                className="input-campo"
+                                value={form.tonalidad}
+                                onChange={e => setForm(p => ({ ...p, tonalidad: e.target.value }))}
+                                placeholder="Sol mayor"
+                                disabled={subiendo}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Compás</label>
+                            <input
+                                className="input-campo"
+                                value={form.compas}
+                                onChange={e => setForm(p => ({ ...p, compas: e.target.value }))}
+                                placeholder="4/4"
+                                disabled={subiendo}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <label className="label-campo">Páginas</label>
+                            <input
+                                type="number"
+                                min={1}
+                                className="input-campo"
+                                value={form.paginas}
+                                onChange={e => setForm(p => ({ ...p, paginas: e.target.value }))}
+                                placeholder="4"
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Descripción */}
+                    <div>
+                        <label className="label-campo">Descripción</label>
+                        <textarea
+                            rows={2}
+                            className="input-campo resize-none"
+                            value={form.descripcion}
+                            onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))}
+                            placeholder="Breve descripción de la obra o anotaciones de ensayo..."
+                            disabled={subiendo}
+                        />
+                    </div>
+
+                    {/* Archivo PDF */}
+                    <div className="border border-vinotinto/20 dark:border-khaki/25 rounded-xl p-3.5 bg-vinotinto/5 dark:bg-khaki/5 space-y-2">
+                        <label className="label-campo text-vinotinto dark:text-khaki">
+                            <span className="flex items-center gap-1.5 font-semibold">
+                                <FileText className="w-3.5 h-3.5" /> Partitura (PDF) *
+                            </span>
+                        </label>
+                        <BotonSubirArchivo
+                            id="input-partitura-pdf"
+                            accept="application/pdf,.pdf"
+                            etiqueta="Elegir PDF"
+                            alElegir={manejarArchivoPdf}
+                            ocupado={subiendo}
+                        />
+                        {/* break-all: los nombres largos de PDF son la causa mas
+                            frecuente de desborde en este formulario. */}
+                        {archivoPdf && (
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono break-all">
+                                ✓ Seleccionado: {archivoPdf.name}
+                                <span className="whitespace-nowrap"> ({(archivoPdf.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                            </p>
+                        )}
+                        <div className="pt-2 border-t border-vinotinto/10 dark:border-khaki/10">
+                            <label className="text-[11px] t-muted block mb-1">
+                                O pega una URL directa del PDF (opcional si ya seleccionaste archivo):
+                            </label>
+                            <input
+                                className="input-campo text-xs py-1.5"
+                                value={form.urlPdf}
+                                onChange={e => setForm(p => ({ ...p, urlPdf: e.target.value }))}
+                                placeholder="https://..."
+                                disabled={subiendo}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Portada */}
+                    <div>
+                        <label className="label-campo">Imagen de Portada (Opcional)</label>
+                        <BotonSubirArchivo
+                            id="input-portada-partitura"
+                            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
+                            etiqueta="Elegir imagen"
+                            alElegir={manejarArchivoPortada}
+                            ocupado={subiendo}
+                        />
+                        {archivoPortada && (
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-1 break-all">
+                                ✓ Portada: {archivoPortada.name}
+                            </p>
+                        )}
+                        <input
+                            className="input-campo text-xs mt-1.5"
+                            value={form.urlPortada}
+                            onChange={e => setForm(p => ({ ...p, urlPortada: e.target.value }))}
+                            placeholder="O pega una URL de imagen: https://..."
+                            disabled={subiendo}
+                        />
+                    </div>
+
+                    {/* Toggles: Descargable y Ocultar. min-w-0 en el contenedor y
+                        flex-1 + min-w-0 en el texto: son replicas manuales de
+                        ToggleCampo y se habian quedado sin el recorte, que es lo que
+                        hacia partir la descripcion larga. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setForm(p => ({ ...p, descargable: !p.descargable }))}
+                            disabled={subiendo}
+                            className={`min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all ${
+                                form.descargable
+                                    ? 'bg-khaki/10 border-khaki/40'
+                                    : 'bg-sutil border-borde-subtle'
+                            }`}
+                        >
+                            <Download className={`w-4 h-4 flex-shrink-0 ${form.descargable ? 'text-khaki' : 't-muted'}`} />
+                            <span className="flex-1 min-w-0 text-left">
+                                <span className="block text-sm font-medium text-secundario">Descargable</span>
+                                <span className="block text-[11px] t-muted break-words">Mostrar botón "Descargar" al público</span>
+                            </span>
+                            <span
+                                className={`toggle-switch flex-shrink-0 ${form.descargable ? 'bg-vinotinto' : 'bg-sutil-hover'}`}
+                                role="switch"
+                                aria-checked={form.descargable}
+                            >
+                                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.descargable ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setForm(p => ({ ...p, activo: !p.activo }))}
+                            disabled={subiendo}
+                            className={`min-w-0 flex items-center gap-3 rounded-xl p-3 border transition-all ${
+                                form.activo
+                                    ? 'bg-vinotinto/5 dark:bg-khaki/5 border-vinotinto/30 dark:border-khaki/30'
+                                    : 'bg-sutil border-borde-subtle'
+                            }`}
+                        >
+                            <EyeOff className={`w-4 h-4 flex-shrink-0 ${form.activo ? 'text-vinotinto dark:text-khaki' : 't-muted'}`} />
+                            <span className="flex-1 min-w-0 text-left">
+                                <span className="block text-sm font-medium text-secundario">Ocultar</span>
+                                <span className="block text-[11px] t-muted break-words">{form.activo ? 'Visible en la web (ON)' : 'Oculta temporalmente'}</span>
+                            </span>
+                            <span
+                                className={`toggle-switch flex-shrink-0 ${form.activo ? 'bg-vinotinto' : 'bg-sutil-hover'}`}
+                                role="switch"
+                                aria-checked={form.activo}
+                            >
+                                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.activo ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </ModalHoja>
         </div>
     );
 };
@@ -3920,7 +4061,9 @@ const AudioPruebaSolicitud = ({ valor }: { valor: string }) => {
     return (
         <div className="space-y-2">
             {esVideo ? (
-                <video src={urlResuelta} controls className="w-full rounded-lg max-h-44 bg-black" />
+                // bg-transparent en vez de bg-black: el reproductor ya pinta sus
+                // propios controles, y el fondo negro tapaba el color del tema.
+                <video src={urlResuelta} controls className="w-full rounded-lg max-h-44 bg-transparent" />
             ) : (
                 <audio src={urlResuelta} controls className="w-full" />
             )}
@@ -4035,8 +4178,11 @@ const ModuloBuzonAudiciones = () => {
                                 {/* Antes las siete etiquetas vivían en una sola fila con wrap y
                                     ml-auto: en un teléfono ocupaban tres renglones desiguales y el
                                     botón de eliminar saltaba a una esquina. Ahora los estados van
-                                    en su rejilla y las acciones de contacto en la siguiente. */}
-                                <div className="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
+                                    en su rejilla y las acciones de contacto en la siguiente. Los
+                                    cuatro estados pasan a 2x2 en móvil: a cuatro columnas
+                                    quedaban en 79px y "Rechazada" se cortaba a "Rech…", que
+                                    además rompía la paridad con el buzón de mensajes. */}
+                                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
                                     {(['Pendiente', 'Revisada', 'Aceptada', 'Rechazada'] as const).map(estado => (
                                         <button key={estado} onClick={() => marcarSolicitudRevisada(s.id, estado)}
                                             className={`text-[11px] sm:text-xs px-1 sm:px-3 py-2 sm:py-1 rounded-full border transition-all truncate ${s.estado === estado
@@ -4306,8 +4452,16 @@ const AdminPanel = () => {
         <div className="min-h-screen bg-fondo-oscuro flex">
 
             {/* ---- MENÚ LATERAL (Sidebar) ---- */}
-            <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-fondo-card border-r borde-subtle
-                       flex flex-col transition-transform duration-300 lg:translate-x-0 ${menuMovilAbierto ? 'translate-x-0' : '-translate-x-full'
+            {/* En móvil se comporta como drawer: max-w evita que en pantallas
+                muy angostas el menú se coma todo el ancho, h-dvh lo ata al alto
+                visible real (con inset-y-0 en iOS el 100vh excede el área
+                visible y el pie queda cortado), y la sombra lo despega del
+                contenido. Los márgenes seguros laterales solo aplican cuando la
+                pantalla está en horizontal y hay notch. */}
+            <div className={`fixed left-0 top-0 z-50 h-dvh w-64 max-w-[85vw] bg-fondo-card border-r borde-subtle
+                       flex flex-col shadow-2xl lg:shadow-none
+                       transition-transform duration-300 lg:translate-x-0
+                       pl-[env(safe-area-inset-left)] ${menuMovilAbierto ? 'translate-x-0' : '-translate-x-full'
                 }`}>
                 {/* Logo */}
                 <div className="p-6 border-b borde-subtle">
@@ -4383,19 +4537,22 @@ const AdminPanel = () => {
 
             {/* ---- CONTENIDO PRINCIPAL ---- */}
             <div className="flex-1 lg:ml-64 flex flex-col min-h-screen min-w-0">
-                {/* Header móvil */}
-                <div className="lg:hidden flex items-center justify-between p-4 border-b borde-subtle bg-fondo-card">
-                    <button onClick={() => setMenuMovilAbierto(true)} className="btn-ghost">
+                {/* Header móvil. Con el scroll largo de un módulo, el botón de
+                    Menú desaparecía y había que subir hasta arriba para volver a
+                    abrirlo. Con sticky se queda siempre accesible; el contenido
+                    pasa por debajo, de ahí la sombra. */}
+                <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5 border-b borde-subtle bg-fondo-card shadow-card">
+                    <button onClick={() => setMenuMovilAbierto(true)} className="btn-ghost shrink-0">
                         <LayoutDashboard className="w-5 h-5" />
                         Menú
                     </button>
-                    <div className="flex items-center gap-1">
-                        <span className="text-sm font-medium t-muted-high">
+                    <div className="flex items-center gap-1 min-w-0">
+                        <span className="min-w-0 text-sm font-medium t-muted-high truncate">
                             {MODULOS.find(m => m.id === moduloActivo)?.etiqueta}
                         </span>
                         <button
                             onClick={toggleModoOscuro}
-                            className="w-9 h-9 flex items-center justify-center rounded-lg t-muted-high hover:text-khaki hover:bg-sutil transition-all duration-200"
+                            className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg t-muted-high hover:text-khaki hover:bg-sutil transition-all duration-200"
                             aria-label="Cambiar tema"
                         >
                             {modoOscuro ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
